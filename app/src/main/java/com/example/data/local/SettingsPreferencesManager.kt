@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import androidx.compose.ui.graphics.Color
 import com.example.data.AppTier
 import com.example.data.GlassThemeConfig
+import com.example.data.LauncherIconVariant
 import com.example.data.TemperatureUnit
 
 /**
@@ -77,7 +78,9 @@ class SettingsPreferencesManager(context: Context) {
             showLiquidDroplet = prefs.getBoolean(KEY_SHOW_LIQUID_DROPLET, true),
             autoUpdateEnabled = prefs.getBoolean(KEY_AUTO_UPDATE_ENABLED, true),
             currentMultiplier = prefs.getFloat(KEY_CURRENT_MULTIPLIER, 1.0f),
-            currentZeroOffsetMa = prefs.getFloat(KEY_CURRENT_ZERO_OFFSET, 0.0f)
+            currentZeroOffsetMa = prefs.getFloat(KEY_CURRENT_ZERO_OFFSET, 0.0f),
+            launcherIconKey = prefs.getString(KEY_LAUNCHER_ICON_KEY, LauncherIconVariant.SAPPHIRE.key)
+                ?: LauncherIconVariant.SAPPHIRE.key
         )
     }
 
@@ -115,6 +118,7 @@ class SettingsPreferencesManager(context: Context) {
             putBoolean(KEY_AUTO_UPDATE_ENABLED, config.autoUpdateEnabled)
             putFloat(KEY_CURRENT_MULTIPLIER, config.currentMultiplier)
             putFloat(KEY_CURRENT_ZERO_OFFSET, config.currentZeroOffsetMa)
+            putString(KEY_LAUNCHER_ICON_KEY, config.launcherIconKey)
             apply()
         }
     }
@@ -144,5 +148,6 @@ class SettingsPreferencesManager(context: Context) {
         private const val KEY_AUTO_UPDATE_ENABLED = "auto_update_enabled"
         private const val KEY_CURRENT_MULTIPLIER = "current_multiplier"
         private const val KEY_CURRENT_ZERO_OFFSET = "current_zero_offset"
+        private const val KEY_LAUNCHER_ICON_KEY = "launcher_icon_key"
     }
 }

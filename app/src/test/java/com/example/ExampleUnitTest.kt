@@ -175,5 +175,19 @@ class ExampleUnitTest {
         assertEquals(com.example.data.AppTier.FREE, config.appTier)
         assertEquals("charfeddine23a", com.example.ui.AmperePulseViewModel.PREMIUM_REDEEM_CODE)
     }
+
+    @Test
+    fun testLauncherIconVariantsAndDefaults() {
+        val config = GlassThemeConfig()
+        assertEquals("sapphire", config.launcherIconKey)
+        assertEquals(com.example.data.LauncherIconVariant.SAPPHIRE, config.launcherIconVariant)
+        assertEquals(com.example.data.LauncherIconVariant.SAPPHIRE, com.example.data.LauncherIconVariant.fromKey("unknown"))
+
+        val variants = com.example.data.LauncherIconVariant.entries
+        assertEquals(5, variants.size)
+        assertEquals(5, variants.map { it.key }.distinct().size)
+        assertEquals(5, variants.map { it.aliasClassName }.distinct().size)
+        assertTrue(variants.all { it.aliasClassName.startsWith("com.example.Launcher") })
+    }
 }
 

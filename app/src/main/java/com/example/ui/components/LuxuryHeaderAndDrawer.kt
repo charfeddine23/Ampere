@@ -116,6 +116,7 @@ import kotlinx.coroutines.isActive
 import kotlin.math.abs
 import com.example.audio.CyberHapticsEngine
 import com.example.data.GlassThemeConfig
+import com.example.data.LauncherIconVariant
 import com.example.data.TemperatureUnit
 import com.example.data.update.InAppUpdateUiState
 import com.example.ui.theme.OutfitFontFamily
@@ -388,6 +389,7 @@ fun LuxurySettingsDrawer(
     onClose: () -> Unit,
     themeConfig: GlassThemeConfig,
     onConfigChange: (GlassThemeConfig) -> Unit,
+    onSelectLauncherIcon: (LauncherIconVariant) -> Unit = {},
     onOpenSkinVault: () -> Unit = {},
     onOpenRedeemDialog: () -> Unit = {},
     updateUiState: InAppUpdateUiState = InAppUpdateUiState(),
@@ -839,6 +841,18 @@ fun LuxurySettingsDrawer(
                         }
                     )
 
+                    // 4b. External Home Launcher App Icon Color Selector
+                    LauncherIconColorCard(
+                        selectedVariant = themeConfig.launcherIconVariant,
+                        onSelectVariant = onSelectLauncherIcon,
+                        isDark = isDark,
+                        surfaceColor = surfaceCardColor,
+                        softColor = softTileColor,
+                        borderColor = subtleBorder,
+                        textColor = textColor,
+                        subTextColor = subTextColor
+                    )
+
                     // 5. Expandable Accordion: Appearance & Identity
                     SettingsAccordionCard(
                         title = "الألوان والهوية",
@@ -1240,6 +1254,169 @@ fun LuxurySettingsDrawer(
                 }
             }
         }
+    }
+}
+
+private fun LauncherIconVariant.foregroundDrawableRes(): Int {
+    return when (this) {
+        LauncherIconVariant.SAPPHIRE -> R.drawable.ic_launcher_foreground
+        LauncherIconVariant.EMERALD -> R.drawable.ic_launcher_fg_emerald
+        LauncherIconVariant.CRIMSON -> R.drawable.ic_launcher_fg_crimson
+        LauncherIconVariant.VIOLET -> R.drawable.ic_launcher_fg_violet
+        LauncherIconVariant.AURIC -> R.drawable.ic_launcher_fg_auric
+    }
+}
+
+@Composable
+private fun LauncherIconColorCard(
+    selectedVariant: LauncherIconVariant,
+    onSelectVariant: (LauncherIconVariant) -> Unit,
+    isDark: Boolean,
+    surfaceColor: Color,
+    softColor: Color,
+    borderColor: Color,
+    textColor: Color,
+    subTextColor: Color
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(surfaceColor)
+            .border(1.1.dp, borderColor, RoundedCornerShape(20.dp))
+            .padding(horizontal = 14.dp, vertical = 12.dp)
+            .testTag("launcher_icon_selector_card"),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(selectedVariant.primaryColor.copy(alpha = if (isDark) 0.22f else 0.12f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Image(
+                        painter = painterResource(id = selectedVariant.foregroundDrawableRes()),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(28.dp)
+                            .graphicsLayer {
+                                scaleX = 1.48f
+                                scaleY = 1.48f
+                            }
+                    )
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                Column {
+                    Text(
+                        text = "لون أيقونة التطبيق الخارجية",
+                        fontFamily = OutfitFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        color = textColor
+                    )
+                    Text(
+                        text = "أيقونة الشاشة الرئيسية الحالية: ${selectedVariant.titleAr}",
+                        fontFamily = PlusJakartaSansFontFamily,
+                        fontSize = 10.5.sp,
+                        color = if (isDark) selectedVariant.secondaryColor else selectedVariant.primaryColor
+                    )
+                }
+            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            LauncherIconVariant.entries.forEach { variant ->
+                val isSelected = variant == selectedVariant
+                val tileBg by animateColorAsState(
+                    targetValue = if (isSelected) {
+                        variant.primaryColor.copy(alpha = if (isDark) 0.22f else 0.13f)
+                    } else {
+                        softColor.copy(alpha = if (isDark) 0.55f else 0.65f)
+                    },
+                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                    label = "iconVariantBg_${variant.key}"
+                )
+                val tileBorder by animateColorAsState(
+                    targetValue = if (isSelected) {
+                        if (isDark) variant.secondaryColor else variant.primaryColor
+                    } else {
+                        borderColor
+                    },
+                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                    label = "iconVariantBorder_${variant.key}"
+                )
+
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 68.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(tileBg)
+                        .border(if (isSelected) 1.5.dp else 0.9.dp, tileBorder, RoundedCornerShape(14.dp))
+                        .clickable { onSelectVariant(variant) }
+                        .padding(vertical = 8.dp, horizontal = 3.dp)
+                        .testTag("launcher_icon_${variant.key}")
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(CircleShape)
+                            .background(
+                                Brush.radialGradient(
+                                    colors = listOf(
+                                        variant.primaryColor.copy(alpha = if (isDark) 0.28f else 0.18f),
+                                        Color.Transparent
+                                    )
+                                )
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Image(
+                            painter = painterResource(id = variant.foregroundDrawableRes()),
+                            contentDescription = "أيقونة ${variant.titleAr}",
+                            modifier = Modifier
+                                .size(32.dp)
+                                .graphicsLayer {
+                                    scaleX = 1.52f
+                                    scaleY = 1.52f
+                                }
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = variant.titleAr,
+                        fontFamily = PlusJakartaSansFontFamily,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        fontSize = 9.5.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = if (isSelected) textColor else subTextColor
+                    )
+                }
+            }
+        }
+
+        Text(
+            text = "تغيير فوري لشكل الأيقونة على مشغّل الهاتف مع الحفاظ على الخلفية الشفافة",
+            fontFamily = PlusJakartaSansFontFamily,
+            fontSize = 9.8.sp,
+            color = subTextColor,
+            lineHeight = 13.sp
+        )
     }
 }
 

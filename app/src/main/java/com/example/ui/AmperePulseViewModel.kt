@@ -166,6 +166,26 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    fun updateLauncherIcon(variant: com.example.data.LauncherIconVariant) {
+        val current = _themeConfig.value
+        if (current.launcherIconKey == variant.key) {
+            com.example.data.AppIconManager.syncLauncherIcon(getApplication(), variant)
+            return
+        }
+        val updated = current.copy(launcherIconKey = variant.key)
+        _themeConfig.value = updated
+        prefsManager.saveThemeConfig(updated)
+        com.example.data.AppIconManager.applyLauncherIcon(getApplication(), variant)
+        com.example.audio.CyberHapticsEngine.triggerTactileTick(getApplication())
+        com.example.audio.CyberSoundscapeEngine.playCryoChime()
+        repository.addManualSessionLog(
+            title = "Launcher Icon Updated: ${variant.titleAr}",
+            desc = "External home launcher icon color switched to ${variant.titleAr} (${variant.key}).",
+            statTag = "ICON",
+            type = "check"
+        )
+    }
+
     fun toggleSettingsMenu(open: Boolean) {
         _isSettingsMenuOpen.value = open
     }

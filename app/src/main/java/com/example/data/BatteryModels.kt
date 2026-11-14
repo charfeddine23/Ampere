@@ -196,6 +196,56 @@ enum class AppTier(
     }
 }
 
+enum class LauncherIconVariant(
+    val key: String,
+    val titleAr: String,
+    val aliasClassName: String,
+    val primaryColor: Color,
+    val secondaryColor: Color
+) {
+    SAPPHIRE(
+        key = "sapphire",
+        titleAr = "ياقوتي",
+        aliasClassName = "com.example.LauncherSapphire",
+        primaryColor = Color(0xFF2962FF),
+        secondaryColor = Color(0xFF00E5FF)
+    ),
+    EMERALD(
+        key = "emerald",
+        titleAr = "زمردي",
+        aliasClassName = "com.example.LauncherEmerald",
+        primaryColor = Color(0xFF00C853),
+        secondaryColor = Color(0xFF69F0AE)
+    ),
+    CRIMSON(
+        key = "crimson",
+        titleAr = "قرمزي",
+        aliasClassName = "com.example.LauncherCrimson",
+        primaryColor = Color(0xFFFF3D00),
+        secondaryColor = Color(0xFFFF9100)
+    ),
+    VIOLET(
+        key = "violet",
+        titleAr = "بنفسجي",
+        aliasClassName = "com.example.LauncherViolet",
+        primaryColor = Color(0xFF7C4DFF),
+        secondaryColor = Color(0xFFE040FB)
+    ),
+    AURIC(
+        key = "auric",
+        titleAr = "ذهبي",
+        aliasClassName = "com.example.LauncherAuric",
+        primaryColor = Color(0xFFFFB300),
+        secondaryColor = Color(0xFFFFE082)
+    );
+
+    companion object {
+        fun fromKey(key: String?): LauncherIconVariant {
+            return entries.find { it.key == key } ?: SAPPHIRE
+        }
+    }
+}
+
 data class GlassThemeConfig(
     val isDarkMode: Boolean = false, // Defaults to Soft Stone Light Neumorphism
     val glowIntensity: Float = 0.75f,
@@ -219,8 +269,12 @@ data class GlassThemeConfig(
     val showLiquidDroplet: Boolean = true,
     val autoUpdateEnabled: Boolean = true,
     val currentMultiplier: Float = 1.0f,
-    val currentZeroOffsetMa: Float = 0.0f
+    val currentZeroOffsetMa: Float = 0.0f,
+    val launcherIconKey: String = LauncherIconVariant.SAPPHIRE.key
 ) {
+    val launcherIconVariant: LauncherIconVariant
+        get() = LauncherIconVariant.fromKey(launcherIconKey)
+
     // Backward compatibility alias
     val target90FpsMode: Boolean
         get() = target120FpsMode

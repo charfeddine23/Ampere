@@ -332,6 +332,7 @@ fun AmperePulseApp(viewModel: AmperePulseViewModel) {
                 onClose = { viewModel.toggleSettingsMenu(false) },
                 themeConfig = themeConfig,
                 onConfigChange = { viewModel.updateThemeConfig(it) },
+                onSelectLauncherIcon = { viewModel.updateLauncherIcon(it) },
                 onOpenSkinVault = { viewModel.toggleSkinVault(true) },
                 onOpenRedeemDialog = { viewModel.toggleRedeemDialog(true) },
                 updateUiState = updateUiState,
