@@ -52,6 +52,7 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
     val userAccount: StateFlow<com.example.data.UserAccount> = repository.userAccount
     val cableResult: StateFlow<com.example.data.CableDiagnosticResult> = repository.cableResult
     val sohPrediction: StateFlow<com.example.data.BatterySohPrediction> = repository.sohPrediction
+    val deviceProfile: StateFlow<com.example.data.DeviceHardwareProfile> = repository.deviceProfile
     val hourlyStats: StateFlow<List<com.example.data.local.HourlyBatteryStatEntity>> = repository.hourlyStats
 
     private val _selectedTab = MutableStateFlow(NavigationTab.BATTERY)
@@ -61,6 +62,11 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
 
     private val _themeConfig = MutableStateFlow(prefsManager.loadThemeConfig())
     val themeConfig: StateFlow<GlassThemeConfig> = _themeConfig.asStateFlow()
+
+    private val _iconDiagnostics = MutableStateFlow(
+        com.example.data.AppIconManager.getDiagnostics(application.applicationContext)
+    )
+    val iconDiagnostics: StateFlow<com.example.data.IconSwitchDiagnostics> = _iconDiagnostics.asStateFlow()
 
     private val _isSettingsMenuOpen = MutableStateFlow(false)
     val isSettingsMenuOpen: StateFlow<Boolean> = _isSettingsMenuOpen.asStateFlow()
@@ -88,6 +94,7 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
         // Apply persisted sound & haptic preferences on startup
         com.example.audio.CyberSoundscapeEngine.isEnabled = _themeConfig.value.soundEffectsEnabled
         com.example.audio.CyberHapticsEngine.isEnabled = _themeConfig.value.hapticFeedbackEnabled
+        repository.setProModeActive(_themeConfig.value.isProMode)
         repository.updateCurrentCalibration(
             multiplier = _themeConfig.value.currentMultiplier,
             zeroOffsetMa = _themeConfig.value.currentZeroOffsetMa
@@ -176,13 +183,17 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
     fun updateThemeConfig(config: GlassThemeConfig) {
         val prev = _themeConfig.value
         val activePreset = com.example.ui.theme.ThemeEngineCatalog.findById(config.activeThemeId)
-        val sanitized = if (activePreset != null && prev.isDarkMode != config.isDarkMode && activePreset.isDark != config.isDarkMode) {
+        val baseSanitized = if (activePreset != null && prev.isDarkMode != config.isDarkMode && activePreset.isDark != config.isDarkMode) {
             config.copy(activeThemeId = null)
         } else {
             config
         }
+        val sanitized = baseSanitized.copy(
+            samplingIntervalMs = if (baseSanitized.isProMode) 1L else 1000L
+        )
         _themeConfig.value = sanitized
         prefsManager.saveThemeConfig(sanitized)
+        repository.setProModeActive(sanitized.isProMode)
         com.example.audio.CyberSoundscapeEngine.isEnabled = sanitized.soundEffectsEnabled
         com.example.audio.CyberHapticsEngine.isEnabled = sanitized.hapticFeedbackEnabled
         repository.updateCurrentCalibration(
@@ -208,10 +219,13 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
             activeThemeId = preset.id,
             isDarkMode = preset.isDark,
             customAccentHex = argb,
-            glowIntensity = preset.glowIntensity
+            glowIntensity = preset.glowIntensity,
+            graphicsMode = com.example.data.GraphicsMode.STANDARD,
+            samplingIntervalMs = 1000L
         )
         _themeConfig.value = updated
         prefsManager.saveThemeConfig(updated)
+        repository.setProModeActive(false)
         com.example.audio.CyberHapticsEngine.triggerTactileTick(getApplication())
         com.example.audio.CyberSoundscapeEngine.playCryoChime()
         repository.addManualSessionLog(
@@ -241,22 +255,66 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
 
     fun updateLauncherIcon(variant: com.example.data.LauncherIconVariant) {
         val current = _themeConfig.value
-        if (current.launcherIconKey == variant.key) {
-            com.example.data.AppIconManager.syncLauncherIcon(getApplication(), variant)
-            return
-        }
         val updated = current.copy(launcherIconKey = variant.key)
         _themeConfig.value = updated
-        prefsManager.saveThemeConfig(updated)
-        com.example.data.AppIconManager.applyLauncherIcon(getApplication(), variant)
+        prefsManager.saveThemeConfigSync(updated)
+
+        val diag = if (updated.forceChangeIconEnabled) {
+            com.example.data.AppIconManager.forceApplyLauncherIcon(getApplication(), variant, launchHomeScreen = true)
+        } else {
+            com.example.data.AppIconManager.applyLauncherIcon(getApplication(), variant)
+        }
+        _iconDiagnostics.value = diag
+
         com.example.audio.CyberHapticsEngine.triggerTactileTick(getApplication())
         com.example.audio.CyberSoundscapeEngine.playCryoChime()
         repository.addManualSessionLog(
-            title = "Launcher Icon Updated: ${variant.titleAr}",
-            desc = "External home launcher icon color switched to ${variant.titleAr} (${variant.key}).",
+            title = if (updated.forceChangeIconEnabled) {
+                "Force Icon Switch: ${variant.titleAr}"
+            } else {
+                "Launcher Icon Updated: ${variant.titleAr}"
+            },
+            desc = "External home launcher icon switched to ${variant.titleAr} (${variant.key}).",
             statTag = "ICON",
             type = "check"
         )
+    }
+
+    fun toggleForceChangeIcon(enabled: Boolean) {
+        val updated = _themeConfig.value.copy(forceChangeIconEnabled = enabled)
+        _themeConfig.value = updated
+        prefsManager.saveThemeConfigSync(updated)
+        com.example.audio.CyberHapticsEngine.triggerTactileTick(getApplication())
+    }
+
+    fun forceChangeLauncherIconNow(variant: com.example.data.LauncherIconVariant = _themeConfig.value.launcherIconVariant) {
+        val updated = _themeConfig.value.copy(launcherIconKey = variant.key)
+        _themeConfig.value = updated
+        prefsManager.saveThemeConfigSync(updated)
+        com.example.audio.CyberHapticsEngine.triggerBenchmarkSuccess(getApplication())
+        com.example.audio.CyberSoundscapeEngine.playCryoChime()
+        repository.addManualSessionLog(
+            title = "Force Change Icon Executed: ${variant.titleAr}",
+            desc = "Executed multi-layer PackageManager cycle + Home flush + flags=0 for ${variant.aliasClassName}.",
+            statTag = "FORCE",
+            type = "check"
+        )
+        _iconDiagnostics.value = com.example.data.AppIconManager.forceApplyLauncherIcon(
+            context = getApplication(),
+            variant = variant,
+            launchHomeScreen = true
+        )
+    }
+
+    fun pinLauncherShortcut(variant: com.example.data.LauncherIconVariant): Boolean {
+        val pinned = com.example.data.AppIconManager.pinForcedHomeShortcut(getApplication(), variant)
+        if (pinned) {
+            com.example.audio.CyberHapticsEngine.triggerBenchmarkSuccess(getApplication())
+            _iconDiagnostics.value = _iconDiagnostics.value.copy(
+                statusMessage = "تم إرسال اختصار أيقونة (${variant.titleAr}) للشاشة الرئيسية"
+            )
+        }
+        return pinned
     }
 
     fun toggleSettingsMenu(open: Boolean) {

@@ -26,17 +26,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Autorenew
 import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.HealthAndSafety
 import androidx.compose.material.icons.filled.HourglassTop
-import androidx.compose.material.icons.filled.MonitorHeart
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.Verified
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.animation.core.Spring
@@ -45,10 +41,6 @@ import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -60,12 +52,9 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.audio.CyberHapticsEngine
-import com.example.audio.CyberSoundscapeEngine
 import com.example.data.BatterySohPrediction
 import com.example.data.BatteryTelemetry
 import com.example.data.CellHealthStatus
@@ -81,8 +70,6 @@ import com.example.ui.theme.TactileRoyalBlue
 import com.example.ui.theme.TextCharcoal
 import com.example.ui.theme.TextSlate
 import com.example.ui.theme.TextWhite
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 /**
  * PAGE 3: Battery SOH & Charge Cycles Predictor
@@ -97,22 +84,15 @@ fun Page3BatterySohScreen(
     sohPrediction: BatterySohPrediction,
     onRecalibrateSoh: (Boolean) -> Unit
 ) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
     val isDark = themeConfig.isDarkMode
     val glow = themeConfig.glowIntensity
     val textColor = if (isDark) TextWhite else TextCharcoal
     val subTextColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
 
-    var isCalibrating by remember { mutableStateOf(true) }
-
     // Automatically recalibrate SOH against Room WAL & hardware registers on page entry
     LaunchedEffect(Unit) {
-        isCalibrating = true
         onRecalibrateSoh(false)
-        delay(450L)
-        isCalibrating = false
     }
 
     val statusColor = sohPrediction.cellStatus.color
@@ -566,58 +546,6 @@ fun Page3BatterySohScreen(
                         Text("Cycle 0 (100% Health)", fontSize = 10.sp, color = TextSlate)
                         Text("Cycle 1000 (80% Health EOL)", fontSize = 10.sp, color = TactileCoralRed)
                     }
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        // 5. Automatic Live Sub-Second Calibration Status & Optional Manual Trigger
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-        ) {
-            Button(
-                onClick = {
-                    scope.launch {
-                        isCalibrating = true
-                        CyberSoundscapeEngine.playDiagnosticSweep()
-                        CyberHapticsEngine.triggerTactileTick(context)
-                        onRecalibrateSoh(true)
-                        delay(450L)
-                        isCalibrating = false
-                        CyberHapticsEngine.triggerBenchmarkSuccess(context)
-                        CyberSoundscapeEngine.playCryoChime()
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = TactileGreen
-                )
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = if (isCalibrating) Icons.Default.Autorenew else Icons.Default.MonitorHeart,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = if (isCalibrating) {
-                            "AUTO-CALIBRATING CELL SOH & ROOM WAL..."
-                        } else {
-                            "LIVE AUTO-CALIBRATION ACTIVE • 100ms SYNC"
-                        },
-                        fontFamily = OutfitFontFamily,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp,
-                        color = Color.White
-                    )
                 }
             }
         }

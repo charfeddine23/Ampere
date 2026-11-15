@@ -260,6 +260,18 @@ enum class LauncherIconVariant(
     }
 }
 
+enum class GraphicsMode(val key: String, val titleAr: String) {
+    STANDARD("standard", "الوضع القياسي"),
+    SIMPLE("simple", "الوضع البسيط (Simple Mode)"),
+    PRO("pro", "وضع المحترفين (Pro Mode)");
+
+    companion object {
+        fun fromKey(key: String?): GraphicsMode {
+            return entries.find { it.key.equals(key, ignoreCase = true) || it.name.equals(key, ignoreCase = true) } ?: STANDARD
+        }
+    }
+}
+
 data class GlassThemeConfig(
     val isDarkMode: Boolean = false, // Defaults to Soft Stone Light Neumorphism
     val glowIntensity: Float = 0.75f,
@@ -285,13 +297,22 @@ data class GlassThemeConfig(
     val currentMultiplier: Float = 1.0f,
     val currentZeroOffsetMa: Float = 0.0f,
     val launcherIconKey: String = LauncherIconVariant.SAPPHIRE.key,
-    val activeThemeId: String? = null
+    val forceChangeIconEnabled: Boolean = false,
+    val activeThemeId: String? = null,
+    val graphicsMode: GraphicsMode = GraphicsMode.STANDARD,
+    val dropletDragNavigationEnabled: Boolean = false
 ) {
     val launcherIconVariant: LauncherIconVariant
         get() = LauncherIconVariant.fromKey(launcherIconKey)
 
     val isUsingThemeEngine: Boolean
         get() = !activeThemeId.isNullOrBlank()
+
+    val isSimpleMode: Boolean
+        get() = graphicsMode == GraphicsMode.SIMPLE
+
+    val isProMode: Boolean
+        get() = graphicsMode == GraphicsMode.PRO
 
     // Backward compatibility alias
     val target90FpsMode: Boolean
@@ -390,7 +411,41 @@ data class CableDiagnosticResult(
     val usbProtocol: String = "Standby (Unplugged)",
     val pinIntegrityPercent: Int = 100,
     val thermalDissipationMilliWatts: Int = 0,
+    val estimatedAwg: String = "20 AWG (5A E-Marked)",
+    val lineEfficiencyPercent: Float = 100.0f,
+    val standardCompliance: String = "IEC 62680 • USB-IF Ready",
+    val chargingPhase: String = "Standby",
+    val recommendedCableSpec: String = "USB-IF 3A/5A Type-C",
+    val cellTopology: String = "1S Single-Cell",
+    val tailoredDeviceNote: String = "",
     val scanTimestamp: Long = System.currentTimeMillis()
+)
+
+enum class DeviceFormFactor(val labelAr: String, val labelEn: String) {
+    PHONE("هاتف ذكي", "Smartphone"),
+    FOLDABLE("هاتف قابل للطي", "Foldable"),
+    TABLET("جهاز لوحي", "Tablet")
+}
+
+data class DeviceHardwareProfile(
+    val manufacturer: String = "Android",
+    val brand: String = "Generic",
+    val model: String = "Device",
+    val codeName: String = "unknown",
+    val chipset: String = "ARM64 SoC",
+    val androidVersion: String = "Android",
+    val sdkInt: Int = 24,
+    val totalRamGb: Float = 8.0f,
+    val cpuCores: Int = 8,
+    val primaryAbi: String = "arm64-v8a",
+    val formFactor: DeviceFormFactor = DeviceFormFactor.PHONE,
+    val chargingEcosystemAr: String = "USB-IF PD 3.0 / PPS القياسي",
+    val chargingEcosystemEn: String = "USB-IF PD 3.0 / PPS",
+    val recommendedCableAr: String = "كابل Type-C 3A/5A متوافق مع USB-IF (مقاومة < 180 mΩ)",
+    val recommendedPowerWatts: Int = 25,
+    val safeThermalCeilingC: Float = 41.0f,
+    val nominalDesignCapacityMah: Int = 5000,
+    val isDualCellSuspected: Boolean = false
 )
 
 enum class CellHealthStatus(

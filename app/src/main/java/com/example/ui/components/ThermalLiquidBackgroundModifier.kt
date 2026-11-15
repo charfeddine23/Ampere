@@ -106,12 +106,18 @@ fun Modifier.thermalLiquidGlassBackground(
         label = "thermalPulse"
     )
 
-    // Base background (respects active Theme Engine preset or adapts smoothly)
+    // Base background (respects active Theme Engine preset or Simple/Pro modes)
     val theme = LocalAmpereTheme.current
     val rootBg = if (theme.themeId != null) theme.background else if (isDarkMode) NeumorphBgDark else NeumorphBgLight
 
-    // Alpha multipliers calibrated for Soft Stone Light Neumorphism vs Dark Obsidian
-    val alphaScale = if (isDarkMode) 1.0f else 0.78f
+    if (theme.isSimpleMode) {
+        return@composed this.drawBehind {
+            drawRect(color = rootBg)
+        }
+    }
+
+    // Alpha multipliers calibrated for Soft Stone Light Neumorphism vs Dark Obsidian vs Pro Mode
+    val alphaScale = (if (isDarkMode) 1.0f else 0.78f) * (if (theme.isProMode) 0.36f else 1.0f)
     val baseGlow = glowIntensity * alphaScale * thermalPulse
 
     val isOverheated = temperatureC >= criticalTempThreshold

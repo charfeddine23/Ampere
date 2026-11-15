@@ -81,77 +81,96 @@ fun LiquidGlassCard(
     val theme = LocalAmpereTheme.current
     val customThemeActive = theme.themeId != null
 
+    val isSimple = theme.isSimpleMode
+    val isPro = theme.isProMode
     val surfaceColor = if (customThemeActive) theme.surface else if (isDarkMode) NeumorphSurfaceDark else NeumorphSurfaceLight
-    val shadowColor = if (isDarkMode) NeumorphShadowDark else NeumorphShadowLight
-    val highlightColor = if (customThemeActive && theme.isGlassStyle) {
+    val shadowColor = if (isPro) {
+        if (isDarkMode) Color(0x33000000) else Color(0x227589A2)
+    } else {
+        if (isDarkMode) NeumorphShadowDark else NeumorphShadowLight
+    }
+    val highlightColor = if (isPro) {
+        if (isDarkMode) Color(0x0D94A3B8) else Color(0x55FFFFFF)
+    } else if (customThemeActive && theme.isGlassStyle) {
         theme.accent.copy(alpha = if (isDarkMode) 0.14f else 0.25f)
     } else if (isDarkMode) NeumorphHighlightDark else NeumorphHighlightLight
     val borderColor = if (customThemeActive) theme.border else if (isDarkMode) NeumorphBorderDark else NeumorphBorderLight
+    val effectiveAccent = if (isSimple) theme.accent else accentColor
 
     Box(
         modifier = modifier
             .then(tagModifier)
-            // Neumorphic Dual Shadows (Extruded look)
+            // Neumorphic Dual Shadows (omitted cleanly in Simple Mode)
             .drawBehind {
-                val shadowOffset = 5.dp.toPx()
-                val highlightOffset = -3.dp.toPx()
+                if (!isSimple) {
+                    val shadowOffset = if (isPro) 3.dp.toPx() else 5.dp.toPx()
+                    val highlightOffset = if (isPro) -2.dp.toPx() else -3.dp.toPx()
 
-                // Bottom-right soft diffusion shadow
-                drawRoundRect(
-                    color = shadowColor,
-                    topLeft = Offset(shadowOffset, shadowOffset),
-                    size = size,
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(22.dp.toPx(), 22.dp.toPx())
-                )
+                    // Bottom-right soft diffusion shadow
+                    drawRoundRect(
+                        color = shadowColor,
+                        topLeft = Offset(shadowOffset, shadowOffset),
+                        size = size,
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(22.dp.toPx(), 22.dp.toPx())
+                    )
 
-                // Top-left soft specular highlight
-                drawRoundRect(
-                    color = highlightColor,
-                    topLeft = Offset(highlightOffset, highlightOffset),
-                    size = size,
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(22.dp.toPx(), 22.dp.toPx())
-                )
+                    // Top-left soft specular highlight
+                    drawRoundRect(
+                        color = highlightColor,
+                        topLeft = Offset(highlightOffset, highlightOffset),
+                        size = size,
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(22.dp.toPx(), 22.dp.toPx())
+                    )
+                }
             }
             .clip(shape)
             .background(surfaceColor)
-            // Subtle liquid glass gradient sheen
+            // Subtle liquid glass gradient sheen (disabled in Simple Mode, damped in Pro Mode)
             .drawBehind {
-                drawRect(
-                    brush = Brush.linearGradient(
-                        colors = if (customThemeActive) {
-                            listOf(
-                                if (theme.isGlassStyle) Color.White.copy(alpha = if (isDarkMode) 0.08f else 0.22f)
-                                else Color.White.copy(alpha = if (isDarkMode) 0.03f else 0.12f),
-                                Color.Transparent
-                            )
-                        } else if (isDarkMode) {
-                            listOf(
-                                Color.White.copy(alpha = 0.05f),
-                                Color.Transparent
-                            )
-                        } else {
-                            listOf(
-                                NeumorphCardTopLight,
-                                NeumorphSurfaceLight,
-                                NeumorphCardBottomLight
-                            )
-                        },
-                        start = Offset(0f, 0f),
-                        end = Offset(size.width, size.height)
+                if (!isSimple) {
+                    drawRect(
+                        brush = Brush.linearGradient(
+                            colors = if (isPro) {
+                                listOf(
+                                    Color.White.copy(alpha = if (isDarkMode) 0.025f else 0.10f),
+                                    Color.Transparent
+                                )
+                            } else if (customThemeActive) {
+                                listOf(
+                                    if (theme.isGlassStyle) Color.White.copy(alpha = if (isDarkMode) 0.08f else 0.22f)
+                                    else Color.White.copy(alpha = if (isDarkMode) 0.03f else 0.12f),
+                                    Color.Transparent
+                                )
+                            } else if (isDarkMode) {
+                                listOf(
+                                    Color.White.copy(alpha = 0.05f),
+                                    Color.Transparent
+                                )
+                            } else {
+                                listOf(
+                                    NeumorphCardTopLight,
+                                    NeumorphSurfaceLight,
+                                    NeumorphCardBottomLight
+                                )
+                            },
+                            start = Offset(0f, 0f),
+                            end = Offset(size.width, size.height)
+                        )
                     )
-                )
 
-                // Subtle accent glow tint from top edge
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            accentColor.copy(alpha = if (isDarkMode) 0.12f * glowIntensity else 0.06f * glowIntensity),
-                            Color.Transparent
-                        ),
-                        center = Offset(size.width * 0.2f, 0f),
-                        radius = size.width * 0.7f
+                    // Subtle accent glow tint from top edge
+                    val glowAlphaScale = if (isPro) 0.35f else 1f
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                effectiveAccent.copy(alpha = (if (isDarkMode) 0.12f else 0.06f) * glowIntensity * glowAlphaScale),
+                                Color.Transparent
+                            ),
+                            center = Offset(size.width * 0.2f, 0f),
+                            radius = size.width * 0.7f
+                        )
                     )
-                )
+                }
             }
             .border(
                 width = 1.dp,
@@ -172,6 +191,22 @@ fun PulsingNeonDot(
     color: Color = TactileRoyalBlue,
     sizeDp: Dp = 8.dp
 ) {
+    val theme = LocalAmpereTheme.current
+    if (theme.isSimpleMode) {
+        Box(
+            modifier = modifier.size(sizeDp * 1.4f),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(sizeDp)
+                    .clip(CircleShape)
+                    .background(theme.accent)
+            )
+        }
+        return
+    }
+
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val scale by infiniteTransition.animateFloat(
         initialValue = 0.85f,

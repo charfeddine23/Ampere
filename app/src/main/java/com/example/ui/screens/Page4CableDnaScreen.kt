@@ -1,21 +1,18 @@
 package com.example.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -30,26 +27,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Cable
+import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.ElectricMeter
-import androidx.compose.material.icons.filled.LocalFireDepartment
-import androidx.compose.material.icons.filled.Power
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -59,18 +45,20 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.audio.CyberHapticsEngine
-import com.example.audio.CyberSoundscapeEngine
 import com.example.data.BatteryTelemetry
 import com.example.data.CableDiagnosticResult
 import com.example.data.CableDnaTier
+import com.example.data.ChargePlug
+import com.example.data.DeviceFormFactor
+import com.example.data.DeviceHardwareProfile
 import com.example.data.GlassThemeConfig
 import com.example.ui.components.LiquidGlassCard
 import com.example.ui.components.PulsingNeonDot
+import com.example.ui.theme.LocalAmpereTheme
 import com.example.ui.theme.OutfitFontFamily
 import com.example.ui.theme.PlusJakartaSansFontFamily
 import com.example.ui.theme.TactileAmber
@@ -81,37 +69,32 @@ import com.example.ui.theme.TactileRoyalBlue
 import com.example.ui.theme.TextCharcoal
 import com.example.ui.theme.TextSlate
 import com.example.ui.theme.TextWhite
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import java.util.Locale
 
 /**
- * PAGE 4: Cable DNA & Charger Analyzer
- * Real-time diagnostic module triggered upon charger connection.
- * Measures cable resistance (mΩ), voltage sag, power throughput,
- * classifies charger tiers (Legendary Original vs. Dangerous Counterfeit),
- * and computes XP multiplier or thermal warning alerts.
+ * PAGE 4: Cable DNA & Charger Analyzer (IEC 62680 / USB-IF Rev 2.3 International Standards)
+ * Continuous hardware-calibrated cable diagnostics + real device hardware profile detection.
  */
 @Composable
 fun Page4CableDnaScreen(
     telemetry: BatteryTelemetry,
     themeConfig: GlassThemeConfig,
     cableResult: CableDiagnosticResult,
-    onRunDiagnosticSweep: (CableDnaTier?) -> Unit
+    deviceProfile: DeviceHardwareProfile = DeviceHardwareProfile(),
+    onRunDiagnosticSweep: (CableDnaTier?) -> Unit = {}
 ) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
+    val resolvedTheme = LocalAmpereTheme.current
     val isDark = themeConfig.isDarkMode
     val glow = themeConfig.glowIntensity
-    val textColor = if (isDark) TextWhite else TextCharcoal
-    val subTextColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+    val textColor = if (resolvedTheme.themeId != null) resolvedTheme.textPrimary else if (isDark) TextWhite else TextCharcoal
+    val subTextColor = if (resolvedTheme.themeId != null) resolvedTheme.textSecondary else if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+    val surfaceInset = if (resolvedTheme.themeId != null) resolvedTheme.surfaceInset else if (isDark) Color(0xFF151F30) else Color(0xFFD5DFEA)
 
-    var isScanning by remember { mutableStateOf(false) }
     val activeResult = cableResult
     val tier = activeResult.tier
     val tierColor = tier.badgeColor
 
-    // 500ms Smooth Indicator Animation to Real-Time Measurement
     val targetResistance = activeResult.resistanceMilliOhms.toFloat()
     val animatedResistance by animateFloatAsState(
         targetValue = targetResistance,
@@ -143,16 +126,6 @@ fun Page4CableDnaScreen(
         label = "pulseAlpha"
     )
 
-    val scanSweepAngle by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(3000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "scanSweep"
-    )
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -172,13 +145,16 @@ fun Page4CableDnaScreen(
                 isDarkMode = isDark,
                 glowIntensity = glow
             ) {
-                Column(modifier = Modifier.padding(18.dp)) {
+                Column(modifier = Modifier.padding(16.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
                             Box(
                                 modifier = Modifier
                                     .size(44.dp)
@@ -197,21 +173,24 @@ fun Page4CableDnaScreen(
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
                                 Text(
-                                    text = "CABLE DNA & CHARGER ANALYZER",
+                                    text = "CABLE DNA & IEC 62680 ANALYZER",
                                     fontFamily = OutfitFontFamily,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 14.sp,
-                                    letterSpacing = 0.5.sp,
+                                    letterSpacing = 0.4.sp,
                                     color = textColor
                                 )
                                 Text(
-                                    text = "${telemetry.plugType.label} • Active Line Audit",
+                                    text = "${telemetry.plugType.label} • ${activeResult.standardCompliance}",
                                     fontFamily = PlusJakartaSansFontFamily,
-                                    fontSize = 11.sp,
-                                    color = TextSlate
+                                    fontSize = 10.5.sp,
+                                    color = subTextColor,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
+                        Spacer(modifier = Modifier.width(8.dp))
                         PulsingNeonDot(color = tierColor, sizeDp = 7.dp)
                     }
                 }
@@ -220,7 +199,7 @@ fun Page4CableDnaScreen(
 
         Spacer(modifier = Modifier.height(6.dp))
 
-        // 2. Main Cable Resistance & Diagnostic Dial Card
+        // 2. Main Cable Resistance & International Standards Dial Card
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -235,33 +214,31 @@ fun Page4CableDnaScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(20.dp),
+                        .padding(18.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "INTERNAL CABLE RESISTANCE",
+                        text = "USB-IF LOOP RESISTANCE (VBUS + GND)",
                         fontFamily = OutfitFontFamily,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp,
-                        letterSpacing = 1.sp,
-                        color = TextSlate
+                        fontSize = 11.5.sp,
+                        letterSpacing = 0.9.sp,
+                        color = subTextColor
                     )
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // Circular Resistance Gauge (mΩ Meter)
+                    // Circular Resistance Gauge (mΩ Meter calibrated to 600 mΩ IEC boundary)
                     Box(
                         modifier = Modifier.size(190.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Canvas(modifier = Modifier.fillMaxSize()) {
                             val w = size.width
-                            val h = size.height
                             val strokeWidth = 12.dp.toPx()
-                            val center = Offset(w / 2f, h / 2f)
+                            val center = Offset(w / 2f, size.height / 2f)
                             val radius = (w - strokeWidth) / 2f
 
-                            // Background Track Arc (240 degrees arc from 150 to 390)
                             drawArc(
                                 color = if (isDark) Color(0xFF1E293B) else Color(0xFFCFD9E6),
                                 startAngle = 150f,
@@ -270,7 +247,6 @@ fun Page4CableDnaScreen(
                                 style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
                             )
 
-                            // Active Measured Resistance Arc - Smoothly rising over 500ms
                             val resistanceFraction = (animatedResistance / 600f).coerceIn(0f, 1f)
                             val activeSweep = 240f * resistanceFraction
 
@@ -293,20 +269,17 @@ fun Page4CableDnaScreen(
                                 )
                             )
 
-                            // Glowing Real-Time Needle / Pointer Orb at the leading tip of the gauge
                             if (animatedResistance > 1.5f) {
                                 val currentAngle = 150f + activeSweep
                                 val angleRad = Math.toRadians(currentAngle.toDouble())
                                 val needleX = center.x + radius * Math.cos(angleRad).toFloat()
                                 val needleY = center.y + radius * Math.sin(angleRad).toFloat()
 
-                                // Outer neon aura
                                 drawCircle(
                                     color = tierColor.copy(alpha = 0.50f * pulseAlpha),
                                     radius = strokeWidth * 0.95f,
                                     center = Offset(needleX, needleY)
                                 )
-                                // Solid needle core
                                 drawCircle(
                                     color = Color.White,
                                     radius = strokeWidth * 0.55f,
@@ -318,20 +291,8 @@ fun Page4CableDnaScreen(
                                     center = Offset(needleX, needleY)
                                 )
                             }
-
-                            // Dynamic Scan Needle Glow
-                            if (isScanning) {
-                                drawArc(
-                                    color = Color.White.copy(alpha = 0.8f),
-                                    startAngle = scanSweepAngle,
-                                    sweepAngle = 40f,
-                                    useCenter = false,
-                                    style = Stroke(width = strokeWidth + 4.dp.toPx(), cap = StrokeCap.Round)
-                                )
-                            }
                         }
 
-                        // Central Resistance Readout - Smooth Synchronous 500ms counter
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Row(verticalAlignment = Alignment.Bottom) {
                                 Text(
@@ -352,18 +313,18 @@ fun Page4CableDnaScreen(
                                 )
                             }
                             Text(
-                                text = "ΔV Sag: -${animatedVoltageDrop.toInt()} mV",
+                                text = "ΔV Loop: -${animatedVoltageDrop.toInt()} mV",
                                 fontFamily = PlusJakartaSansFontFamily,
                                 fontWeight = FontWeight.SemiBold,
-                                fontSize = 12.sp,
-                                color = if (tier.isDangerous) TactileCoralRed else TextSlate
+                                fontSize = 11.5.sp,
+                                color = if (tier.isDangerous) TactileCoralRed else subTextColor
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                    // Classification Tier Badge & Status Banner (No XP)
+                    // International Compliance & Tier Badge
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -377,7 +338,10 @@ fun Page4CableDnaScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
                                 Icon(
                                     imageVector = if (tier.isDangerous) Icons.Default.Warning else Icons.Default.Verified,
                                     contentDescription = null,
@@ -387,31 +351,40 @@ fun Page4CableDnaScreen(
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Column {
                                     Text(
-                                        text = if (telemetry.plugType == com.example.data.ChargePlug.NONE) "شاحن غير موصول (0 mΩ)" else tier.title,
+                                        text = if (telemetry.plugType == ChargePlug.NONE) {
+                                            "شاحن غير موصول (0 mΩ)"
+                                        } else {
+                                            tier.title
+                                        },
                                         fontFamily = OutfitFontFamily,
                                         fontWeight = FontWeight.Bold,
-                                        fontSize = 14.sp,
+                                        fontSize = 13.5.sp,
                                         color = textColor
                                     )
                                     Text(
-                                        text = if (telemetry.plugType == com.example.data.ChargePlug.NONE) "وصل الشاحن لبدء الفحص التلقائي الفوري" else tier.grade,
+                                        text = if (telemetry.plugType == ChargePlug.NONE) {
+                                            "وصل الكابل للقياس التلقائي وفق IEC 62680"
+                                        } else {
+                                            "${tier.grade} • ${activeResult.estimatedAwg}"
+                                        },
                                         fontFamily = PlusJakartaSansFontFamily,
                                         fontWeight = FontWeight.Bold,
-                                        fontSize = 11.sp,
+                                        fontSize = 10.5.sp,
                                         color = tierColor
                                     )
                                 }
                             }
 
-                            // Active Sensor Auto Status Chip
+                            Spacer(modifier = Modifier.width(6.dp))
+
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(8.dp))
                                     .background(tierColor)
-                                    .padding(horizontal = 10.dp, vertical = 5.dp)
+                                    .padding(horizontal = 9.dp, vertical = 5.dp)
                             ) {
                                 Text(
-                                    text = if (telemetry.plugType == com.example.data.ChargePlug.NONE) "STANDBY" else "100% AUTO",
+                                    text = if (telemetry.plugType == ChargePlug.NONE) "STANDBY" else "${activeResult.qualityScore}/100",
                                     fontFamily = OutfitFontFamily,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 11.sp,
@@ -423,11 +396,10 @@ fun Page4CableDnaScreen(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    // Tier Description Box
                     Text(
-                        text = if (telemetry.plugType == com.example.data.ChargePlug.NONE)
-                            "المستشعرات في وضع الاستعداد بانتظار توصيل كابل الشحن لحساب المقاومة وهبوط الجهد فورياً بدقة متناهية."
-                        else tier.description,
+                        text = activeResult.tailoredDeviceNote.ifBlank {
+                            "المستشعرات في وضع المراقبة المستمرة وفق معايير USB-IF Rev 2.3 و IEC 62680 (الحد الأقصى لهبوط الجهد ≤ 750 mV)."
+                        },
                         fontFamily = PlusJakartaSansFontFamily,
                         fontSize = 11.sp,
                         color = subTextColor,
@@ -439,113 +411,299 @@ fun Page4CableDnaScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // 3. 2x2 Telemetry Metrics Grid (Voltage Drop, Thermal Watts, Protocol, Score)
-        Column(
+        // 3. International Standards Metrics Grid (Adaptive Layout by Container Width & Device Class)
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+                .padding(horizontal = 16.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                // Voltage Drop Sag
-                CableMetricCard(
-                    modifier = Modifier.weight(1f),
-                    title = "VOLTAGE SAG",
-                    value = if (animatedVoltageDrop.toInt() > 0) "-${animatedVoltageDrop.toInt()} mV" else "0 mV",
-                    subtext = if (telemetry.plugType == com.example.data.ChargePlug.NONE) "No load connected" else "Drop from 5.0V line",
-                    accentColor = if (animatedVoltageDrop > 500f) TactileCoralRed else TactileRoyalBlue,
-                    isDark = isDark
-                )
-
-                // Thermal Dissipation
-                CableMetricCard(
-                    modifier = Modifier.weight(1f),
-                    title = "HEAT DISSIPATION",
-                    value = "${activeResult.thermalDissipationMilliWatts} mW",
-                    subtext = "I² × R Line Loss",
-                    accentColor = if (activeResult.thermalDissipationMilliWatts > 2500) TactileCoralRed else TactileAmber,
-                    isDark = isDark
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                // Protocol
-                CableMetricCard(
-                    modifier = Modifier.weight(1f),
-                    title = "PROTOCOL MATRIX",
-                    value = if (telemetry.plugType == com.example.data.ChargePlug.NONE) "Disconnected" else activeResult.usbProtocol,
-                    subtext = if (telemetry.plugType == com.example.data.ChargePlug.NONE) "Line Idle (0 mA)" else "Handshake Active",
-                    accentColor = TactileCyan,
-                    isDark = isDark
-                )
-
-                // Quality Score
-                CableMetricCard(
-                    modifier = Modifier.weight(1f),
-                    title = "CABLE SCORE",
-                    value = if (telemetry.plugType == com.example.data.ChargePlug.NONE) "-- / 100" else "${activeResult.qualityScore} / 100",
-                    subtext = if (telemetry.plugType == com.example.data.ChargePlug.NONE) "Connect Charger" else "Pin Integrity ${activeResult.pinIntegrityPercent}%",
-                    accentColor = tierColor,
-                    isDark = isDark
-                )
+            val useExpandedColumns = maxWidth >= 560.dp || deviceProfile.formFactor == DeviceFormFactor.TABLET
+            if (useExpandedColumns) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        CableMetricCard(
+                            modifier = Modifier.weight(1f),
+                            title = "WIRE GAUGE (AWG)",
+                            value = activeResult.estimatedAwg,
+                            subtext = "IEC 62680 Conductor Spec",
+                            accentColor = TactileCyan,
+                            isDark = isDark
+                        )
+                        CableMetricCard(
+                            modifier = Modifier.weight(1f),
+                            title = "LINE EFFICIENCY",
+                            value = "${String.format(Locale.US, "%.1f", activeResult.lineEfficiencyPercent)}%",
+                            subtext = "I²R Loss: ${activeResult.thermalDissipationMilliWatts} mW",
+                            accentColor = TactileGreen,
+                            isDark = isDark
+                        )
+                        CableMetricCard(
+                            modifier = Modifier.weight(1f),
+                            title = "USB-IF LOOP DROP",
+                            value = "-${animatedVoltageDrop.toInt()} mV",
+                            subtext = "Limit ≤ 750 mV @ 3A-5A",
+                            accentColor = if (animatedVoltageDrop > 750f) TactileCoralRed else TactileRoyalBlue,
+                            isDark = isDark
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        CableMetricCard(
+                            modifier = Modifier.weight(1f),
+                            title = "CHARGING PHASE",
+                            value = activeResult.chargingPhase,
+                            subtext = activeResult.cellTopology,
+                            accentColor = TactileAmber,
+                            isDark = isDark
+                        )
+                        CableMetricCard(
+                            modifier = Modifier.weight(1f),
+                            title = "PROTOCOL MATRIX",
+                            value = activeResult.usbProtocol,
+                            subtext = "Handshake & Stability ${activeResult.pinIntegrityPercent}%",
+                            accentColor = TactileCyan,
+                            isDark = isDark
+                        )
+                        CableMetricCard(
+                            modifier = Modifier.weight(1f),
+                            title = "CABLE SCORE",
+                            value = if (telemetry.plugType == ChargePlug.NONE) "-- / 100" else "${activeResult.qualityScore} / 100",
+                            subtext = activeResult.standardCompliance,
+                            accentColor = tierColor,
+                            isDark = isDark
+                        )
+                    }
+                }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        CableMetricCard(
+                            modifier = Modifier.weight(1f),
+                            title = "WIRE GAUGE (AWG)",
+                            value = activeResult.estimatedAwg,
+                            subtext = "معيار المقطع العالمي",
+                            accentColor = TactileCyan,
+                            isDark = isDark
+                        )
+                        CableMetricCard(
+                            modifier = Modifier.weight(1f),
+                            title = "LINE EFFICIENCY",
+                            value = "${String.format(Locale.US, "%.1f", activeResult.lineEfficiencyPercent)}%",
+                            subtext = "فقد حراري ${activeResult.thermalDissipationMilliWatts} mW",
+                            accentColor = TactileGreen,
+                            isDark = isDark
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        CableMetricCard(
+                            modifier = Modifier.weight(1f),
+                            title = "USB-IF LOOP DROP",
+                            value = if (animatedVoltageDrop.toInt() > 0) "-${animatedVoltageDrop.toInt()} mV" else "0 mV",
+                            subtext = "حد USB-IF ≤ 750 mV",
+                            accentColor = if (animatedVoltageDrop > 750f) TactileCoralRed else TactileRoyalBlue,
+                            isDark = isDark
+                        )
+                        CableMetricCard(
+                            modifier = Modifier.weight(1f),
+                            title = "PROTOCOL & PHASE",
+                            value = activeResult.usbProtocol,
+                            subtext = activeResult.chargingPhase,
+                            accentColor = TactileAmber,
+                            isDark = isDark
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        CableMetricCard(
+                            modifier = Modifier.weight(1f),
+                            title = "PIN INTEGRITY",
+                            value = "${activeResult.pinIntegrityPercent}%",
+                            subtext = activeResult.cellTopology,
+                            accentColor = TactileRoyalBlue,
+                            isDark = isDark
+                        )
+                        CableMetricCard(
+                            modifier = Modifier.weight(1f),
+                            title = "CABLE SCORE",
+                            value = if (telemetry.plugType == ChargePlug.NONE) "-- / 100" else "${activeResult.qualityScore} / 100",
+                            subtext = activeResult.standardCompliance,
+                            accentColor = tierColor,
+                            isDark = isDark
+                        )
+                    }
+                }
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        // 4. Auto Refresh Real-Time Sweep Button (No simulation chips, 100% automated)
+        // 4. Detected Device Hardware & Adaptive Spec Card (Formatted by Device Type)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp)
         ) {
-            Button(
-                onClick = {
-                    scope.launch {
-                        isScanning = true
-                        CyberSoundscapeEngine.playDiagnosticSweep()
-                        CyberHapticsEngine.triggerTactileTick(context)
-                        delay(900)
-                        isScanning = false
-                        if (tier.isDangerous) {
-                            CyberHapticsEngine.triggerThermalWarning(context)
-                            CyberSoundscapeEngine.playThermalAlert()
-                        } else {
-                            CyberHapticsEngine.triggerBenchmarkSuccess(context)
-                            CyberSoundscapeEngine.playCableTierLegendary()
-                        }
-                        onRunDiagnosticSweep(null)
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (tier.isDangerous) TactileCoralRed else TactileRoyalBlue
-                )
+            LiquidGlassCard(
+                modifier = Modifier.fillMaxWidth(),
+                accentColor = TactileRoyalBlue,
+                isDarkMode = isDark,
+                glowIntensity = glow,
+                testTag = "device_hardware_profile_card"
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = if (isScanning) Icons.Default.Refresh else Icons.Default.Speed,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = if (isScanning) "SAMPLING HARDWARE REGISTERS..." else "RE-SCAN CABLE & CHARGER NOW",
-                        fontFamily = OutfitFontFamily,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp,
-                        color = Color.White
-                    )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(TactileRoyalBlue.copy(alpha = if (isDark) 0.22f else 0.12f))
+                                    .border(1.dp, TactileRoyalBlue.copy(alpha = 0.45f), RoundedCornerShape(10.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Devices,
+                                    contentDescription = null,
+                                    tint = TactileRoyalBlue,
+                                    modifier = Modifier.size(19.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "ملف العتاد المخصص لجهازك",
+                                    fontFamily = OutfitFontFamily,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.5.sp,
+                                    color = textColor
+                                )
+                                Text(
+                                    text = "${deviceProfile.brand} ${deviceProfile.model} • ${deviceProfile.formFactor.labelAr}",
+                                    fontFamily = PlusJakartaSansFontFamily,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 11.sp,
+                                    color = TactileRoyalBlue,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(surfaceInset)
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = "${deviceProfile.recommendedPowerWatts}W Target",
+                                fontFamily = OutfitFontFamily,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 10.sp,
+                                color = textColor
+                            )
+                        }
+                    }
+
+                    // Device Specs Structured Matrix (adapts to Phone vs Tablet/Foldable width)
+                    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                        val wideDevice = maxWidth >= 520.dp || deviceProfile.formFactor != DeviceFormFactor.PHONE
+                        val specs = listOf(
+                            "المعالج (SoC)" to deviceProfile.chipset,
+                            "النظام والمعمارية" to "${deviceProfile.androidVersion} • ${deviceProfile.primaryAbi}",
+                            "الذاكرة والأنوية" to "${String.format(Locale.US, "%.1f", deviceProfile.totalRamGb)} GB RAM • ${deviceProfile.cpuCores} أنوية",
+                            "منظومة الشحن" to deviceProfile.chargingEcosystemAr,
+                            "السعة والخلية" to "${deviceProfile.nominalDesignCapacityMah} mAh • ${activeResult.cellTopology}",
+                            "الحد الحراري الآمن" to "≤ ${deviceProfile.safeThermalCeilingC}°C (معيار المصنّع)"
+                        )
+                        val chunkCount = if (wideDevice) 3 else 2
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            specs.chunked(chunkCount).forEach { rowSpecs ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    rowSpecs.forEach { (k, v) ->
+                                        Column(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .background(surfaceInset.copy(alpha = if (isDark) 0.55f else 0.72f))
+                                                .padding(horizontal = 10.dp, vertical = 8.dp)
+                                        ) {
+                                            Text(
+                                                text = k,
+                                                fontFamily = PlusJakartaSansFontFamily,
+                                                fontSize = 9.5.sp,
+                                                color = subTextColor,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                text = v,
+                                                fontFamily = OutfitFontFamily,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 11.sp,
+                                                color = textColor,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+                                    repeat(chunkCount - rowSpecs.size) {
+                                        Spacer(modifier = Modifier.weight(1f))
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Recommended Cable Spec Banner Tailored to Device OEM
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(TactileGreen.copy(alpha = if (isDark) 0.14f else 0.10f))
+                            .border(1.dp, TactileGreen.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
+                            .padding(horizontal = 12.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ElectricMeter,
+                            contentDescription = null,
+                            tint = TactileGreen,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "الكابل الموصى به لجهازك: ${deviceProfile.recommendedCableAr}",
+                            fontFamily = PlusJakartaSansFontFamily,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 10.5.sp,
+                            color = textColor,
+                            lineHeight = 14.sp
+                        )
+                    }
                 }
             }
         }
@@ -561,36 +719,47 @@ private fun CableMetricCard(
     accentColor: Color,
     isDark: Boolean
 ) {
+    val resolvedTheme = LocalAmpereTheme.current
+    val bgColor = if (resolvedTheme.themeId != null) resolvedTheme.surface else if (isDark) Color(0xFF1E293B) else Color(0xFFE7ECF3)
+    val borderColor = if (resolvedTheme.themeId != null) resolvedTheme.border else if (isDark) Color(0xFF334155) else Color(0x99BECAD8)
+    val subColor = if (resolvedTheme.themeId != null) resolvedTheme.textSecondary else if (isDark) Color(0xFF94A3B8) else TextSlate
+
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(14.dp))
-            .background(if (isDark) Color(0xFF1E293B) else Color(0xFFE7ECF3))
-            .border(1.dp, if (isDark) Color(0xFF334155) else Color(0x99BECAD8), RoundedCornerShape(14.dp))
-            .padding(14.dp)
+            .background(bgColor)
+            .border(1.dp, borderColor, RoundedCornerShape(14.dp))
+            .padding(12.dp)
     ) {
         Column {
             Text(
                 text = title,
                 fontFamily = OutfitFontFamily,
                 fontWeight = FontWeight.Bold,
-                fontSize = 10.sp,
-                letterSpacing = 0.5.sp,
-                color = TextSlate
+                fontSize = 9.5.sp,
+                letterSpacing = 0.4.sp,
+                color = subColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = value,
                 fontFamily = OutfitFontFamily,
                 fontWeight = FontWeight.Bold,
-                fontSize = 15.sp,
-                color = accentColor
+                fontSize = 13.sp,
+                color = accentColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = subtext,
                 fontFamily = PlusJakartaSansFontFamily,
-                fontSize = 10.sp,
-                color = if (isDark) Color(0xFF94A3B8) else TextSlate
+                fontSize = 9.5.sp,
+                color = subColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }

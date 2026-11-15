@@ -264,5 +264,155 @@ class ExampleUnitTest {
         assertTrue(sorted[1].consumptionPercent > sorted[2].consumptionPercent)
         assertTrue(sorted.all { it.estimatedMah > 0 })
     }
-}
 
+    @Test
+    fun testForceChangeIconDefaultAndScientificBatteryModes() {
+        val config = GlassThemeConfig()
+        assertFalse(config.forceChangeIconEnabled)
+
+        // 1. 38.5°C during fast charging must stay ENERGY_STORING (not false overheat below 42°C JEITA ceiling)
+        val warmFastChargeState = com.example.data.telemetry.BatteryScienceClassifier.classifyState(
+            temperatureC = 38.5f,
+            voltageMv = 4150,
+            currentMa = 2600,
+            percentage = 48,
+            isCharging = true,
+            isScreenInteractive = true,
+            tempDropRatePerTick = 0.0f,
+            isCryoSkillActive = false,
+            deviceThermalCeilingC = 42.0f
+        )
+        assertEquals(com.example.data.LivingBatteryState.ENERGY_STORING, warmFastChargeState)
+
+        // 2. >= 42.0°C triggers OVERDRIVE_HEATING (IEEE 1625 / JEITA stress zone)
+        val stressState = com.example.data.telemetry.BatteryScienceClassifier.classifyState(
+            temperatureC = 42.5f,
+            voltageMv = 4200,
+            currentMa = 2400,
+            percentage = 55,
+            isCharging = true,
+            isScreenInteractive = true,
+            tempDropRatePerTick = -0.05f,
+            isCryoSkillActive = false,
+            deviceThermalCeilingC = 42.0f
+        )
+        assertEquals(com.example.data.LivingBatteryState.OVERDRIVE_HEATING, stressState)
+
+        // 3. < 15.0°C triggers COOLING cold-charge protection
+        val coldState = com.example.data.telemetry.BatteryScienceClassifier.classifyState(
+            temperatureC = 12.0f,
+            voltageMv = 3900,
+            currentMa = 900,
+            percentage = 40,
+            isCharging = true,
+            isScreenInteractive = true,
+            tempDropRatePerTick = 0.0f,
+            isCryoSkillActive = false,
+            deviceThermalCeilingC = 42.0f
+        )
+        assertEquals(com.example.data.LivingBatteryState.COOLING, coldState)
+
+        // 4. Ordered metrics put Temperature #1 during OVERDRIVE_HEATING, and Current #1 during ENERGY_STORING
+        val profile = com.example.data.DeviceHardwareProfile(
+            brand = "Samsung",
+            model = "Galaxy Test",
+            safeThermalCeilingC = 42.0f,
+            nominalDesignCapacityMah = 5000
+        )
+        val stressProfile = com.example.data.telemetry.BatteryScienceClassifier.buildScienceProfile(
+            telemetry = BatteryTelemetry(
+                percentage = 55,
+                voltageMv = 4200,
+                currentMa = 2400,
+                temperatureC = 43.0f,
+                livingState = com.example.data.LivingBatteryState.OVERDRIVE_HEATING
+            ),
+            deviceProfile = profile
+        )
+        assertEquals(com.example.data.MetricType.TEMPERATURE, stressProfile.orderedMetrics.first().type)
+
+        val chargingProfile = com.example.data.telemetry.BatteryScienceClassifier.buildScienceProfile(
+            telemetry = BatteryTelemetry(
+                percentage = 45,
+                voltageMv = 4150,
+                currentMa = 3000,
+                temperatureC = 32.0f,
+                status = com.example.data.BatteryStatus.CHARGING,
+                plugType = com.example.data.ChargePlug.AC,
+                livingState = com.example.data.LivingBatteryState.ENERGY_STORING
+            ),
+            deviceProfile = profile
+        )
+        assertEquals(com.example.data.MetricType.CURRENT, chargingProfile.orderedMetrics.first().type)
+    }
+
+    @Test
+    fun testInternationalCableDnaStandardsEngine() {
+        val profile = com.example.data.DeviceHardwareProfile(
+            brand = "Google",
+            model = "Pixel Test",
+            chargingEcosystemEn = "USB-IF PD 3.0 + PPS",
+            recommendedPowerWatts = 27,
+            safeThermalCeilingC = 41.0f
+        )
+
+        // Genuine 20AWG E-Marked 5A fast cable
+        val oemCable = com.example.data.telemetry.CableDnaStandardsEngine.evaluate(
+            telemetry = BatteryTelemetry(
+                percentage = 50,
+                status = com.example.data.BatteryStatus.CHARGING,
+                plugType = com.example.data.ChargePlug.AC,
+                voltageMv = 4130,
+                currentMa = 3500,
+                temperatureC = 33.0f
+            ),
+            deviceProfile = profile,
+            observedBaselineOcvMv = 3830,
+            dynamicDeltaImpedanceMilliOhms = 90,
+            currentRipplePercent = 2.0f
+        )
+        assertEquals(com.example.data.CableDnaTier.LEGENDARY_ORIGINAL, oemCable.tier)
+        assertTrue(oemCable.estimatedAwg.contains("20 AWG"))
+        assertTrue(oemCable.standardCompliance.contains("PASS"))
+
+        // 2S Dual-Cell (8.15V pack) high-speed charge does not miscalculate against 5V rail
+        val dualCellCable = com.example.data.telemetry.CableDnaStandardsEngine.evaluate(
+            telemetry = BatteryTelemetry(
+                percentage = 50,
+                status = com.example.data.BatteryStatus.CHARGING,
+                plugType = com.example.data.ChargePlug.AC,
+                voltageMv = 8150,
+                currentMa = 4800,
+                temperatureC = 35.0f
+            ),
+            deviceProfile = profile.copy(isDualCellSuspected = true),
+            observedBaselineOcvMv = 7660,
+            dynamicDeltaImpedanceMilliOhms = 98,
+            currentRipplePercent = 2.2f
+        )
+        assertEquals(com.example.data.CableDnaTier.LEGENDARY_ORIGINAL, dualCellCable.tier)
+        assertTrue(dualCellCable.cellTopology.contains("2S"))
+    }
+
+    @Test
+    fun testGraphicsModeAndDropletDragDefaults() {
+        val defaultConfig = GlassThemeConfig()
+        assertEquals(com.example.data.GraphicsMode.STANDARD, defaultConfig.graphicsMode)
+        assertFalse(defaultConfig.isSimpleMode)
+        assertFalse(defaultConfig.isProMode)
+        assertFalse(defaultConfig.dropletDragNavigationEnabled)
+
+        val simpleConfig = defaultConfig.copy(graphicsMode = com.example.data.GraphicsMode.SIMPLE)
+        assertTrue(simpleConfig.isSimpleMode)
+        assertFalse(simpleConfig.isProMode)
+
+        val proConfig = defaultConfig.copy(graphicsMode = com.example.data.GraphicsMode.PRO, samplingIntervalMs = 1L)
+        assertTrue(proConfig.isProMode)
+        assertFalse(proConfig.isSimpleMode)
+        assertEquals(1L, proConfig.samplingIntervalMs)
+
+        assertEquals(com.example.data.GraphicsMode.SIMPLE, com.example.data.GraphicsMode.fromKey("simple"))
+        assertEquals(com.example.data.GraphicsMode.PRO, com.example.data.GraphicsMode.fromKey("pro"))
+        assertEquals(com.example.data.GraphicsMode.STANDARD, com.example.data.GraphicsMode.fromKey("invalid"))
+    }
+}

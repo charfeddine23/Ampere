@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.sp
 import com.example.data.BatteryStatus
 import com.example.data.ChargePlug
 import com.example.data.LivingBatteryState
+import com.example.ui.theme.LocalAmpereTheme
 import com.example.ui.theme.OutfitFontFamily
 import com.example.ui.theme.PlusJakartaSansFontFamily
 import com.example.ui.theme.TextCharcoal
@@ -73,9 +74,13 @@ fun LiquidBatteryRing(
     glowIntensity: Float = 0.75f,
     ambientLiquidWaves: Boolean = true
 ) {
+    val theme = LocalAmpereTheme.current
+    val isSimple = theme.isSimpleMode
+    val isPro = theme.isProMode
+
     val animatedPercent by animateFloatAsState(
         targetValue = percentage.toFloat(),
-        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
+        animationSpec = if (isSimple) tween(160) else spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
         label = "animatedPercent"
     )
 
@@ -86,34 +91,53 @@ fun LiquidBatteryRing(
         LivingBatteryState.DEEP_SLEEP -> 3800
     }
 
-    val infiniteTransition = rememberInfiniteTransition(label = "liquidWaves")
-    val wavePhase by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = (2 * PI).toFloat(),
-        animationSpec = infiniteRepeatable(
-            animation = tween(waveDuration, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "wavePhase"
-    )
+    val wavePhase: Float
+    val auraPulse: Float
+    if (isSimple) {
+        wavePhase = 0f
+        auraPulse = 0.7f
+    } else {
+        val infiniteTransition = rememberInfiniteTransition(label = "liquidWaves")
+        val animWave by infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = (2 * PI).toFloat(),
+            animationSpec = infiniteRepeatable(
+                animation = tween(waveDuration, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "wavePhase"
+        )
+        val animAura by infiniteTransition.animateFloat(
+            initialValue = 0.7f,
+            targetValue = 1.0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1200, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "auraPulse"
+        )
+        wavePhase = animWave
+        auraPulse = animAura
+    }
 
-    val auraPulse by infiniteTransition.animateFloat(
-        initialValue = 0.7f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "auraPulse"
-    )
+    val targetPrimaryColor = when {
+        isSimple -> theme.accent
+        isPro -> androidx.compose.ui.graphics.lerp(livingState.neonPrimary, theme.accent, 0.55f)
+        else -> livingState.neonPrimary
+    }
+    val targetSecondaryColor = when {
+        isSimple -> theme.secondaryAccent
+        isPro -> theme.secondaryAccent
+        else -> livingState.neonSecondary
+    }
 
     val activePrimary by animateColorAsState(
-        targetValue = livingState.neonPrimary,
+        targetValue = targetPrimaryColor,
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
         label = "neonPrimary"
     )
     val activeSecondary by animateColorAsState(
-        targetValue = livingState.neonSecondary,
+        targetValue = targetSecondaryColor,
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
         label = "neonSecondary"
     )
@@ -131,42 +155,51 @@ fun LiquidBatteryRing(
             val radius = (canvasSize - strokeWidth) / 2f
             val center = Offset(size.width / 2f, size.height / 2f)
 
-            // 1. Neumorphic Extruded Dial Dual Shadows
-            val shadowOffset = 6.dp.toPx()
-            val shadowColor = if (isDarkMode) Color(0x66000000) else Color(0x407589A2)
-            val highlightColor = if (isDarkMode) Color(0x1F94A3B8) else Color(0x7AF2F5FA)
+            // 1. Neumorphic Extruded Dial Dual Shadows (omitted cleanly in Simple Mode)
+            if (!isSimple) {
+                val shadowOffset = if (isPro) 4.dp.toPx() else 6.dp.toPx()
+                val shadowColor = if (isDarkMode) Color(0x55000000) else Color(0x367589A2)
+                val highlightColor = if (isDarkMode) Color(0x1894A3B8) else Color(0x6AF2F5FA)
 
-            // Bottom-right shadow
-            drawCircle(
-                color = shadowColor,
-                radius = radius,
-                center = Offset(center.x + shadowOffset, center.y + shadowOffset)
-            )
-
-            // Top-left highlight
-            drawCircle(
-                color = highlightColor,
-                radius = radius,
-                center = Offset(center.x - shadowOffset * 0.7f, center.y - shadowOffset * 0.7f)
-            )
+                drawCircle(
+                    color = shadowColor,
+                    radius = radius,
+                    center = Offset(center.x + shadowOffset, center.y + shadowOffset)
+                )
+                drawCircle(
+                    color = highlightColor,
+                    radius = radius,
+                    center = Offset(center.x - shadowOffset * 0.7f, center.y - shadowOffset * 0.7f)
+                )
+            }
 
             // Dial Disc Surface
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = if (isDarkMode) {
-                        listOf(Color(0xFF243348), Color(0xFF1A2433))
-                    } else {
-                        listOf(Color(0xFFECF1F7), Color(0xFFE5EBF2), Color(0xFFD9E1EB))
-                    },
-                    center = center,
-                    radius = radius
-                ),
-                radius = radius,
-                center = center
-            )
+            if (isSimple) {
+                drawCircle(
+                    color = theme.surface,
+                    radius = radius,
+                    center = center
+                )
+            } else {
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = if (isPro) {
+                            listOf(theme.surface, theme.surfaceInset)
+                        } else if (isDarkMode) {
+                            listOf(Color(0xFF243348), Color(0xFF1A2433))
+                        } else {
+                            listOf(Color(0xFFECF1F7), Color(0xFFE5EBF2), Color(0xFFD9E1EB))
+                        },
+                        center = center,
+                        radius = radius
+                    ),
+                    radius = radius,
+                    center = center
+                )
+            }
 
-            // 2. Liquid Fluid Wave inside circle
-            if (ambientLiquidWaves) {
+            // 2. Liquid Fluid Wave inside circle (disabled in Simple Mode)
+            if (ambientLiquidWaves && !isSimple) {
                 drawNeumorphicLiquidWave(
                     center = center,
                     radius = radius * 0.88f,
@@ -181,14 +214,14 @@ fun LiquidBatteryRing(
 
             // 3. Tactile Inner Ring Bevel
             drawCircle(
-                color = if (isDarkMode) Color(0x33475569) else Color(0x88B4C2D3),
+                color = if (isSimple) theme.border else if (isDarkMode) Color(0x33475569) else Color(0x88B4C2D3),
                 radius = radius * 0.90f,
                 center = center,
                 style = Stroke(width = 1.dp.toPx())
             )
 
             // 4. Background Track Arc (Soft Neumorphic Groove)
-            val trackColor = if (isDarkMode) Color(0xFF28364B) else Color(0xFFCFD9E6)
+            val trackColor = if (isSimple || isPro) theme.surfaceInset else if (isDarkMode) Color(0xFF28364B) else Color(0xFFCFD9E6)
             drawArc(
                 color = trackColor,
                 startAngle = 135f,
@@ -202,23 +235,26 @@ fun LiquidBatteryRing(
             // 5. Active Tactile Liquid Progress Arc
             val activeSweep = (animatedPercent / 100f).coerceIn(0f, 1f) * 270f
             if (activeSweep > 0f) {
-                // Soft glow halo behind active arc
-                drawArc(
-                    brush = Brush.sweepGradient(
-                        0.0f to activeSecondary.copy(alpha = 0.22f * auraPulse),
-                        0.5f to activePrimary.copy(alpha = 0.35f * auraPulse),
-                        1.0f to activePrimary.copy(alpha = 0.45f),
-                        center = center
-                    ),
-                    startAngle = 135f,
-                    sweepAngle = activeSweep,
-                    useCenter = false,
-                    topLeft = Offset(center.x - radius, center.y - radius),
-                    size = Size(radius * 2, radius * 2),
-                    style = Stroke(width = strokeWidth * 1.6f, cap = StrokeCap.Round)
-                )
+                // Soft glow halo behind active arc (omitted in Simple Mode, restrained in Pro Mode)
+                if (!isSimple) {
+                    val proHaloScale = if (isPro) 0.40f else 1f
+                    drawArc(
+                        brush = Brush.sweepGradient(
+                            0.0f to activeSecondary.copy(alpha = 0.22f * auraPulse * proHaloScale),
+                            0.5f to activePrimary.copy(alpha = 0.35f * auraPulse * proHaloScale),
+                            1.0f to activePrimary.copy(alpha = 0.45f * proHaloScale),
+                            center = center
+                        ),
+                        startAngle = 135f,
+                        sweepAngle = activeSweep,
+                        useCenter = false,
+                        topLeft = Offset(center.x - radius, center.y - radius),
+                        size = Size(radius * 2, radius * 2),
+                        style = Stroke(width = strokeWidth * 1.6f, cap = StrokeCap.Round)
+                    )
+                }
 
-                // Crisp Vibrant Arc
+                // Crisp Progress Arc
                 drawArc(
                     brush = Brush.sweepGradient(
                         0.0f to activeSecondary,
@@ -234,16 +270,18 @@ fun LiquidBatteryRing(
                     style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
                 )
 
-                // Head tracking pulse dot
+                // Head tracking dot
                 val endAngleRad = Math.toRadians((135f + activeSweep).toDouble())
                 val headX = center.x + radius * cos(endAngleRad).toFloat()
                 val headY = center.y + radius * sin(endAngleRad).toFloat()
 
-                drawCircle(
-                    color = activePrimary.copy(alpha = 0.4f),
-                    radius = strokeWidth * 0.85f,
-                    center = Offset(headX, headY)
-                )
+                if (!isSimple) {
+                    drawCircle(
+                        color = activePrimary.copy(alpha = if (isPro) 0.24f else 0.4f),
+                        radius = strokeWidth * 0.85f,
+                        center = Offset(headX, headY)
+                    )
+                }
                 drawCircle(
                     color = Color.White,
                     radius = strokeWidth * 0.45f,
@@ -257,7 +295,9 @@ fun LiquidBatteryRing(
             }
 
             // 6. Perimeter Technical Graduation Ticks
-            drawDialTicks(center = center, radius = radius + 10.dp.toPx(), accentColor = activePrimary, isDarkMode = isDarkMode)
+            if (!isSimple) {
+                drawDialTicks(center = center, radius = radius + 10.dp.toPx(), accentColor = activePrimary, isDarkMode = isDarkMode)
+            }
         }
 
         // Center Digital Display Readout

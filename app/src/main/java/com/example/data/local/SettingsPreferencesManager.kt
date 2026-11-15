@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import androidx.compose.ui.graphics.Color
 import com.example.data.AppTier
 import com.example.data.GlassThemeConfig
+import com.example.data.GraphicsMode
 import com.example.data.LauncherIconVariant
 import com.example.data.TemperatureUnit
 
@@ -55,6 +56,7 @@ class SettingsPreferencesManager(context: Context) {
         val target90Fps = prefs.getBoolean(KEY_TARGET_90FPS, true)
         val showFpsOverlay = prefs.getBoolean(KEY_SHOW_FPS, true)
 
+        val graphicsMode = GraphicsMode.fromKey(prefs.getString(KEY_GRAPHICS_MODE, GraphicsMode.STANDARD.key))
         return GlassThemeConfig(
             isDarkMode = isDarkMode,
             glowIntensity = glowIntensity,
@@ -66,7 +68,7 @@ class SettingsPreferencesManager(context: Context) {
             glassBlurAmount = glassBlurAmount,
             ambientLiquidWaves = ambientLiquidWaves,
             temperatureUnit = temperatureUnit,
-            samplingIntervalMs = 1000L,
+            samplingIntervalMs = if (graphicsMode == GraphicsMode.PRO) 1L else 1000L,
             soundEffectsEnabled = soundEnabled,
             backgroundServiceEnabled = bgServiceEnabled,
             alertOn80Percent = alertOn80,
@@ -81,11 +83,22 @@ class SettingsPreferencesManager(context: Context) {
             currentZeroOffsetMa = prefs.getFloat(KEY_CURRENT_ZERO_OFFSET, 0.0f),
             launcherIconKey = prefs.getString(KEY_LAUNCHER_ICON_KEY, LauncherIconVariant.SAPPHIRE.key)
                 ?: LauncherIconVariant.SAPPHIRE.key,
-            activeThemeId = prefs.getString(KEY_ACTIVE_THEME_ID, null)
+            forceChangeIconEnabled = prefs.getBoolean(KEY_FORCE_CHANGE_ICON, false),
+            activeThemeId = prefs.getString(KEY_ACTIVE_THEME_ID, null),
+            graphicsMode = graphicsMode,
+            dropletDragNavigationEnabled = prefs.getBoolean(KEY_DROPLET_DRAG_NAV, false)
         )
     }
 
     fun saveThemeConfig(config: GlassThemeConfig) {
+        saveThemeConfigInternal(config, synchronous = false)
+    }
+
+    fun saveThemeConfigSync(config: GlassThemeConfig) {
+        saveThemeConfigInternal(config, synchronous = true)
+    }
+
+    private fun saveThemeConfigInternal(config: GlassThemeConfig, synchronous: Boolean) {
         prefs.edit().apply {
             putBoolean(KEY_IS_DARK_MODE, config.isDarkMode)
             putFloat(KEY_GLOW_INTENSITY, config.glowIntensity)
@@ -120,12 +133,19 @@ class SettingsPreferencesManager(context: Context) {
             putFloat(KEY_CURRENT_MULTIPLIER, config.currentMultiplier)
             putFloat(KEY_CURRENT_ZERO_OFFSET, config.currentZeroOffsetMa)
             putString(KEY_LAUNCHER_ICON_KEY, config.launcherIconKey)
+            putBoolean(KEY_FORCE_CHANGE_ICON, config.forceChangeIconEnabled)
+            putString(KEY_GRAPHICS_MODE, config.graphicsMode.key)
+            putBoolean(KEY_DROPLET_DRAG_NAV, config.dropletDragNavigationEnabled)
             if (config.activeThemeId != null) {
                 putString(KEY_ACTIVE_THEME_ID, config.activeThemeId)
             } else {
                 remove(KEY_ACTIVE_THEME_ID)
             }
-            apply()
+            if (synchronous) {
+                commit()
+            } else {
+                apply()
+            }
         }
     }
 
@@ -155,6 +175,9 @@ class SettingsPreferencesManager(context: Context) {
         private const val KEY_CURRENT_MULTIPLIER = "current_multiplier"
         private const val KEY_CURRENT_ZERO_OFFSET = "current_zero_offset"
         private const val KEY_LAUNCHER_ICON_KEY = "launcher_icon_key"
+        private const val KEY_FORCE_CHANGE_ICON = "force_change_icon"
         private const val KEY_ACTIVE_THEME_ID = "active_theme_id"
+        private const val KEY_GRAPHICS_MODE = "graphics_mode"
+        private const val KEY_DROPLET_DRAG_NAV = "droplet_drag_nav"
     }
 }

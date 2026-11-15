@@ -61,25 +61,35 @@ import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Thermostat
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.graphics.drawable.toBitmap
 import com.example.audio.CyberHapticsEngine
 import com.example.data.BatteryTelemetry
+import com.example.data.DeviceHardwareProfile
 import com.example.data.GlassThemeConfig
 import com.example.data.LivingBatteryState
+import com.example.data.MetricType
 import com.example.data.PrizeRoadData
 import com.example.data.TelemetryPoint
 import com.example.data.telemetry.AppBatteryConsumption
 import com.example.data.telemetry.AppBatteryUsageTracker
 import com.example.data.telemetry.AppUsageSnapshot
+import com.example.data.telemetry.BatteryScienceClassifier
+import com.example.data.telemetry.LivingStateScienceProfile
 import com.example.ui.components.LiquidBatteryRing
 import com.example.ui.components.LiquidGlassCard
 import com.example.ui.components.PulsingNeonDot
@@ -91,6 +101,8 @@ import com.example.ui.theme.TactileAmber
 import com.example.ui.theme.TactileCoralRed
 import com.example.ui.theme.TactileCyan
 import com.example.ui.theme.TactileGreen
+import com.example.ui.theme.TactileRoyalBlue
+import com.example.ui.theme.TactileViolet
 import com.example.ui.theme.TextCharcoal
 import com.example.ui.theme.TextSlate
 import com.example.ui.theme.TextWhite
@@ -114,6 +126,7 @@ fun Page1LivingBatteryScreen(
     currentHistory: List<TelemetryPoint>,
     themeConfig: GlassThemeConfig,
     prizeRoadData: PrizeRoadData,
+    deviceProfile: DeviceHardwareProfile = DeviceHardwareProfile(),
     isAutoSensorMode: Boolean = true,
     appUsageSnapshot: AppUsageSnapshot = AppUsageSnapshot(),
     onRefreshAppUsage: () -> Unit = {},
@@ -121,13 +134,33 @@ fun Page1LivingBatteryScreen(
     onNavigateToPrizeRoad: () -> Unit = {},
     onToggleThermalTest: () -> Unit = {}
 ) {
+    val context = LocalContext.current
     val scrollState = rememberScrollState()
     val isDark = themeConfig.isDarkMode
     val state = telemetry.livingState
-    val primaryColor = state.neonPrimary
-    val glow = themeConfig.glowIntensity
     val resolvedTheme = LocalAmpereTheme.current
+    val primaryColor = when {
+        resolvedTheme.isSimpleMode -> resolvedTheme.accent
+        resolvedTheme.isProMode -> androidx.compose.ui.graphics.lerp(state.neonPrimary, resolvedTheme.accent, 0.55f)
+        else -> state.neonPrimary
+    }
+    val glow = when {
+        resolvedTheme.isSimpleMode -> 0f
+        resolvedTheme.isProMode -> 0.35f
+        else -> themeConfig.glowIntensity
+    }
+    val autoSensorsColor = when {
+        resolvedTheme.isSimpleMode -> resolvedTheme.accent
+        resolvedTheme.isProMode -> resolvedTheme.accent
+        else -> TactileGreen
+    }
     val textColor = if (resolvedTheme.themeId != null) resolvedTheme.textPrimary else if (isDark) TextWhite else TextCharcoal
+    val subTextColor = if (resolvedTheme.themeId != null) resolvedTheme.textSecondary else TextSlate
+
+    var showAutoSensorsConditionsDialog by remember { mutableStateOf(false) }
+    val scienceProfile = remember(telemetry, deviceProfile) {
+        BatteryScienceClassifier.buildScienceProfile(telemetry, deviceProfile)
+    }
 
     Column(
         modifier = Modifier
@@ -197,37 +230,41 @@ fun Page1LivingBatteryScreen(
                                 Spacer(modifier = Modifier.width(6.dp))
                                 PulsingNeonDot(color = primaryColor, sizeDp = 5.dp)
                             }
+                            val syncTag = if (themeConfig.isProMode) " • 1ms PRO" else ""
                             Text(
-                                text = when (state) {
-                                    LivingBatteryState.OVERDRIVE_HEATING -> "Temp ${telemetry.temperatureC}°C > 38°C • Thermal Stress"
-                                    LivingBatteryState.COOLING -> "Rapid Core Dissipation • <35°C Normalizing"
-                                    LivingBatteryState.ENERGY_STORING -> "Charging Flow • ${telemetry.temperatureC}°C (20-37°C) • Stable ${telemetry.voltageMv}mV"
-                                    LivingBatteryState.DEEP_SLEEP -> "Screen Idle • Sub-Milliamp Draw (${telemetry.currentMa}mA)"
-                                },
+                                text = "${scienceProfile.phaseLabelAr} • ${telemetry.temperatureC}°C • ${String.format(Locale.US, "%.2f", scienceProfile.cRate)}C$syncTag",
                                 fontFamily = PlusJakartaSansFontFamily,
                                 fontSize = 10.sp,
-                                color = TextSlate,
-                                maxLines = 1
+                                color = subTextColor,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
 
                     Spacer(modifier = Modifier.width(8.dp))
 
-                    // Right: Real-time Auto Sensors Indicator
+                    // Right: Clickable 100% AUTO SENSORS Indicator (Opens Scientific Mode Conditions Popup)
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(TactileGreen.copy(alpha = if (isDark) 0.22f else 0.14f))
-                            .border(1.dp, TactileGreen.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                            .minimumInteractiveComponentSize()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(autoSensorsColor.copy(alpha = if (isDark) 0.22f else 0.14f))
+                            .border(1.dp, autoSensorsColor.copy(alpha = 0.55f), RoundedCornerShape(10.dp))
+                            .clickable {
+                                CyberHapticsEngine.triggerTactileTick(context)
+                                showAutoSensorsConditionsDialog = true
+                            }
+                            .padding(horizontal = 10.dp, vertical = 8.dp)
+                            .testTag("auto_sensors_info_button"),
+                        contentAlignment = Alignment.Center
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 imageVector = Icons.Default.Sensors,
-                                contentDescription = null,
-                                tint = TactileGreen,
-                                modifier = Modifier.size(11.dp)
+                                contentDescription = "شروط أوضاع المستشعرات",
+                                tint = autoSensorsColor,
+                                modifier = Modifier.size(12.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
@@ -236,7 +273,14 @@ fun Page1LivingBatteryScreen(
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 9.sp,
                                 letterSpacing = 0.3.sp,
-                                color = TactileGreen
+                                color = autoSensorsColor
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = null,
+                                tint = autoSensorsColor,
+                                modifier = Modifier.size(11.dp)
                             )
                         }
                     }
@@ -270,7 +314,7 @@ fun Page1LivingBatteryScreen(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        // Overdrive Warning Card (if heating condition is active)
+        // Overdrive Warning Card (calibrated against IEEE 1625 / JEITA >= 42°C ceiling)
         if (state == LivingBatteryState.OVERDRIVE_HEATING) {
             Box(
                 modifier = Modifier
@@ -279,7 +323,7 @@ fun Page1LivingBatteryScreen(
             ) {
                 LiquidGlassCard(
                     modifier = Modifier.fillMaxWidth(),
-                    accentColor = Color(0xFFFF3D00),
+                    accentColor = TactileCoralRed,
                     isDarkMode = isDark,
                     glowIntensity = glow
                 ) {
@@ -288,25 +332,25 @@ fun Page1LivingBatteryScreen(
                             Icon(
                                 imageVector = Icons.Default.Warning,
                                 contentDescription = "Thermal Warning",
-                                tint = Color(0xFFFF3D00),
+                                tint = TactileCoralRed,
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "THERMAL STRESS: ELEVATED CORE TEMPERATURE (>38°C)",
+                                text = "THERMAL STRESS: JEITA CEILING (≥${deviceProfile.safeThermalCeilingC}°C)",
                                 fontFamily = OutfitFontFamily,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 12.sp,
                                 letterSpacing = 0.4.sp,
-                                color = Color(0xFFFF3D00)
+                                color = TactileCoralRed
                             )
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Battery cell thermistor is reading ${telemetry.temperatureC}°C. Unplug the charger or deploy Tech Crew Cryo Coolant (Page 4) to restore electrochemical stability.",
+                            text = "${scienceProfile.thermalAssessment.detailAr} القراءة الحالية: ${telemetry.temperatureC}°C.",
                             fontFamily = PlusJakartaSansFontFamily,
                             fontSize = 11.sp,
-                            color = TextSlate,
+                            color = subTextColor,
                             lineHeight = 15.sp
                         )
                     }
@@ -315,42 +359,49 @@ fun Page1LivingBatteryScreen(
             Spacer(modifier = Modifier.height(12.dp))
         }
 
-        // Live Vital Metrics Row - Harmonized with uniform height and styling
+        // Scientifically Ordered Metrics Matrix per Active Mode (top-3 priority metrics arranged by IEEE/BU studies)
+        val topOrdered = scienceProfile.orderedMetrics.take(3)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            QuickMetricNeumorph(
-                modifier = Modifier.weight(1f),
-                label = "VOLTAGE",
-                value = "${telemetry.voltageMv} mV",
-                color = primaryColor,
-                isDarkMode = isDark
-            )
-            QuickMetricNeumorph(
-                modifier = Modifier.weight(1f),
-                label = "CURRENT FLOW",
-                value = "${if (telemetry.currentMa >= 0) "+" else ""}${telemetry.currentMa} mA",
-                color = primaryColor,
-                isDarkMode = isDark
-            )
-            QuickMetricNeumorph(
-                modifier = Modifier.weight(1f),
-                label = "CORE TEMP",
-                value = "${telemetry.temperatureC} °C",
-                color = when {
-                    telemetry.temperatureC >= 40f -> Color(0xFFFF3D00)
-                    telemetry.temperatureC >= 38f -> Color(0xFFFF9100)
-                    telemetry.temperatureC <= 34f -> Color(0xFF00B0FF)
-                    else -> primaryColor
-                },
-                isDarkMode = isDark,
-                onClick = onToggleThermalTest,
-                subtext = null
-            )
+            topOrdered.forEachIndexed { idx, metric ->
+                val metricColor = when {
+                    metric.isPriorityWarning -> TactileCoralRed
+                    metric.type == MetricType.TEMPERATURE -> when (scienceProfile.thermalAssessment.severityLevel) {
+                        3 -> TactileCoralRed
+                        2 -> TactileAmber
+                        0 -> TactileCyan
+                        else -> TactileGreen
+                    }
+                    idx == 0 -> primaryColor
+                    else -> primaryColor.copy(alpha = 0.90f)
+                }
+                QuickMetricNeumorph(
+                    modifier = Modifier.weight(1f),
+                    label = "#${idx + 1} ${metric.titleAr.substringBefore(" (")}",
+                    value = metric.formattedValue.substringBefore(" ("),
+                    color = metricColor,
+                    isDarkMode = isDark,
+                    onClick = if (metric.type == MetricType.TEMPERATURE) onToggleThermalTest else null,
+                    subtext = metric.standardRangeAr
+                )
+            }
         }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Scientific Thermal Scale & Active Mode Reasoning Card
+        ScientificThermalAndModeCard(
+            scienceProfile = scienceProfile,
+            telemetry = telemetry,
+            accentColor = primaryColor,
+            isDarkMode = isDark,
+            glowIntensity = glow,
+            onOpenConditions = { showAutoSensorsConditionsDialog = true }
+        )
 
         Spacer(modifier = Modifier.height(14.dp))
 
@@ -361,6 +412,17 @@ fun Page1LivingBatteryScreen(
             isDarkMode = isDark,
             glowIntensity = glow,
             onRefresh = onRefreshAppUsage
+        )
+    }
+
+    if (showAutoSensorsConditionsDialog) {
+        AutoSensorsConditionsDialog(
+            currentState = state,
+            telemetry = telemetry,
+            deviceProfile = deviceProfile,
+            scienceProfile = scienceProfile,
+            isDarkMode = isDark,
+            onDismiss = { showAutoSensorsConditionsDialog = false }
         )
     }
 }
@@ -1141,11 +1203,357 @@ private fun QuickMetricNeumorph(
                 Text(
                     text = subtext,
                     fontFamily = PlusJakartaSansFontFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 7.5.sp,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 8.sp,
                     color = color,
-                    maxLines = 1
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ScientificThermalAndModeCard(
+    scienceProfile: LivingStateScienceProfile,
+    telemetry: BatteryTelemetry,
+    accentColor: Color,
+    isDarkMode: Boolean,
+    glowIntensity: Float,
+    onOpenConditions: () -> Unit
+) {
+    val resolvedTheme = LocalAmpereTheme.current
+    val textColor = if (resolvedTheme.themeId != null) resolvedTheme.textPrimary else if (isDarkMode) TextWhite else TextCharcoal
+    val subTextColor = if (resolvedTheme.themeId != null) resolvedTheme.textSecondary else TextSlate
+    val insetBg = if (resolvedTheme.themeId != null) resolvedTheme.surfaceInset else if (isDarkMode) Color(0xFF151F30) else Color(0xFFD2DBE6)
+    val sevColor = when (scienceProfile.thermalAssessment.severityLevel) {
+        3 -> TactileCoralRed
+        2 -> TactileAmber
+        0 -> TactileCyan
+        else -> TactileGreen
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+    ) {
+        LiquidGlassCard(
+            modifier = Modifier.fillMaxWidth(),
+            accentColor = accentColor,
+            isDarkMode = isDarkMode,
+            shape = RoundedCornerShape(20.dp),
+            glowIntensity = glowIntensity,
+            testTag = "scientific_mode_thermal_card"
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Thermostat,
+                            contentDescription = null,
+                            tint = sevColor,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = scienceProfile.thermalAssessment.zoneTitleAr,
+                            fontFamily = OutfitFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.5.sp,
+                            color = sevColor,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(insetBg)
+                            .clickable { onOpenConditions() }
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = "شروط الأوضاع",
+                            fontFamily = PlusJakartaSansFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp,
+                            color = accentColor
+                        )
+                    }
+                }
+
+                // 4-Band IEEE / JEITA Thermal Spectrum
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    val bands = listOf(
+                        Triple("<15°C بارد", TactileCyan, 0),
+                        Triple("15–35°C مثالي", TactileGreen, 1),
+                        Triple("35–41.9°C نشط", TactileAmber, 2),
+                        Triple("≥42°C إجهاد", TactileCoralRed, 3)
+                    )
+                    bands.forEach { (label, bandColor, level) ->
+                        val active = scienceProfile.thermalAssessment.severityLevel == level
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(if (active) 7.dp else 4.dp)
+                                    .clip(CircleShape)
+                                    .background(if (active) bandColor else bandColor.copy(alpha = 0.28f))
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = label,
+                                fontFamily = PlusJakartaSansFontFamily,
+                                fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+                                fontSize = 8.5.sp,
+                                color = if (active) bandColor else subTextColor,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+
+                Text(
+                    text = "${scienceProfile.reasonAr}\n${scienceProfile.scienceReference}",
+                    fontFamily = PlusJakartaSansFontFamily,
+                    fontSize = 10.5.sp,
+                    color = textColor.copy(alpha = 0.88f),
+                    lineHeight = 15.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AutoSensorsConditionsDialog(
+    currentState: LivingBatteryState,
+    telemetry: BatteryTelemetry,
+    deviceProfile: DeviceHardwareProfile,
+    scienceProfile: LivingStateScienceProfile,
+    isDarkMode: Boolean,
+    onDismiss: () -> Unit
+) {
+    val resolvedTheme = LocalAmpereTheme.current
+    val bgColor = if (resolvedTheme.themeId != null) resolvedTheme.surface else if (isDarkMode) Color(0xFF131B2B) else Color(0xFFF3F6FA)
+    val insetColor = if (resolvedTheme.themeId != null) resolvedTheme.surfaceInset else if (isDarkMode) Color(0xFF1E293B) else Color(0xFFE3EAF3)
+    val textColor = if (resolvedTheme.themeId != null) resolvedTheme.textPrimary else if (isDarkMode) TextWhite else TextCharcoal
+    val subTextColor = if (resolvedTheme.themeId != null) resolvedTheme.textSecondary else TextSlate
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 24.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(bgColor)
+                .border(1.2.dp, currentState.neonPrimary.copy(alpha = 0.45f), RoundedCornerShape(24.dp))
+                .padding(16.dp)
+                .testTag("auto_sensors_conditions_dialog")
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(TactileGreen.copy(alpha = 0.16f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Sensors,
+                                contentDescription = null,
+                                tint = TactileGreen,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = "معايير المستشعرات وشروط كل وضع",
+                                fontFamily = OutfitFontFamily,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.5.sp,
+                                color = textColor
+                            )
+                            Text(
+                                text = "دراسات IEEE 1625 • JEITA • Battery University",
+                                fontFamily = PlusJakartaSansFontFamily,
+                                fontSize = 10.sp,
+                                color = subTextColor
+                            )
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .background(insetColor)
+                            .clickable { onDismiss() }
+                            .testTag("close_auto_sensors_dialog"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "إغلاق",
+                            tint = textColor,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
+                // Live Current Telemetry Context Pill
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(currentState.neonPrimary.copy(alpha = if (isDarkMode) 0.18f else 0.10f))
+                        .border(1.dp, currentState.neonPrimary.copy(alpha = 0.4f), RoundedCornerShape(14.dp))
+                        .padding(11.dp)
+                ) {
+                    Text(
+                        text = "الوضع النشط الآن: ${currentState.title} • الحرارة: ${telemetry.temperatureC}°C • التيار: ${telemetry.currentMa}mA (${String.format(Locale.US, "%.2f", scienceProfile.cRate)}C) • الجهد: ${telemetry.voltageMv}mV",
+                        fontFamily = PlusJakartaSansFontFamily,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 10.5.sp,
+                        color = textColor,
+                        lineHeight = 15.sp
+                    )
+                }
+
+                data class ModeSpecCard(
+                    val state: LivingBatteryState,
+                    val titleAr: String,
+                    val conditionsAr: String,
+                    val priorityOrderAr: String
+                )
+
+                val modeSpecs = listOf(
+                    ModeSpecCard(
+                        state = LivingBatteryState.ENERGY_STORING,
+                        titleAr = "1. تخزين الطاقة (Energy Storing)",
+                        conditionsAr = "• الشاحن موصول أو تيار الشحن > 220mA\n• الحرارة ضمن نافذة JEITA الآمنة: 15.0°C إلى ${deviceProfile.safeThermalCeilingC - 0.1f}°C (الذروة المثالية 20–35°C)\n• يشمل مرحلة CC السريع (<80%) ومرحلة CV Taper (≥80%)",
+                        priorityOrderAr = "ترتيب القياسات: 1. التيار (C-Rate) ← 2. القدرة (W) ← 3. الجهد ← 4. الحرارة"
+                    ),
+                    ModeSpecCard(
+                        state = LivingBatteryState.OVERDRIVE_HEATING,
+                        titleAr = "2. الإجهاد الحراري (Overdrive & Heating)",
+                        conditionsAr = "• الحرارة ≥ ${deviceProfile.safeThermalCeilingC}°C (الحد العلمي JEITA/IEEE حيث يتسارع تحلل SEI وفق أرهينيوس)\n• أو الخطر الحرج ≥ 45.0°C (حد الإيقاف الآمن)\n• أو صعود حراري فوق 40.5°C مع سحب عالٍ ≥ 2800mA أو جهد خلية شاذ (>4550mV 1S)",
+                        priorityOrderAr = "ترتيب القياسات: 1. حرارة القلب ← 2. التيار الحراري ← 3. القدرة ← 4. الجهد"
+                    ),
+                    ModeSpecCard(
+                        state = LivingBatteryState.COOLING,
+                        titleAr = "3. التبريد واستقرار المصفوفة (Cryo Cooling)",
+                        conditionsAr = "• هبوط حراري مستمر (ΔT ≥ 0.08°C/فترة) أثناء تراجع الحرارة نحو 20–35°C\n• أو برودة منخفضة < 15.0°C (حماية الليثيوم من الترسب المعدني Li Plating)\n• أو تفعيل وضع التبريد المخصص",
+                        priorityOrderAr = "ترتيب القياسات: 1. حرارة القلب ← 2. استقرار الجهد ← 3. التيار ← 4. القدرة"
+                    ),
+                    ModeSpecCard(
+                        state = LivingBatteryState.DEEP_SLEEP,
+                        titleAr = "4. السكون العميق (Deep Sleep)",
+                        conditionsAr = "• الشاشة مطفأة مع استهلاك خامل منخفض ≤ 400mA (< 0.08C)\n• أو سحب تفريغ هادئ أثناء الخمول ≤ 380mA وحرارة < 36°C\n• أو ثبات الامتلاء الليلي (≥ 90% وتيار حفظ دقيق ≤ 180mA)",
+                        priorityOrderAr = "ترتيب القياسات: 1. التيار الخامل ← 2. جهد الراحة ← 3. الحرارة ← 4. القدرة"
+                    )
+                )
+
+                modeSpecs.forEach { spec ->
+                    val isCurrent = spec.state == currentState
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(15.dp))
+                            .background(insetColor)
+                            .border(
+                                width = if (isCurrent) 1.4.dp else 0.8.dp,
+                                color = if (isCurrent) spec.state.neonPrimary else spec.state.neonPrimary.copy(alpha = 0.25f),
+                                shape = RoundedCornerShape(15.dp)
+                            )
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = spec.titleAr,
+                                fontFamily = OutfitFontFamily,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.5.sp,
+                                color = spec.state.neonPrimary
+                            )
+                            if (isCurrent) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(spec.state.neonPrimary)
+                                        .padding(horizontal = 7.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = "نشط الآن",
+                                        fontFamily = PlusJakartaSansFontFamily,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 9.sp,
+                                        color = Color.White
+                                    )
+                                }
+                            }
+                        }
+                        Text(
+                            text = spec.conditionsAr,
+                            fontFamily = PlusJakartaSansFontFamily,
+                            fontSize = 10.5.sp,
+                            color = textColor,
+                            lineHeight = 15.sp
+                        )
+                        Text(
+                            text = spec.priorityOrderAr,
+                            fontFamily = PlusJakartaSansFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 9.8.sp,
+                            color = spec.state.neonPrimary
+                        )
+                    }
+                }
             }
         }
     }

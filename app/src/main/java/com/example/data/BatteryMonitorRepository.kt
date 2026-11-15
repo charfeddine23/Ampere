@@ -67,6 +67,11 @@ class BatteryMonitorRepository(
     private val _userAccount = MutableStateFlow(UserAccount())
     val userAccount: StateFlow<UserAccount> = _userAccount.asStateFlow()
 
+    private val _deviceProfile = MutableStateFlow(
+        com.example.data.telemetry.DeviceHardwareProfiler.collectProfile(context)
+    )
+    val deviceProfile: StateFlow<DeviceHardwareProfile> = _deviceProfile.asStateFlow()
+
     private val _cableResult = MutableStateFlow(CableDiagnosticResult())
     val cableResult: StateFlow<CableDiagnosticResult> = _cableResult.asStateFlow()
 
@@ -75,6 +80,11 @@ class BatteryMonitorRepository(
 
     private var previousLivingState: LivingBatteryState? = null
     private var previousIsCharging: Boolean = false
+    private var observedBaselineOcvMv: Int? = null
+    private var prevSampleVoltageMv: Int = 0
+    private var prevSampleCurrentMa: Int = 0
+    private var smoothedDynamicImpedanceMohm: Int? = null
+    private var smoothedRipplePercent: Float = 2.5f
 
     private var manualStateOverride: LivingBatteryState? = null
     private var simulatedTempDelta = 0.0f
@@ -85,6 +95,9 @@ class BatteryMonitorRepository(
 
     @Volatile
     private var isSohPageActive: Boolean = false
+
+    @Volatile
+    private var isProModeActive: Boolean = false
 
     @Volatile
     private var cachedWalLogCount: Int = 0
@@ -118,6 +131,10 @@ class BatteryMonitorRepository(
                 hasHwChargeCounter = false
             )
         }
+    }
+
+    fun setProModeActive(enabled: Boolean) {
+        isProModeActive = enabled
     }
 
     private fun refreshWalLogCountAsync() {
@@ -224,34 +241,49 @@ class BatteryMonitorRepository(
 
     private var subTick = 0
     private var cachedBatteryStatus: Intent? = null
+    private var lastIntentPollMs: Long = 0L
+    private var lastHistoryAppendMs: Long = 0L
+    private var lastSecondTickMs: Long = 0L
+    private var lastWidgetSyncMs: Long = 0L
 
     private fun startPolling() {
         scope.launch(Dispatchers.Default) {
             while (isActive) {
+                val now = System.currentTimeMillis()
                 val activeForeground = isAppInForeground
-                if (subTick % 10 == 0 || cachedBatteryStatus == null || isSohPageActive) {
+                val proActive = isProModeActive && activeForeground
+
+                val intentIntervalMs = if (proActive) 25L else if (isSohPageActive) 100L else 1000L
+                if (cachedBatteryStatus == null || now - lastIntentPollMs >= intentIntervalMs) {
                     val ifilter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
                     cachedBatteryStatus = context.registerReceiver(null, ifilter)
+                    lastIntentPollMs = now
                 }
 
-                if (isSohPageActive && (System.currentTimeMillis() - lastWalSyncTimeMs >= 5_000L)) {
+                if ((isSohPageActive || proActive) && (now - lastWalSyncTimeMs >= 5_000L)) {
                     refreshWalLogCountAsync()
                 }
 
-                readBatteryState(cachedBatteryStatus)
+                readBatteryState(cachedBatteryStatus, now = now, proActive = proActive)
 
                 subTick++
-                if (subTick % 10 == 0) {
+                if (now - lastSecondTickMs >= 1_000L) {
+                    lastSecondTickMs = now
                     updateEggAndPrizeProgress()
                     updateCrewCooldowns()
                 }
 
-                delay(if (activeForeground) 100L else 5_000L)
+                // Pro Mode elevates telemetry sync to high-frequency 1-part-of-a-second precision
+                delay(if (proActive) 10L else if (activeForeground) 100L else 5_000L)
             }
         }
     }
 
-    private fun readBatteryState(batteryStatus: Intent?) {
+    private fun readBatteryState(
+        batteryStatus: Intent?,
+        now: Long = System.currentTimeMillis(),
+        proActive: Boolean = isProModeActive
+    ) {
         simTick++
 
         val rawLevel = batteryStatus?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
@@ -313,41 +345,46 @@ class BatteryMonitorRepository(
         val tempDropRate = previousTempC - temperatureC
         previousTempC = temperatureC
 
-        // 1. ENERGY STORING (Phosphor Green #00C853)
-        // Condition: Charging active (Current > 0 mA) AND Temp between 20°C and 37°C AND stable voltage (3700 - 4450 mV).
-        val isStableVoltage = voltageMv in 3700..4450
-        val isEnergyStoringCondition = (isCharging || currentMa > 0) &&
-                (temperatureC in 20.0f..37.0f) &&
-                isStableVoltage
-
-        // 2. OVERDRIVE / HEATING (Warning Red #FF3D00)
-        // Condition: Temp > 38°C OR high internal resistance/voltage drop (poor cable/charger).
-        val isVoltageDropFault = isCharging && (voltageMv < 3700 || (currentMa > 2000 && voltageMv < 3800))
-        val isOverdriveHeatingCondition = temperatureC > 38.0f || isVoltageDropFault
-
-        // 3. CRYOGENIC COOLING (Ice Blue #00B0FF)
-        // Condition: Rapid thermal drop (Temp decreasing toward <35°C) OR Cryo skill deployed.
-        val isCryoSkillActive = _techCrew.value.any { it.id == "crew_1" && it.isActiveAbilityRunning } || simulatedTempDelta < -1.0f
-        val isRapidThermalDrop = (tempDropRate >= 0.10f && temperatureC < 35.0f)
-        val isCoolingCondition = isRapidThermalDrop || isCryoSkillActive
-
-        // 4. DEEP SLEEP / HIBERNATION (Night Purple #7C4DFF)
-        // Condition: Screen OFF + Low idle current draw (Current <= 300 mA) OR Overnight 80-85% trickling.
-        val isLowIdleCurrent = abs(currentMa) <= 350
-        val isOvernightTrickle = isCharging && percent in 80..85 && abs(currentMa) <= 400
-        val isDeepSleepCondition = (!isScreenInteractive && isLowIdleCurrent) || isOvernightTrickle || (!isCharging && isLowIdleCurrent && temperatureC < 32f)
-
-        // Auto-Trigger Resolution based on real-time sensor hierarchy
-        val sensorEvaluatedState = when {
-            isOverdriveHeatingCondition -> LivingBatteryState.OVERDRIVE_HEATING
-            isCoolingCondition -> LivingBatteryState.COOLING
-            isDeepSleepCondition -> LivingBatteryState.DEEP_SLEEP
-            isEnergyStoringCondition -> LivingBatteryState.ENERGY_STORING
-            isCharging -> LivingBatteryState.ENERGY_STORING
-            abs(currentMa) <= 350 -> LivingBatteryState.DEEP_SLEEP
-            temperatureC < 30.0f -> LivingBatteryState.COOLING
-            else -> LivingBatteryState.ENERGY_STORING
+        // Update Device Hardware Profile if Dual-Cell (2S) voltage (>6000mV) is observed
+        if (voltageMv > 6000 && !_deviceProfile.value.isDualCellSuspected) {
+            _deviceProfile.value = com.example.data.telemetry.DeviceHardwareProfiler.collectProfile(context, voltageMv)
         }
+        val currentDeviceProfile = _deviceProfile.value
+
+        // Track OCV baseline during calm idle & rolling dynamic dV/dI impedance during current steps
+        if (!isCharging && abs(currentMa) <= 320) {
+            observedBaselineOcvMv = observedBaselineOcvMv?.let { ((it * 0.7f) + (voltageMv * 0.3f)).toInt() } ?: voltageMv
+        }
+        if (prevSampleVoltageMv > 0) {
+            val deltaI = abs(abs(currentMa) - abs(prevSampleCurrentMa))
+            val deltaV = abs(voltageMv - prevSampleVoltageMv)
+            if (deltaI >= 160 && deltaV in 4..450) {
+                val instantMohm = ((deltaV.toFloat() / deltaI.toFloat()) * 1000f).toInt().coerceIn(50, 620)
+                smoothedDynamicImpedanceMohm = smoothedDynamicImpedanceMohm?.let {
+                    ((it * 0.65f) + (instantMohm * 0.35f)).toInt()
+                } ?: instantMohm
+            }
+            val denom = abs(currentMa).coerceAtLeast(300).toFloat()
+            val instantRipple = ((deltaI / denom) * 100f).coerceIn(0f, 35f)
+            smoothedRipplePercent = (smoothedRipplePercent * 0.75f) + (instantRipple * 0.25f)
+        }
+        prevSampleVoltageMv = voltageMv
+        prevSampleCurrentMa = currentMa
+
+        val isCryoSkillActive = _techCrew.value.any { it.id == "crew_1" && it.isActiveAbilityRunning } || simulatedTempDelta < -1.0f
+
+        // Scientific Classification Engine (IEEE 1625 / JEITA / Battery University BU-808)
+        val sensorEvaluatedState = com.example.data.telemetry.BatteryScienceClassifier.classifyState(
+            temperatureC = temperatureC,
+            voltageMv = voltageMv,
+            currentMa = currentMa,
+            percentage = percent.coerceIn(0, 100),
+            isCharging = isCharging,
+            isScreenInteractive = isScreenInteractive,
+            tempDropRatePerTick = tempDropRate,
+            isCryoSkillActive = isCryoSkillActive,
+            deviceThermalCeilingC = currentDeviceProfile.safeThermalCeilingC
+        )
 
         // Apply automatic real-time sensor detection (or manual preview when explicitly toggled)
         val livingState = if (_isAutoSensorMode.value) {
@@ -356,12 +393,15 @@ class BatteryMonitorRepository(
             manualStateOverride ?: sensorEvaluatedState
         }
 
+        val designCapMah = currentDeviceProfile.nominalDesignCapacityMah.coerceAtLeast(3000)
         val estimatedMin = if (isCharging) {
-            val remainingPercent = (100 - percent).coerceAtLeast(1)
-            (remainingPercent * 1.4f).toInt().coerceAtLeast(4)
+            val remainingMah = ((100 - percent).coerceAtLeast(1) / 100f) * designCapMah
+            val rateMa = abs(currentMa).coerceAtLeast(650)
+            ((remainingMah / rateMa) * 60f).toInt().coerceIn(4, 360)
         } else {
-            val remainingPercent = percent.coerceAtLeast(1)
-            (remainingPercent * 11.5f).toInt().coerceAtLeast(15)
+            val remainingMah = (percent.coerceAtLeast(1) / 100f) * designCapMah
+            val rateMa = abs(currentMa).coerceIn(180, 1200)
+            ((remainingMah / rateMa) * 60f).toInt().coerceIn(15, 2400)
         }
 
         val rawChargeCounter = try {
@@ -373,7 +413,7 @@ class BatteryMonitorRepository(
         val effectiveChargeCounterUah = if (hasHwChargeCounter) {
             rawChargeCounter
         } else {
-            (percent.coerceIn(0, 100) / 100f * 5000f * 1000f).toLong()
+            (percent.coerceIn(0, 100) / 100f * designCapMah * 1000f).toLong()
         }
 
         val hwCycleCount = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
@@ -387,27 +427,34 @@ class BatteryMonitorRepository(
             percentage = percent.coerceIn(0, 100),
             status = status,
             plugType = plugType,
-            health = if (temperatureC >= 42f) BatteryHealth.OVERHEAT else BatteryHealth.GOOD,
+            health = when {
+                temperatureC >= com.example.data.telemetry.BatteryScienceClassifier.TEMP_CRITICAL_OVERHEAT_C -> BatteryHealth.OVERHEAT
+                temperatureC < 5.0f -> BatteryHealth.COLD
+                else -> BatteryHealth.GOOD
+            },
             voltageMv = voltageMv,
             currentMa = currentMa,
             wattageW = (wattageW * 100).toInt() / 100f,
             temperatureC = (temperatureC * 10).toInt() / 10f,
-            technology = "Li-poly (Solid Matrix)",
-            capacityMah = 5000,
+            technology = if (currentDeviceProfile.isDualCellSuspected) "Li-Poly Dual-Cell (2S)" else "Li-Poly High-Density (1S)",
+            capacityMah = designCapMah,
             chargeCounterUah = effectiveChargeCounterUah,
             cycleCount = resolvedCycleCount,
             estimatedMinutesRemaining = estimatedMin,
-            isFastCharging = abs(currentMa) > 1800,
+            isFastCharging = abs(currentMa) > 1800 || wattageW >= 18f,
             dischargeRatePerHour = 4.2f,
             livingState = livingState,
             lastUpdated = System.currentTimeMillis()
         )
 
         _telemetry.value = telemetry
-        appendHistoryPoint(telemetry)
+        if (proActive || (now - lastHistoryAppendMs >= 100L)) {
+            lastHistoryAppendMs = now
+            appendHistoryPoint(telemetry)
+        }
 
-        // Sub-second live Cell SOH telemetry calculation (every 100ms on Cell SOH screen, or every 1s elsewhere)
-        if (isSohPageActive || subTick % 10 == 0) {
+        // Sub-second live Cell SOH telemetry calculation (every tick in Pro Mode / Cell SOH screen, or every 1s elsewhere)
+        if (proActive || isSohPageActive || subTick % 10 == 0) {
             computeLiveSohPrediction(
                 telemetry = telemetry,
                 chargeCounterUah = effectiveChargeCounterUah,
@@ -417,7 +464,8 @@ class BatteryMonitorRepository(
         }
 
         // Throttled Liquid Glass Home Widget sync (every ~3s or on living-state transition)
-        if (subTick % 30 == 0 || previousLivingState != telemetry.livingState) {
+        if ((now - lastWidgetSyncMs >= 3_000L) || previousLivingState != telemetry.livingState) {
+            lastWidgetSyncMs = now
             scope.launch {
                 try {
                     com.example.widget.WidgetTelemetryUpdater.update(
@@ -443,23 +491,17 @@ class BatteryMonitorRepository(
                     com.example.audio.CyberHapticsEngine.triggerElectricSpark(context)
                 }
             } else {
-                // When unplugged, reset cable metrics cleanly to 0
-                _cableResult.value = CableDiagnosticResult(
-                    resistanceMilliOhms = 0,
-                    voltageDropMv = 0,
-                    measuredVoltageMv = telemetry.voltageMv,
-                    measuredCurrentMa = 0,
-                    maxWattageW = 0f,
-                    qualityScore = 100,
-                    tier = CableDnaTier.LEGENDARY_ORIGINAL,
-                    usbProtocol = "Standby (Unplugged)",
-                    pinIntegrityPercent = 100,
-                    thermalDissipationMilliWatts = 0,
-                    scanTimestamp = System.currentTimeMillis()
+                // When unplugged, reset cable metrics cleanly using international standby state
+                _cableResult.value = com.example.data.telemetry.CableDnaStandardsEngine.evaluate(
+                    telemetry = telemetry,
+                    deviceProfile = currentDeviceProfile,
+                    observedBaselineOcvMv = observedBaselineOcvMv,
+                    dynamicDeltaImpedanceMilliOhms = smoothedDynamicImpedanceMohm,
+                    currentRipplePercent = smoothedRipplePercent
                 )
             }
         } else if (isNowCharging) {
-            // Sub-second 100ms real-time cable telemetry synchronization with live hardware voltage & current
+            // Sub-second 100ms real-time cable telemetry synchronization with IEC 62680 & device profile
             updateContinuousCableMetrics(telemetry)
         }
 
@@ -755,101 +797,31 @@ class BatteryMonitorRepository(
     }
 
     fun runCableDiagnosticSweep(tierOverride: CableDnaTier? = null) {
-        val currentV = _telemetry.value.voltageMv
-        val currentI = abs(_telemetry.value.currentMa)
-        val isPlugged = _telemetry.value.plugType != ChargePlug.NONE || _telemetry.value.status == BatteryStatus.CHARGING || currentI > 200
-
-        if (!isPlugged) {
-            _cableResult.value = CableDiagnosticResult(
-                resistanceMilliOhms = 0,
-                voltageDropMv = 0,
-                measuredVoltageMv = currentV,
-                measuredCurrentMa = 0,
-                maxWattageW = 0f,
-                qualityScore = 100,
-                tier = CableDnaTier.LEGENDARY_ORIGINAL,
-                usbProtocol = "Standby (Unplugged)",
-                pinIntegrityPercent = 100,
-                thermalDissipationMilliWatts = 0,
-                scanTimestamp = System.currentTimeMillis()
-            )
-            return
-        }
-
-        // Live hardware Ohm's law calculation: R = ΔV / I
-        val nominalSourceMv = 5000 // USB 5V reference rail
-        val measuredSagMv = (nominalSourceMv - currentV).coerceIn(40, 850)
-        val effectiveI = currentI.coerceAtLeast(400)
-        val calculatedResistance = ((measuredSagMv.toFloat() / effectiveI.toFloat()) * 1000f).toInt().coerceIn(75, 620)
-
-        val evaluatedTier = tierOverride ?: when {
-            calculatedResistance > 450 || _telemetry.value.temperatureC > 38f -> CableDnaTier.DANGEROUS_COUNTERFEIT
-            calculatedResistance <= 140 -> CableDnaTier.LEGENDARY_ORIGINAL
-            calculatedResistance <= 260 -> CableDnaTier.CERTIFIED_FAST
-            else -> CableDnaTier.DEGRADED_STANDARD
-        }
-
-        val dissipationMw = ((effectiveI.toDouble() / 1000.0) * (effectiveI.toDouble() / 1000.0) * (calculatedResistance.toDouble() / 1000.0) * 1000.0).toInt()
-
-        val result = CableDiagnosticResult(
-            resistanceMilliOhms = calculatedResistance,
-            voltageDropMv = measuredSagMv,
-            measuredVoltageMv = currentV,
-            measuredCurrentMa = effectiveI,
-            maxWattageW = (currentV / 1000f) * (effectiveI / 1000f),
-            qualityScore = when (evaluatedTier) {
-                CableDnaTier.LEGENDARY_ORIGINAL -> 98
-                CableDnaTier.CERTIFIED_FAST -> 89
-                CableDnaTier.DEGRADED_STANDARD -> 64
-                CableDnaTier.DANGEROUS_COUNTERFEIT -> 31
-            },
-            tier = evaluatedTier,
-            thermalDissipationMilliWatts = dissipationMw,
-            scanTimestamp = System.currentTimeMillis()
+        val result = com.example.data.telemetry.CableDnaStandardsEngine.evaluate(
+            telemetry = _telemetry.value,
+            deviceProfile = _deviceProfile.value,
+            observedBaselineOcvMv = observedBaselineOcvMv,
+            dynamicDeltaImpedanceMilliOhms = smoothedDynamicImpedanceMohm,
+            currentRipplePercent = smoothedRipplePercent,
+            tierOverride = tierOverride
         )
         _cableResult.value = result
 
         addManualSessionLog(
-            title = "Cable DNA Audit: ${evaluatedTier.title}",
-            desc = "Internal Resistance ${calculatedResistance}mΩ, Sag -${measuredSagMv}mV. Classification: ${evaluatedTier.grade}.",
-            statTag = evaluatedTier.grade,
-            type = if (evaluatedTier.isDangerous) "warning" else "check"
+            title = "Cable DNA Audit: ${result.tier.title}",
+            desc = "Resistance ${result.resistanceMilliOhms}mΩ (${result.estimatedAwg}), Drop -${result.voltageDropMv}mV, ${result.standardCompliance}.",
+            statTag = result.tier.grade,
+            type = if (result.tier.isDangerous) "warning" else "check"
         )
     }
 
     private fun updateContinuousCableMetrics(telemetry: BatteryTelemetry) {
-        val currentV = telemetry.voltageMv
-        val currentI = abs(telemetry.currentMa)
-        val nominalSourceMv = 5000 // USB 5V rail reference
-        val measuredSagMv = (nominalSourceMv - currentV).coerceIn(40, 850)
-        val effectiveI = currentI.coerceAtLeast(400)
-        val calculatedResistance = ((measuredSagMv.toFloat() / effectiveI.toFloat()) * 1000f).toInt().coerceIn(75, 620)
-
-        val evaluatedTier = when {
-            calculatedResistance > 450 || telemetry.temperatureC > 38f -> CableDnaTier.DANGEROUS_COUNTERFEIT
-            calculatedResistance <= 140 -> CableDnaTier.LEGENDARY_ORIGINAL
-            calculatedResistance <= 260 -> CableDnaTier.CERTIFIED_FAST
-            else -> CableDnaTier.DEGRADED_STANDARD
-        }
-
-        val dissipationMw = ((effectiveI.toDouble() / 1000.0) * (effectiveI.toDouble() / 1000.0) * (calculatedResistance.toDouble() / 1000.0) * 1000.0).toInt()
-
-        val current = _cableResult.value
-        _cableResult.value = current.copy(
-            resistanceMilliOhms = calculatedResistance,
-            voltageDropMv = measuredSagMv,
-            measuredVoltageMv = currentV,
-            measuredCurrentMa = effectiveI,
-            maxWattageW = (currentV / 1000f) * (effectiveI / 1000f),
-            qualityScore = when (evaluatedTier) {
-                CableDnaTier.LEGENDARY_ORIGINAL -> 98
-                CableDnaTier.CERTIFIED_FAST -> 89
-                CableDnaTier.DEGRADED_STANDARD -> 64
-                CableDnaTier.DANGEROUS_COUNTERFEIT -> 31
-            },
-            tier = evaluatedTier,
-            thermalDissipationMilliWatts = dissipationMw,
-            scanTimestamp = System.currentTimeMillis()
+        _cableResult.value = com.example.data.telemetry.CableDnaStandardsEngine.evaluate(
+            telemetry = telemetry,
+            deviceProfile = _deviceProfile.value,
+            observedBaselineOcvMv = observedBaselineOcvMv,
+            dynamicDeltaImpedanceMilliOhms = smoothedDynamicImpedanceMohm,
+            currentRipplePercent = smoothedRipplePercent
         )
     }
 

@@ -73,10 +73,12 @@ fun AmperePulseApp(viewModel: AmperePulseViewModel) {
     val techCrew by viewModel.techCrew.collectAsState()
     val cableResult by viewModel.cableResult.collectAsState()
     val sohPrediction by viewModel.sohPrediction.collectAsState()
+    val deviceProfile by viewModel.deviceProfile.collectAsState()
     val hourlyStats by viewModel.hourlyStats.collectAsState()
 
     val selectedTab by viewModel.selectedTab.collectAsState()
     val themeConfig by viewModel.themeConfig.collectAsState()
+    val iconDiagnostics by viewModel.iconDiagnostics.collectAsState()
     val isSettingsOpen by viewModel.isSettingsMenuOpen.collectAsState()
     val isSkinVaultOpen by viewModel.isSkinVaultOpen.collectAsState()
     val isRedeemDialogOpen by viewModel.isRedeemDialogOpen.collectAsState()
@@ -104,12 +106,12 @@ fun AmperePulseApp(viewModel: AmperePulseViewModel) {
         }
     }
 
-    // Dynamic state-based primary accent color (respects Theme Engine when below warm threshold)
-    val activeAccent = when (selectedTab) {
+    // Dynamic state-based primary accent color (calm in Simple Mode, classic executive in Pro Mode)
+    val rawActiveAccent = when (selectedTab) {
         NavigationTab.BATTERY -> {
             when {
-                telemetry.temperatureC >= 40f -> Color(0xFFFF3D00)
-                telemetry.temperatureC >= 38f -> Color(0xFFFF9100)
+                telemetry.temperatureC >= 42f -> Color(0xFFFF3D00)
+                telemetry.temperatureC >= 39.5f -> Color(0xFFFF9100)
                 themeConfig.isUsingThemeEngine -> themeConfig.accentColor
                 telemetry.temperatureC <= 34f -> Color(0xFF00B0FF)
                 else -> telemetry.livingState.neonPrimary
@@ -117,11 +119,17 @@ fun AmperePulseApp(viewModel: AmperePulseViewModel) {
         }
         else -> themeConfig.accentColor
     }
+    val activeAccent = when {
+        themeConfig.isSimpleMode -> if (isDark) Color(0xFF7B8FA6) else Color(0xFF475569)
+        themeConfig.isProMode -> if (isDark) Color(0xFF6C9BCF) else Color(0xFF2E5B88)
+        else -> rawActiveAccent
+    }
 
     MyApplicationTheme(
         isDarkMode = isDark,
         accentColor = activeAccent,
-        activeThemeId = themeConfig.activeThemeId
+        activeThemeId = themeConfig.activeThemeId,
+        graphicsMode = themeConfig.graphicsMode
     ) {
         val resolvedTheme = LocalAmpereTheme.current
         val rootBg = if (resolvedTheme.themeId != null) resolvedTheme.background
@@ -135,28 +143,34 @@ fun AmperePulseApp(viewModel: AmperePulseViewModel) {
                         Modifier.thermalLiquidGlassBackground(
                             temperatureC = telemetry.temperatureC,
                             isDarkMode = isDark,
-                            glowIntensity = themeConfig.glowIntensity,
-                            criticalTempThreshold = 40.0f,
+                            glowIntensity = when {
+                                themeConfig.isSimpleMode -> 0f
+                                themeConfig.isProMode -> 0.35f
+                                else -> themeConfig.glowIntensity
+                            },
+                            criticalTempThreshold = 42.0f,
                             normalTempThreshold = 34.0f
                         )
+                    } else if (themeConfig.isSimpleMode) {
+                        Modifier.background(rootBg)
                     } else {
                         Modifier
                             .background(rootBg)
                             .graphicsLayer { clip = false }
                             .drawBehind {
-                                // Subtle ambient aura tint
+                                val auraAlphaScale = if (themeConfig.isProMode) 0.35f else 1f
                                 val auraColor = activeAccent
                                 drawCircle(
                                     brush = Brush.radialGradient(
                                         colors = if (isDark) {
                                             listOf(
-                                                auraColor.copy(alpha = 0.08f * themeConfig.glowIntensity),
-                                                auraColor.copy(alpha = 0.02f),
+                                                auraColor.copy(alpha = 0.08f * themeConfig.glowIntensity * auraAlphaScale),
+                                                auraColor.copy(alpha = 0.02f * auraAlphaScale),
                                                 Color.Transparent
                                             )
                                         } else {
                                             listOf(
-                                                auraColor.copy(alpha = 0.05f * themeConfig.glowIntensity),
+                                                auraColor.copy(alpha = 0.05f * themeConfig.glowIntensity * auraAlphaScale),
                                                 Color.Transparent
                                             )
                                         },
@@ -250,33 +264,38 @@ fun AmperePulseApp(viewModel: AmperePulseViewModel) {
                     AnimatedContent(
                             targetState = selectedTab,
                             transitionSpec = {
-                                val isMovingForward = targetState.ordinal > initialState.ordinal
-                                (slideInHorizontally(
-                                    initialOffsetX = { if (isMovingForward) (it * 0.40f).toInt() else (-it * 0.40f).toInt() },
-                                    animationSpec = spring(
-                                        dampingRatio = 0.82f,
-                                        stiffness = Spring.StiffnessMedium
-                                    )
-                                ) + scaleIn(
-                                    initialScale = 0.96f,
-                                    animationSpec = spring(
-                                        dampingRatio = 0.82f,
-                                        stiffness = Spring.StiffnessMedium
-                                    )
-                                ) + fadeIn(
-                                    animationSpec = spring(stiffness = Spring.StiffnessMedium)
-                                )).togetherWith(
-                                    slideOutHorizontally(
-                                        targetOffsetX = { if (isMovingForward) (-it * 0.25f).toInt() else (it * 0.25f).toInt() },
+                                if (themeConfig.isSimpleMode) {
+                                    fadeIn(androidx.compose.animation.core.tween(130)) togetherWith
+                                        fadeOut(androidx.compose.animation.core.tween(100))
+                                } else {
+                                    val isMovingForward = targetState.ordinal > initialState.ordinal
+                                    (slideInHorizontally(
+                                        initialOffsetX = { if (isMovingForward) (it * 0.40f).toInt() else (-it * 0.40f).toInt() },
                                         animationSpec = spring(
-                                            dampingRatio = 0.85f,
+                                            dampingRatio = 0.82f,
                                             stiffness = Spring.StiffnessMedium
                                         )
-                                    ) + scaleOut(
-                                        targetScale = 0.97f,
+                                    ) + scaleIn(
+                                        initialScale = 0.96f,
+                                        animationSpec = spring(
+                                            dampingRatio = 0.82f,
+                                            stiffness = Spring.StiffnessMedium
+                                        )
+                                    ) + fadeIn(
                                         animationSpec = spring(stiffness = Spring.StiffnessMedium)
-                                    ) + fadeOut()
-                                )
+                                    )).togetherWith(
+                                        slideOutHorizontally(
+                                            targetOffsetX = { if (isMovingForward) (-it * 0.25f).toInt() else (it * 0.25f).toInt() },
+                                            animationSpec = spring(
+                                                dampingRatio = 0.85f,
+                                                stiffness = Spring.StiffnessMedium
+                                            )
+                                        ) + scaleOut(
+                                            targetScale = 0.97f,
+                                            animationSpec = spring(stiffness = Spring.StiffnessMedium)
+                                        ) + fadeOut()
+                                    )
+                                }
                             },
                             label = "120HzUltraFluidPageTransition"
                         ) { tab ->
@@ -287,6 +306,7 @@ fun AmperePulseApp(viewModel: AmperePulseViewModel) {
                                     currentHistory = currentHistory,
                                     themeConfig = themeConfig,
                                     prizeRoadData = prizeRoadData,
+                                    deviceProfile = deviceProfile,
                                     isAutoSensorMode = isAutoSensorMode,
                                     appUsageSnapshot = appUsageSnapshot,
                                     onRefreshAppUsage = { viewModel.refreshAppBatteryUsage() },
@@ -304,6 +324,7 @@ fun AmperePulseApp(viewModel: AmperePulseViewModel) {
                                     telemetry = telemetry,
                                     themeConfig = themeConfig,
                                     cableResult = cableResult,
+                                    deviceProfile = deviceProfile,
                                     onRunDiagnosticSweep = { viewModel.runCableDiagnosticSweep(it) }
                                 )
                                 NavigationTab.MY_SPACE -> Page5MySpaceScreen(
@@ -333,6 +354,7 @@ fun AmperePulseApp(viewModel: AmperePulseViewModel) {
                 accentColor = activeAccent,
                 isDarkMode = isDark,
                 showLiquidDroplet = themeConfig.showLiquidDroplet,
+                dropletDragNavigationEnabled = themeConfig.dropletDragNavigationEnabled,
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
 
@@ -343,6 +365,10 @@ fun AmperePulseApp(viewModel: AmperePulseViewModel) {
                 themeConfig = themeConfig,
                 onConfigChange = { viewModel.updateThemeConfig(it) },
                 onSelectLauncherIcon = { viewModel.updateLauncherIcon(it) },
+                iconDiagnostics = iconDiagnostics,
+                onToggleForceChangeIcon = { viewModel.toggleForceChangeIcon(it) },
+                onForceChangeLauncherIcon = { viewModel.forceChangeLauncherIconNow(it) },
+                onPinLauncherShortcut = { viewModel.pinLauncherShortcut(it) },
                 onOpenThemeEngine = { viewModel.toggleThemeEngine(true) },
                 onOpenSkinVault = { viewModel.toggleSkinVault(true) },
                 onOpenRedeemDialog = { viewModel.toggleRedeemDialog(true) },

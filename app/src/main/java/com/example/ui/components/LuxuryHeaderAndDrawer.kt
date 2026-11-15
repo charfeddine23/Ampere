@@ -67,9 +67,15 @@ import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.foundation.Image
 import androidx.compose.ui.res.painterResource
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.DisplaySettings
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material.icons.filled.WorkspacePremium
+import com.example.data.GraphicsMode
+import com.example.data.IconSwitchDiagnostics
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -393,6 +399,10 @@ fun LuxurySettingsDrawer(
     themeConfig: GlassThemeConfig,
     onConfigChange: (GlassThemeConfig) -> Unit,
     onSelectLauncherIcon: (LauncherIconVariant) -> Unit = {},
+    iconDiagnostics: IconSwitchDiagnostics = IconSwitchDiagnostics("", "System Launcher", "default", false),
+    onToggleForceChangeIcon: (Boolean) -> Unit = {},
+    onForceChangeLauncherIcon: (LauncherIconVariant) -> Unit = {},
+    onPinLauncherShortcut: (LauncherIconVariant) -> Boolean = { false },
     onOpenThemeEngine: () -> Unit = {},
     onOpenSkinVault: () -> Unit = {},
     onOpenRedeemDialog: () -> Unit = {},
@@ -430,8 +440,10 @@ fun LuxurySettingsDrawer(
     val textColor = if (resolvedTheme.themeId != null) resolvedTheme.textPrimary else if (isDark) Color(0xFFE9EFF8) else TextCharcoal
     val subTextColor = if (resolvedTheme.themeId != null) resolvedTheme.textSecondary else if (isDark) Color(0xFF93A5BF) else TextSlate
 
-    var expandAppearance by remember { mutableStateOf(false) }
-    var expandProtection by remember { mutableStateOf(false) }
+    var expandAppearance by remember { mutableStateOf(true) }
+    var expandColorsIdentity by remember { mutableStateOf(false) }
+    var expandGraphics by remember { mutableStateOf(true) }
+    var expandNotifications by remember { mutableStateOf(true) }
     var expandCalibration by remember { mutableStateOf(false) }
 
     AnimatedVisibility(
@@ -599,201 +611,753 @@ fun LuxurySettingsDrawer(
                         }
                     }
 
-                    // 2a. Theme Engine Studio Showcase Banner (60 Curated IDE & Liquid Glass Themes)
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 68.dp)
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(
-                                Brush.horizontalGradient(
-                                    colors = listOf(
-                                        accentColor.copy(alpha = if (isDark) 0.26f else 0.14f),
-                                        resolvedTheme.secondaryAccent.copy(alpha = if (isDark) 0.14f else 0.08f),
-                                        surfaceCardColor
-                                    )
-                                )
-                            )
-                            .border(
-                                1.2.dp,
-                                accentColor.copy(alpha = if (isDark) 0.50f else 0.34f),
-                                RoundedCornerShape(20.dp)
-                            )
-                            .clickable {
-                                CyberHapticsEngine.triggerTactileTick(context)
-                                onClose()
-                                onOpenThemeEngine()
-                            }
-                            .padding(horizontal = 14.dp, vertical = 12.dp)
-                            .testTag("drawer_theme_engine_banner")
+                    // 2. TOP SECTION: Appearance (Theme Engine, Skin Vault, Launcher Icon Color, Colors & Identity)
+                    SettingsAccordionCard(
+                        title = "المظهر • Appearance",
+                        summary = "${resolvedTheme.themeName} • أيقونة ${themeConfig.launcherIconVariant.titleAr}",
+                        icon = Icons.Default.Palette,
+                        expanded = expandAppearance,
+                        onToggle = {
+                            CyberHapticsEngine.triggerTactileTick(context)
+                            expandAppearance = !expandAppearance
+                        },
+                        accentColor = accentColor,
+                        surfaceColor = surfaceCardColor,
+                        borderColor = subtleBorder,
+                        textColor = textColor,
+                        subTextColor = subTextColor,
+                        testTag = "settings_appearance_section"
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.weight(1f)
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            // 2a. Theme Engine Studio Showcase Banner (60 Curated IDE & Liquid Glass Themes)
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 64.dp)
+                                    .clip(RoundedCornerShape(18.dp))
+                                    .background(
+                                        Brush.horizontalGradient(
+                                            colors = listOf(
+                                                accentColor.copy(alpha = if (isDark) 0.24f else 0.14f),
+                                                resolvedTheme.secondaryAccent.copy(alpha = if (isDark) 0.12f else 0.08f),
+                                                softTileColor
+                                            )
+                                        )
+                                    )
+                                    .border(
+                                        1.1.dp,
+                                        accentColor.copy(alpha = if (isDark) 0.48f else 0.34f),
+                                        RoundedCornerShape(18.dp)
+                                    )
+                                    .clickable {
+                                        CyberHapticsEngine.triggerTactileTick(context)
+                                        onClose()
+                                        onOpenThemeEngine()
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                                    .testTag("drawer_theme_engine_banner")
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(40.dp)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(accentColor.copy(alpha = if (isDark) 0.25f else 0.15f)),
-                                    contentAlignment = Alignment.Center
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(38.dp)
+                                                .clip(RoundedCornerShape(11.dp))
+                                                .background(accentColor.copy(alpha = if (isDark) 0.25f else 0.15f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Palette,
+                                                contentDescription = null,
+                                                tint = accentColor,
+                                                modifier = Modifier.size(19.dp)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                Text(
+                                                    text = "محرك الثيمات • Theme Engine",
+                                                    fontFamily = OutfitFontFamily,
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 12.5.sp,
+                                                    color = textColor,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                                Box(
+                                                    modifier = Modifier
+                                                        .clip(RoundedCornerShape(6.dp))
+                                                        .background(accentColor.copy(alpha = 0.20f))
+                                                        .padding(horizontal = 5.dp, vertical = 1.5.dp)
+                                                ) {
+                                                    Text(
+                                                        text = "${ThemeEngineCatalog.presets.size}",
+                                                        fontFamily = OutfitFontFamily,
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontSize = 9.5.sp,
+                                                        color = accentColor
+                                                    )
+                                                }
+                                            }
+                                            Text(
+                                                text = "النشط: ${resolvedTheme.themeName}",
+                                                fontFamily = PlusJakartaSansFontFamily,
+                                                fontSize = 10.sp,
+                                                color = subTextColor,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
                                     Icon(
-                                        imageVector = Icons.Default.Palette,
+                                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
                                         contentDescription = null,
                                         tint = accentColor,
                                         modifier = Modifier.size(20.dp)
                                     )
                                 }
-                                Spacer(modifier = Modifier.width(12.dp))
+                            }
+
+                            // 2b. Cyber Skin Vault Showcase Banner
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 60.dp)
+                                    .clip(RoundedCornerShape(18.dp))
+                                    .background(
+                                        Brush.horizontalGradient(
+                                            colors = listOf(
+                                                accentColor.copy(alpha = if (isDark) 0.20f else 0.11f),
+                                                softTileColor
+                                            )
+                                        )
+                                    )
+                                    .border(
+                                        1.dp,
+                                        accentColor.copy(alpha = if (isDark) 0.40f else 0.28f),
+                                        RoundedCornerShape(18.dp)
+                                    )
+                                    .clickable {
+                                        CyberHapticsEngine.triggerTactileTick(context)
+                                        onClose()
+                                        onOpenSkinVault()
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                                    .testTag("drawer_cyber_vault_banner")
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(38.dp)
+                                                .clip(RoundedCornerShape(11.dp))
+                                                .background(accentColor.copy(alpha = if (isDark) 0.24f else 0.14f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.AutoAwesome,
+                                                contentDescription = null,
+                                                tint = accentColor,
+                                                modifier = Modifier.size(19.dp)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Column {
+                                            Text(
+                                                text = "متجر الثيمات الزجاجية",
+                                                fontFamily = OutfitFontFamily,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 12.8.sp,
+                                                color = textColor
+                                            )
+                                            Text(
+                                                text = "أقنعة ومؤثرات بصرية مريحة للعين",
+                                                fontFamily = PlusJakartaSansFontFamily,
+                                                fontSize = 10.sp,
+                                                color = subTextColor
+                                            )
+                                        }
+                                    }
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                                        contentDescription = null,
+                                        tint = accentColor,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+
+                            // 2c. External Home Launcher App Icon Color Selector + Force Change Engine
+                            LauncherIconColorCard(
+                                selectedVariant = themeConfig.launcherIconVariant,
+                                forceChangeEnabled = themeConfig.forceChangeIconEnabled,
+                                iconDiagnostics = iconDiagnostics,
+                                accentColor = accentColor,
+                                onSelectVariant = onSelectLauncherIcon,
+                                onToggleForceChange = onToggleForceChangeIcon,
+                                onForceChangeNow = onForceChangeLauncherIcon,
+                                onPinShortcut = onPinLauncherShortcut,
+                                isDark = isDark,
+                                surfaceColor = softTileColor.copy(alpha = 0.72f),
+                                softColor = surfaceCardColor,
+                                borderColor = subtleBorder,
+                                textColor = textColor,
+                                subTextColor = subTextColor
+                            )
+
+                            // 2d. Colors & Identity (moved inside Appearance)
+                            SettingsAccordionCard(
+                                title = "الألوان والهوية",
+                                summary = "${if (isDark) "ليلي" else "نهاري"} • ${themeConfig.appTier.label} • ${if (themeConfig.temperatureUnit == TemperatureUnit.CELSIUS) "°C" else "°F"}",
+                                icon = Icons.Default.Palette,
+                                expanded = expandColorsIdentity,
+                                onToggle = {
+                                    CyberHapticsEngine.triggerTactileTick(context)
+                                    expandColorsIdentity = !expandColorsIdentity
+                                },
+                                accentColor = accentColor,
+                                surfaceColor = softTileColor.copy(alpha = 0.62f),
+                                borderColor = subtleBorder,
+                                textColor = textColor,
+                                subTextColor = subTextColor
+                            ) {
+                                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                                    // Day / Night Mode Row
+                                    DrawerToggleRow(
+                                        title = if (isDark) "الوضع الليلي" else "الوضع النهاري",
+                                        subtitle = if (isDark) "تبديل إلى المظهر النهاري المريح" else "تبديل إلى المظهر الليلي الهادئ",
+                                        checked = isDark,
+                                        onCheckedChange = { onConfigChange(themeConfig.copy(isDarkMode = it)) },
+                                        accentColor = accentColor,
+                                        textColor = textColor,
+                                        subTextColor = subTextColor
+                                    )
+
+                                    // Soft Eye-Friendly Color Orbs
+                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Text(
+                                            text = "لون التمييز المريح للعين",
+                                            fontFamily = PlusJakartaSansFontFamily,
+                                            fontWeight = FontWeight.Medium,
+                                            fontSize = 12.sp,
+                                            color = subTextColor
+                                        )
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            listOf(
+                                                Triple("أزرق هادئ", Color(0xFF4F7DF3), 0),
+                                                Triple("زمردي", Color(0xFF1BBF75), 1),
+                                                Triple("مرجاني", Color(0xFFF06449), 2),
+                                                Triple("بنفسجي", Color(0xFF8B6EF3), 3)
+                                            ).forEach { (label, color, idx) ->
+                                                val isSelected = themeConfig.accentColorIndex == idx && themeConfig.customAccentHex == null
+                                                Column(
+                                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                                    modifier = Modifier
+                                                        .weight(1f)
+                                                        .clip(RoundedCornerShape(14.dp))
+                                                        .clickable {
+                                                            CyberHapticsEngine.triggerTactileTick(context)
+                                                            onConfigChange(
+                                                                themeConfig.copy(
+                                                                    accentColorIndex = idx,
+                                                                    customAccentHex = null
+                                                                )
+                                                            )
+                                                        }
+                                                        .padding(vertical = 6.dp)
+                                                ) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(34.dp)
+                                                            .clip(CircleShape)
+                                                            .background(color)
+                                                            .border(
+                                                                width = if (isSelected) 2.5.dp else 1.dp,
+                                                                color = if (isSelected) textColor else Color.White.copy(alpha = 0.25f),
+                                                                shape = CircleShape
+                                                            ),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        if (isSelected) {
+                                                            Icon(
+                                                                imageVector = Icons.Default.Check,
+                                                                contentDescription = label,
+                                                                tint = Color.White,
+                                                                modifier = Modifier.size(16.dp)
+                                                            )
+                                                        }
+                                                    }
+                                                    Spacer(modifier = Modifier.height(4.dp))
+                                                    Text(
+                                                        text = label,
+                                                        fontFamily = PlusJakartaSansFontFamily,
+                                                        fontSize = 10.sp,
+                                                        color = if (isSelected) textColor else subTextColor,
+                                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // Tier Pills
+                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Text(
+                                            text = "فئة الحساب والشارة",
+                                            fontFamily = PlusJakartaSansFontFamily,
+                                            fontWeight = FontWeight.Medium,
+                                            fontSize = 12.sp,
+                                            color = subTextColor
+                                        )
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            com.example.data.AppTier.values().forEach { tierOption ->
+                                                val isLockedPremium = tierOption == com.example.data.AppTier.PREMIUM && !themeConfig.isPremiumUnlocked
+                                                val isSelected = themeConfig.appTier == tierOption && !isLockedPremium
+                                                val tColor = tierOption.displayColor(isDark)
+                                                Box(
+                                                    modifier = Modifier
+                                                        .weight(1f)
+                                                        .heightIn(min = 48.dp)
+                                                        .clip(RoundedCornerShape(12.dp))
+                                                        .background(
+                                                            if (isSelected) tColor.copy(alpha = if (isDark) 0.22f else 0.14f)
+                                                            else surfaceCardColor
+                                                        )
+                                                        .border(
+                                                            1.dp,
+                                                            if (isSelected) tColor.copy(alpha = 0.7f) else subtleBorder,
+                                                            RoundedCornerShape(12.dp)
+                                                        )
+                                                        .clickable {
+                                                            CyberHapticsEngine.triggerTactileTick(context)
+                                                            if (isLockedPremium) {
+                                                                onClose()
+                                                                onOpenRedeemDialog()
+                                                            } else {
+                                                                onConfigChange(themeConfig.copy(appTier = tierOption))
+                                                            }
+                                                        },
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.Center
+                                                    ) {
+                                                        if (isLockedPremium) {
+                                                            Icon(
+                                                                imageVector = Icons.Default.Lock,
+                                                                contentDescription = null,
+                                                                tint = tColor,
+                                                                modifier = Modifier.size(12.dp)
+                                                            )
+                                                            Spacer(modifier = Modifier.width(4.dp))
+                                                        }
+                                                        Text(
+                                                            text = tierOption.label,
+                                                            fontFamily = OutfitFontFamily,
+                                                            fontWeight = FontWeight.Bold,
+                                                            fontSize = 11.5.sp,
+                                                            color = if (isSelected || isLockedPremium) tColor else subTextColor
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        if (themeConfig.isPremiumUnlocked) {
+                                            val goldTint = com.example.data.AppTier.PREMIUM.displayColor(isDark)
+                                            Text(
+                                                text = "وضع PREMIUM مفعّل بالكامل ✓",
+                                                fontFamily = PlusJakartaSansFontFamily,
+                                                fontWeight = FontWeight.SemiBold,
+                                                fontSize = 10.5.sp,
+                                                color = goldTint
+                                            )
+                                        }
+                                    }
+
+                                    // Temperature Scale Row
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "وحدة الحرارة",
+                                            fontFamily = PlusJakartaSansFontFamily,
+                                            fontWeight = FontWeight.Medium,
+                                            fontSize = 12.5.sp,
+                                            color = textColor
+                                        )
+                                        Row(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(10.dp))
+                                                .background(surfaceCardColor)
+                                                .padding(3.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            listOf(
+                                                TemperatureUnit.CELSIUS to "°C",
+                                                TemperatureUnit.FAHRENHEIT to "°F"
+                                            ).forEach { (unit, label) ->
+                                                val selected = themeConfig.temperatureUnit == unit
+                                                Box(
+                                                    modifier = Modifier
+                                                        .clip(RoundedCornerShape(8.dp))
+                                                        .background(if (selected) accentColor.copy(alpha = 0.22f) else Color.Transparent)
+                                                        .clickable {
+                                                            CyberHapticsEngine.triggerTactileTick(context)
+                                                            onConfigChange(themeConfig.copy(temperatureUnit = unit))
+                                                        }
+                                                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                                                ) {
+                                                    Text(
+                                                        text = label,
+                                                        fontFamily = OutfitFontFamily,
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontSize = 12.sp,
+                                                        color = if (selected) accentColor else subTextColor
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // Liquid Droplet Visibility Toggle
+                                    DrawerToggleRow(
+                                        title = "قطرة الزجاج السائل",
+                                        subtitle = "إظهار المؤشر العائم في شريط التنقل السفلي",
+                                        checked = themeConfig.showLiquidDroplet,
+                                        onCheckedChange = { onConfigChange(themeConfig.copy(showLiquidDroplet = it)) },
+                                        accentColor = accentColor,
+                                        textColor = textColor,
+                                        subTextColor = subTextColor
+                                    )
+
+                                    // Droplet Drag Navigation Behavior Toggle (Disabled by default so dragging droplet does not switch pages)
+                                    DrawerToggleRow(
+                                        title = "التنقل بسحب القطرة",
+                                        subtitle = if (themeConfig.dropletDragNavigationEnabled) {
+                                            "مفعّل: سحب القطرة يميناً ويساراً يبدّل الصفحات"
+                                        } else {
+                                            "مقفول: سحب القطرة في البانر لا يبدّل الصفحات (النقر فقط)"
+                                        },
+                                        checked = themeConfig.dropletDragNavigationEnabled,
+                                        onCheckedChange = {
+                                            onConfigChange(themeConfig.copy(dropletDragNavigationEnabled = it))
+                                        },
+                                        accentColor = accentColor,
+                                        textColor = textColor,
+                                        subTextColor = subTextColor,
+                                        testTag = "droplet_drag_nav_switch"
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // 3. GRAPHICS SECTION: Simple Mode, Pro Mode (1ms Sync + Classic Comfort), and 120Hz Refresh
+                    SettingsAccordionCard(
+                        title = "الرسوميات والأداء • Graphics",
+                        summary = "${themeConfig.graphicsMode.titleAr} • ${if (themeConfig.target120FpsMode) "120Hz" else "قياسي"}",
+                        icon = Icons.Default.DisplaySettings,
+                        expanded = expandGraphics,
+                        onToggle = {
+                            CyberHapticsEngine.triggerTactileTick(context)
+                            expandGraphics = !expandGraphics
+                        },
+                        accentColor = TactileCyan,
+                        surfaceColor = surfaceCardColor,
+                        borderColor = subtleBorder,
+                        textColor = textColor,
+                        subTextColor = subTextColor,
+                        testTag = "settings_graphics_section"
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            // 3a. Simple Mode Toggle Card
+                            val isSimpleSelected = themeConfig.graphicsMode == GraphicsMode.SIMPLE
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 58.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(
+                                        if (isSimpleSelected) accentColor.copy(alpha = if (isDark) 0.18f else 0.12f)
+                                        else softTileColor.copy(alpha = 0.65f)
+                                    )
+                                    .border(
+                                        1.1.dp,
+                                        if (isSimpleSelected) accentColor.copy(alpha = 0.65f) else subtleBorder,
+                                        RoundedCornerShape(16.dp)
+                                    )
+                                    .clickable {
+                                        CyberHapticsEngine.triggerTactileTick(context)
+                                        val nextMode = if (isSimpleSelected) GraphicsMode.STANDARD else GraphicsMode.SIMPLE
+                                        onConfigChange(
+                                            themeConfig.copy(
+                                                graphicsMode = nextMode,
+                                                samplingIntervalMs = 1000L
+                                            )
+                                        )
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                                    .testTag("simple_mode_card"),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Simple Mode • الوضع البسيط",
+                                        fontFamily = OutfitFontFamily,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.5.sp,
+                                        color = textColor
+                                    )
+                                    Text(
+                                        text = "مظهر عادي وهادئ يميل إلى البساطة بدون ألوان زاهية أو حركات لامعة",
+                                        fontFamily = PlusJakartaSansFontFamily,
+                                        fontSize = 10.sp,
+                                        color = subTextColor,
+                                        lineHeight = 14.sp
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Switch(
+                                    checked = isSimpleSelected,
+                                    onCheckedChange = { checked ->
+                                        CyberHapticsEngine.triggerTactileTick(context)
+                                        onConfigChange(
+                                            themeConfig.copy(
+                                                graphicsMode = if (checked) GraphicsMode.SIMPLE else GraphicsMode.STANDARD,
+                                                samplingIntervalMs = 1000L
+                                            )
+                                        )
+                                    },
+                                    modifier = Modifier.testTag("simple_mode_switch"),
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Color.White,
+                                        checkedTrackColor = accentColor,
+                                        uncheckedThumbColor = subTextColor,
+                                        uncheckedTrackColor = Color(0x3394A3B8)
+                                    )
+                                )
+                            }
+
+                            // 3b. Pro Mode Toggle Card (Classic Luxury Eye-Comfort + 1ms Ultra-Fast Sync)
+                            val isProSelected = themeConfig.graphicsMode == GraphicsMode.PRO
+                            val proGoldAccent = if (isDark) Color(0xFF6C9BCF) else Color(0xFF2E5B88)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 64.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(
+                                        if (isProSelected) proGoldAccent.copy(alpha = if (isDark) 0.22f else 0.13f)
+                                        else softTileColor.copy(alpha = 0.65f)
+                                    )
+                                    .border(
+                                        1.1.dp,
+                                        if (isProSelected) proGoldAccent.copy(alpha = 0.72f) else subtleBorder,
+                                        RoundedCornerShape(16.dp)
+                                    )
+                                    .clickable {
+                                        CyberHapticsEngine.triggerTactileTick(context)
+                                        val nextMode = if (isProSelected) GraphicsMode.STANDARD else GraphicsMode.PRO
+                                        onConfigChange(
+                                            themeConfig.copy(
+                                                graphicsMode = nextMode,
+                                                samplingIntervalMs = if (nextMode == GraphicsMode.PRO) 1L else 1000L
+                                            )
+                                        )
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                                    .testTag("pro_mode_card"),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Column(modifier = Modifier.weight(1f)) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
                                         Text(
-                                            text = "محرك الثيمات • Theme Engine",
+                                            text = "Pro Mode • وضع المحترفين",
                                             fontFamily = OutfitFontFamily,
                                             fontWeight = FontWeight.Bold,
-                                            fontSize = 13.sp,
-                                            color = textColor,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
+                                            fontSize = 12.5.sp,
+                                            color = textColor
                                         )
-                                        Box(
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(6.dp))
-                                                .background(accentColor.copy(alpha = 0.20f))
-                                                .padding(horizontal = 5.dp, vertical = 1.5.dp)
-                                        ) {
-                                            Text(
-                                                text = "${ThemeEngineCatalog.presets.size}",
-                                                fontFamily = OutfitFontFamily,
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 9.5.sp,
-                                                color = accentColor
-                                            )
+                                        if (isProSelected) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(6.dp))
+                                                    .background(proGoldAccent.copy(alpha = 0.22f))
+                                                    .padding(horizontal = 5.dp, vertical = 1.5.dp)
+                                            ) {
+                                                Text(
+                                                    text = "1ms SYNC",
+                                                    fontFamily = OutfitFontFamily,
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 9.sp,
+                                                    color = proGoldAccent
+                                                )
+                                            }
                                         }
                                     }
                                     Text(
-                                        text = "النشط: ${resolvedTheme.themeName}",
+                                        text = "مظهر كلاسيكي فخم ناعم ومريح للعين في كل الأوضاع + رفع تزامن القياسات إلى 1 جزء من الثانية",
                                         fontFamily = PlusJakartaSansFontFamily,
-                                        fontSize = 10.5.sp,
+                                        fontSize = 10.sp,
                                         color = subTextColor,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
+                                        lineHeight = 14.sp
                                     )
                                 }
-                            }
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(3.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(9.dp)
-                                        .clip(CircleShape)
-                                        .background(accentColor)
-                                )
-                                Box(
-                                    modifier = Modifier
-                                        .size(9.dp)
-                                        .clip(CircleShape)
-                                        .background(resolvedTheme.secondaryAccent)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                                    contentDescription = null,
-                                    tint = accentColor,
-                                    modifier = Modifier.size(20.dp)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Switch(
+                                    checked = isProSelected,
+                                    onCheckedChange = { checked ->
+                                        CyberHapticsEngine.triggerTactileTick(context)
+                                        val nextMode = if (checked) GraphicsMode.PRO else GraphicsMode.STANDARD
+                                        onConfigChange(
+                                            themeConfig.copy(
+                                                graphicsMode = nextMode,
+                                                samplingIntervalMs = if (checked) 1L else 1000L
+                                            )
+                                        )
+                                    },
+                                    modifier = Modifier.testTag("pro_mode_switch"),
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Color.White,
+                                        checkedTrackColor = proGoldAccent,
+                                        uncheckedThumbColor = subTextColor,
+                                        uncheckedTrackColor = Color(0x3394A3B8)
+                                    )
                                 )
                             }
+
+                            // 3c. سلاسة 120Hz moved underneath Simple & Pro inside Graphics
+                            DrawerToggleRow(
+                                title = "سلاسة 120Hz",
+                                subtitle = if (themeConfig.target120FpsMode) "مفعّل: سلاسة حركة فائقة 120 إطار" else "قياسي: استجابة موفرة للطاقة",
+                                checked = themeConfig.target120FpsMode,
+                                onCheckedChange = {
+                                    CyberHapticsEngine.triggerTactileTick(context)
+                                    onConfigChange(themeConfig.copy(target120FpsMode = it))
+                                },
+                                accentColor = TactileCyan,
+                                textColor = textColor,
+                                subTextColor = subTextColor,
+                                testTag = "fps_120_toggle_row"
+                            )
                         }
                     }
 
-                    // 2. Cyber Skin Vault Sleek Showcase Banner
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 64.dp)
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(
-                                Brush.horizontalGradient(
-                                    colors = listOf(
-                                        accentColor.copy(alpha = if (isDark) 0.22f else 0.12f),
-                                        surfaceCardColor
-                                    )
-                                )
-                            )
-                            .border(
-                                1.dp,
-                                accentColor.copy(alpha = if (isDark) 0.42f else 0.28f),
-                                RoundedCornerShape(20.dp)
-                            )
-                            .clickable {
-                                CyberHapticsEngine.triggerTactileTick(context)
-                                onClose()
-                                onOpenSkinVault()
-                            }
-                            .padding(horizontal = 14.dp, vertical = 12.dp)
-                            .testTag("drawer_cyber_vault_banner")
+                    // 4. NOTIFICATIONS SECTION: Moved Sounds, Vibration & Battery Protection Alerts
+                    val activeNotifCount = listOf(
+                        themeConfig.soundEffectsEnabled,
+                        themeConfig.hapticFeedbackEnabled,
+                        themeConfig.backgroundServiceEnabled,
+                        themeConfig.alertOn80Percent,
+                        themeConfig.alertOnHighTemp
+                    ).count { it }
+
+                    SettingsAccordionCard(
+                        title = "التنبيهات • Notifications",
+                        summary = "$activeNotifCount من 5 مفعّلة",
+                        icon = Icons.Default.Notifications,
+                        expanded = expandNotifications,
+                        onToggle = {
+                            CyberHapticsEngine.triggerTactileTick(context)
+                            expandNotifications = !expandNotifications
+                        },
+                        accentColor = TactileGreen,
+                        surfaceColor = surfaceCardColor,
+                        borderColor = subtleBorder,
+                        textColor = textColor,
+                        subTextColor = subTextColor,
+                        testTag = "settings_notifications_section"
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(40.dp)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(accentColor.copy(alpha = if (isDark) 0.24f else 0.14f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.AutoAwesome,
-                                        contentDescription = null,
-                                        tint = accentColor,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Column {
-                                    Text(
-                                        text = "متجر الثيمات الزجاجية",
-                                        fontFamily = OutfitFontFamily,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 13.5.sp,
-                                        color = textColor
-                                    )
-                                    Text(
-                                        text = "أقنعة ومؤثرات بصرية مريحة للعين",
-                                        fontFamily = PlusJakartaSansFontFamily,
-                                        fontSize = 10.5.sp,
-                                        color = subTextColor
-                                    )
-                                }
-                            }
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                                contentDescription = null,
-                                tint = accentColor,
-                                modifier = Modifier.size(20.dp)
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            DrawerToggleRow(
+                                title = "الاهتزاز",
+                                subtitle = if (themeConfig.hapticFeedbackEnabled) "استجابة لمسية تفاعلية مفعّلة" else "الاهتزاز معطّل",
+                                checked = themeConfig.hapticFeedbackEnabled,
+                                onCheckedChange = {
+                                    onConfigChange(themeConfig.copy(hapticFeedbackEnabled = it))
+                                    if (it) CyberHapticsEngine.triggerTactileTick(context)
+                                },
+                                accentColor = TactileGreen,
+                                textColor = textColor,
+                                subTextColor = subTextColor,
+                                testTag = "notifications_vibration_switch"
+                            )
+                            DrawerToggleRow(
+                                title = "الأصوات",
+                                subtitle = if (themeConfig.soundEffectsEnabled) "مؤثرات صوتية تفاعلية مفعّلة" else "الوضع الصامت مفعّل",
+                                checked = themeConfig.soundEffectsEnabled,
+                                onCheckedChange = {
+                                    CyberHapticsEngine.triggerTactileTick(context)
+                                    onConfigChange(themeConfig.copy(soundEffectsEnabled = it))
+                                },
+                                accentColor = TactileViolet,
+                                textColor = textColor,
+                                subTextColor = subTextColor,
+                                testTag = "notifications_sound_switch"
+                            )
+                            DrawerToggleRow(
+                                title = "خدمة القياس في الخلفية 24/7",
+                                subtitle = "رصد استقرار الشحن والبطارية باستمرار",
+                                checked = themeConfig.backgroundServiceEnabled,
+                                onCheckedChange = { onConfigChange(themeConfig.copy(backgroundServiceEnabled = it)) },
+                                accentColor = accentColor,
+                                textColor = textColor,
+                                subTextColor = subTextColor
+                            )
+                            DrawerToggleRow(
+                                title = "تنبيه حماية البطارية 80%",
+                                subtitle = "إشعار لطيف لإطالة عمر خلايا الليثيوم",
+                                checked = themeConfig.alertOn80Percent,
+                                onCheckedChange = { onConfigChange(themeConfig.copy(alertOn80Percent = it)) },
+                                accentColor = accentColor,
+                                textColor = textColor,
+                                subTextColor = subTextColor
+                            )
+                            DrawerToggleRow(
+                                title = "تحذير الحرارة المرتفعة (>42°C)",
+                                subtitle = "تنبيه فوري عند ارتفاع حرارة المستشعر",
+                                checked = themeConfig.alertOnHighTemp,
+                                onCheckedChange = { onConfigChange(themeConfig.copy(alertOnHighTemp = it)) },
+                                accentColor = accentColor,
+                                textColor = textColor,
+                                subTextColor = subTextColor
                             )
                         }
                     }
 
-                    // 2b. Quick Premium Redeem Banner (shown cleanly when Premium is locked)
+                    // 5. Quick Premium Redeem Banner (shown cleanly when Premium is locked)
                     if (!themeConfig.isPremiumUnlocked) {
                         val goldColor = if (isDark) Color(0xFFFFD700) else Color(0xFFB77900)
                         Box(
@@ -868,90 +1432,7 @@ fun LuxurySettingsDrawer(
                         }
                     }
 
-                    // 3. Dynamic 2x2 Quick Glass Control Grid
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            QuickControlTile(
-                                title = if (isDark) "الوضع الليلي" else "الوضع النهاري",
-                                status = if (isDark) "داكن هادئ" else "ناعم مريح",
-                                icon = if (isDark) Icons.Default.DarkMode else Icons.Default.LightMode,
-                                active = isDark,
-                                accentColor = accentColor,
-                                surfaceColor = surfaceCardColor,
-                                softColor = softTileColor,
-                                borderColor = subtleBorder,
-                                textColor = textColor,
-                                subTextColor = subTextColor,
-                                onClick = {
-                                    CyberHapticsEngine.triggerTactileTick(context)
-                                    onConfigChange(themeConfig.copy(isDarkMode = !isDark))
-                                },
-                                modifier = Modifier.weight(1f)
-                            )
-                            QuickControlTile(
-                                title = "سلاسة 120Hz",
-                                status = if (themeConfig.target120FpsMode) "مفعّل" else "قياسي",
-                                icon = Icons.Default.Speed,
-                                active = themeConfig.target120FpsMode,
-                                accentColor = TactileCyan,
-                                surfaceColor = surfaceCardColor,
-                                softColor = softTileColor,
-                                borderColor = subtleBorder,
-                                textColor = textColor,
-                                subTextColor = subTextColor,
-                                onClick = {
-                                    CyberHapticsEngine.triggerTactileTick(context)
-                                    onConfigChange(themeConfig.copy(target120FpsMode = !themeConfig.target120FpsMode))
-                                },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            QuickControlTile(
-                                title = "الأصوات",
-                                status = if (themeConfig.soundEffectsEnabled) "مفعّلة" else "صامت",
-                                icon = Icons.Default.GraphicEq,
-                                active = themeConfig.soundEffectsEnabled,
-                                accentColor = TactileViolet,
-                                surfaceColor = surfaceCardColor,
-                                softColor = softTileColor,
-                                borderColor = subtleBorder,
-                                textColor = textColor,
-                                subTextColor = subTextColor,
-                                onClick = {
-                                    CyberHapticsEngine.triggerTactileTick(context)
-                                    onConfigChange(themeConfig.copy(soundEffectsEnabled = !themeConfig.soundEffectsEnabled))
-                                },
-                                modifier = Modifier.weight(1f)
-                            )
-                            QuickControlTile(
-                                title = "الاهتزاز",
-                                status = if (themeConfig.hapticFeedbackEnabled) "تفاعلي" else "معطّل",
-                                icon = Icons.Default.Vibration,
-                                active = themeConfig.hapticFeedbackEnabled,
-                                accentColor = TactileGreen,
-                                surfaceColor = surfaceCardColor,
-                                softColor = softTileColor,
-                                borderColor = subtleBorder,
-                                textColor = textColor,
-                                subTextColor = subTextColor,
-                                onClick = {
-                                    CyberHapticsEngine.triggerTactileTick(context)
-                                    onConfigChange(themeConfig.copy(hapticFeedbackEnabled = !themeConfig.hapticFeedbackEnabled))
-                                },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
-
-                    // 4. Luxurious, Breathing & Dynamic Auto-Update Card (with Auto Toggle integrated cleanly)
+                    // 6. Luxurious, Breathing & Dynamic Auto-Update Card
                     LuxuriousAutoUpdateStatusCard(
                         updateUiState = updateUiState,
                         autoUpdateEnabled = themeConfig.autoUpdateEnabled,
@@ -970,296 +1451,6 @@ fun LuxurySettingsDrawer(
                             onOpenUpdateDialog()
                         }
                     )
-
-                    // 4b. External Home Launcher App Icon Color Selector
-                    LauncherIconColorCard(
-                        selectedVariant = themeConfig.launcherIconVariant,
-                        onSelectVariant = onSelectLauncherIcon,
-                        isDark = isDark,
-                        surfaceColor = surfaceCardColor,
-                        softColor = softTileColor,
-                        borderColor = subtleBorder,
-                        textColor = textColor,
-                        subTextColor = subTextColor
-                    )
-
-                    // 5. Expandable Accordion: Appearance & Identity
-                    SettingsAccordionCard(
-                        title = "الألوان والهوية",
-                        summary = "${themeConfig.appTier.label} • ${if (themeConfig.temperatureUnit == TemperatureUnit.CELSIUS) "°C" else "°F"}",
-                        icon = Icons.Default.Palette,
-                        expanded = expandAppearance,
-                        onToggle = {
-                            CyberHapticsEngine.triggerTactileTick(context)
-                            expandAppearance = !expandAppearance
-                        },
-                        accentColor = accentColor,
-                        surfaceColor = surfaceCardColor,
-                        borderColor = subtleBorder,
-                        textColor = textColor,
-                        subTextColor = subTextColor
-                    ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                            // Soft Eye-Friendly Color Orbs
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text(
-                                    text = "لون التمييز المريح للعين",
-                                    fontFamily = PlusJakartaSansFontFamily,
-                                    fontWeight = FontWeight.Medium,
-                                    fontSize = 12.sp,
-                                    color = subTextColor
-                                )
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    listOf(
-                                        Triple("أزرق هادئ", Color(0xFF4F7DF3), 0),
-                                        Triple("زمردي", Color(0xFF1BBF75), 1),
-                                        Triple("مرجاني", Color(0xFFF06449), 2),
-                                        Triple("بنفسجي", Color(0xFF8B6EF3), 3)
-                                    ).forEach { (label, color, idx) ->
-                                        val isSelected = themeConfig.accentColorIndex == idx && themeConfig.customAccentHex == null
-                                        Column(
-                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .clip(RoundedCornerShape(14.dp))
-                                                .clickable {
-                                                    CyberHapticsEngine.triggerTactileTick(context)
-                                                    onConfigChange(
-                                                        themeConfig.copy(
-                                                            accentColorIndex = idx,
-                                                            customAccentHex = null
-                                                        )
-                                                    )
-                                                }
-                                                .padding(vertical = 6.dp)
-                                        ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(34.dp)
-                                                    .clip(CircleShape)
-                                                    .background(color)
-                                                    .border(
-                                                        width = if (isSelected) 2.5.dp else 1.dp,
-                                                        color = if (isSelected) textColor else Color.White.copy(alpha = 0.25f),
-                                                        shape = CircleShape
-                                                    ),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                if (isSelected) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.Check,
-                                                        contentDescription = label,
-                                                        tint = Color.White,
-                                                        modifier = Modifier.size(16.dp)
-                                                    )
-                                                }
-                                            }
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            Text(
-                                                text = label,
-                                                fontFamily = PlusJakartaSansFontFamily,
-                                                fontSize = 10.sp,
-                                                color = if (isSelected) textColor else subTextColor,
-                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Tier Pills
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text(
-                                    text = "فئة الحساب والشارة",
-                                    fontFamily = PlusJakartaSansFontFamily,
-                                    fontWeight = FontWeight.Medium,
-                                    fontSize = 12.sp,
-                                    color = subTextColor
-                                )
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    com.example.data.AppTier.values().forEach { tierOption ->
-                                        val isLockedPremium = tierOption == com.example.data.AppTier.PREMIUM && !themeConfig.isPremiumUnlocked
-                                        val isSelected = themeConfig.appTier == tierOption && !isLockedPremium
-                                        val tColor = tierOption.displayColor(isDark)
-                                        Box(
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .heightIn(min = 44.dp)
-                                                .clip(RoundedCornerShape(12.dp))
-                                                .background(
-                                                    if (isSelected) tColor.copy(alpha = if (isDark) 0.22f else 0.14f)
-                                                    else softTileColor
-                                                )
-                                                .border(
-                                                    1.dp,
-                                                    if (isSelected) tColor.copy(alpha = 0.7f) else subtleBorder,
-                                                    RoundedCornerShape(12.dp)
-                                                )
-                                                .clickable {
-                                                    CyberHapticsEngine.triggerTactileTick(context)
-                                                    if (isLockedPremium) {
-                                                        onClose()
-                                                        onOpenRedeemDialog()
-                                                    } else {
-                                                        onConfigChange(themeConfig.copy(appTier = tierOption))
-                                                    }
-                                                },
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.Center
-                                            ) {
-                                                if (isLockedPremium) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.Lock,
-                                                        contentDescription = null,
-                                                        tint = tColor,
-                                                        modifier = Modifier.size(12.dp)
-                                                    )
-                                                    Spacer(modifier = Modifier.width(4.dp))
-                                                }
-                                                Text(
-                                                    text = tierOption.label,
-                                                    fontFamily = OutfitFontFamily,
-                                                    fontWeight = FontWeight.Bold,
-                                                    fontSize = 11.5.sp,
-                                                    color = if (isSelected || isLockedPremium) tColor else subTextColor
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                                if (themeConfig.isPremiumUnlocked) {
-                                    val goldTint = com.example.data.AppTier.PREMIUM.displayColor(isDark)
-                                    Text(
-                                        text = "وضع PREMIUM مفعّل بالكامل ✓",
-                                        fontFamily = PlusJakartaSansFontFamily,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 10.5.sp,
-                                        color = goldTint
-                                    )
-                                }
-                            }
-
-                            // Temperature Scale Row
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "وحدة الحرارة",
-                                    fontFamily = PlusJakartaSansFontFamily,
-                                    fontWeight = FontWeight.Medium,
-                                    fontSize = 12.5.sp,
-                                    color = textColor
-                                )
-                                Row(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(softTileColor)
-                                        .padding(3.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    listOf(
-                                        TemperatureUnit.CELSIUS to "°C",
-                                        TemperatureUnit.FAHRENHEIT to "°F"
-                                    ).forEach { (unit, label) ->
-                                        val selected = themeConfig.temperatureUnit == unit
-                                        Box(
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .background(if (selected) accentColor.copy(alpha = 0.22f) else Color.Transparent)
-                                                .clickable {
-                                                    CyberHapticsEngine.triggerTactileTick(context)
-                                                    onConfigChange(themeConfig.copy(temperatureUnit = unit))
-                                                }
-                                                .padding(horizontal = 12.dp, vertical = 6.dp)
-                                        ) {
-                                            Text(
-                                                text = label,
-                                                fontFamily = OutfitFontFamily,
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 12.sp,
-                                                color = if (selected) accentColor else subTextColor
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Liquid Droplet Toggle
-                            DrawerToggleRow(
-                                title = "قطرة الزجاج السائل",
-                                subtitle = "إظهار المؤشر العائم في شريط التنقل السفلي",
-                                checked = themeConfig.showLiquidDroplet,
-                                onCheckedChange = { onConfigChange(themeConfig.copy(showLiquidDroplet = it)) },
-                                accentColor = accentColor,
-                                textColor = textColor,
-                                subTextColor = subTextColor
-                            )
-                        }
-                    }
-
-                    // 6. Expandable Accordion: Protection & Background Alerts
-                    val activeProtectionCount = listOf(
-                        themeConfig.backgroundServiceEnabled,
-                        themeConfig.alertOn80Percent,
-                        themeConfig.alertOnHighTemp
-                    ).count { it }
-
-                    SettingsAccordionCard(
-                        title = "الحماية والتنبيهات",
-                        summary = "$activeProtectionCount من 3 مفعّلة",
-                        icon = Icons.Default.Shield,
-                        expanded = expandProtection,
-                        onToggle = {
-                            CyberHapticsEngine.triggerTactileTick(context)
-                            expandProtection = !expandProtection
-                        },
-                        accentColor = TactileGreen,
-                        surfaceColor = surfaceCardColor,
-                        borderColor = subtleBorder,
-                        textColor = textColor,
-                        subTextColor = subTextColor
-                    ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            DrawerToggleRow(
-                                title = "خدمة القياس في الخلفية 24/7",
-                                subtitle = "رصد استقرار الشحن والبطارية باستمرار",
-                                checked = themeConfig.backgroundServiceEnabled,
-                                onCheckedChange = { onConfigChange(themeConfig.copy(backgroundServiceEnabled = it)) },
-                                accentColor = accentColor,
-                                textColor = textColor,
-                                subTextColor = subTextColor
-                            )
-                            DrawerToggleRow(
-                                title = "تنبيه حماية البطارية 80%",
-                                subtitle = "إشعار لطيف لإطالة عمر خلايا الليثيوم",
-                                checked = themeConfig.alertOn80Percent,
-                                onCheckedChange = { onConfigChange(themeConfig.copy(alertOn80Percent = it)) },
-                                accentColor = accentColor,
-                                textColor = textColor,
-                                subTextColor = subTextColor
-                            )
-                            DrawerToggleRow(
-                                title = "تحذير الحرارة المرتفعة (>42°C)",
-                                subtitle = "تنبيه فوري عند ارتفاع حرارة المستشعر",
-                                checked = themeConfig.alertOnHighTemp,
-                                onCheckedChange = { onConfigChange(themeConfig.copy(alertOnHighTemp = it)) },
-                                accentColor = accentColor,
-                                textColor = textColor,
-                                subTextColor = subTextColor
-                            )
-                        }
-                    }
 
                     // 7. Expandable Accordion: Sensor Calibration
                     SettingsAccordionCard(
@@ -1402,7 +1593,13 @@ private fun LauncherIconVariant.foregroundDrawableRes(): Int {
 @Composable
 private fun LauncherIconColorCard(
     selectedVariant: LauncherIconVariant,
+    forceChangeEnabled: Boolean,
+    iconDiagnostics: IconSwitchDiagnostics,
+    accentColor: Color,
     onSelectVariant: (LauncherIconVariant) -> Unit,
+    onToggleForceChange: (Boolean) -> Unit,
+    onForceChangeNow: (LauncherIconVariant) -> Unit,
+    onPinShortcut: (LauncherIconVariant) -> Boolean,
     isDark: Boolean,
     surfaceColor: Color,
     softColor: Color,
@@ -1410,6 +1607,8 @@ private fun LauncherIconColorCard(
     textColor: Color,
     subTextColor: Color
 ) {
+    val context = LocalContext.current
+    var pinFeedbackText by remember { mutableStateOf<String?>(null) }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -1569,13 +1768,144 @@ private fun LauncherIconColorCard(
             }
         }
 
-        Text(
-            text = "تغيير فوري لشكل الأيقونة على مشغّل الهاتف مع الحفاظ على الخلفية الشفافة",
-            fontFamily = PlusJakartaSansFontFamily,
-            fontSize = 9.8.sp,
-            color = subTextColor,
-            lineHeight = 13.sp
-        )
+        // Force Change (التغيير الإجباري) Control Box
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(softColor.copy(alpha = if (isDark) 0.58f else 0.65f))
+                .border(1.dp, accentColor.copy(alpha = 0.28f), RoundedCornerShape(14.dp))
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "وضع التغيير الإجباري (Force Change)",
+                        fontFamily = OutfitFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.8.sp,
+                        color = textColor
+                    )
+                    Text(
+                        text = "يعيد تدوير مكونات المشغّل ويفرّغ كاش الهاتف فوراً مهما كان نوع المشغّل",
+                        fontFamily = PlusJakartaSansFontFamily,
+                        fontSize = 9.5.sp,
+                        color = subTextColor,
+                        lineHeight = 12.5.sp
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Switch(
+                    checked = forceChangeEnabled,
+                    onCheckedChange = { onToggleForceChange(it) },
+                    modifier = Modifier.testTag("force_change_icon_switch"),
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = accentColor
+                    )
+                )
+            }
+
+            // Immediate Force Apply Action Button (>= 48dp touch height)
+            Button(
+                onClick = {
+                    CyberHapticsEngine.triggerBenchmarkSuccess(context)
+                    onForceChangeNow(selectedVariant)
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .testTag("force_change_icon_button"),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = accentColor
+                )
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Bolt,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "تغيير إجباري الآن (${selectedVariant.titleAr})",
+                    fontFamily = OutfitFontFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
+                    color = Color.White
+                )
+            }
+
+            // Direct Home Screen Shortcut Pinning Fallback (bypasses stubborn OEM caches like MIUI/HyperOS/ColorOS)
+            if (iconDiagnostics.isPinShortcutSupported) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(surfaceColor.copy(alpha = 0.9f))
+                        .border(1.dp, borderColor, RoundedCornerShape(12.dp))
+                        .clickable {
+                            CyberHapticsEngine.triggerTactileTick(context)
+                            val ok = onPinShortcut(selectedVariant)
+                            pinFeedbackText = if (ok) {
+                                "تم إرسال اختصار الشاشة الرئيسية بالأيقونة (${selectedVariant.titleAr}) — وافق على الإضافة في الشاشة."
+                            } else {
+                                "المشغّل الحالي لا يدعم التثبيت المباشر التلقائي."
+                            }
+                        }
+                        .padding(horizontal = 10.dp, vertical = 10.dp)
+                        .testTag("pin_forced_icon_button"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PushPin,
+                            contentDescription = null,
+                            tint = accentColor,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "تثبيت أيقونة مباشرة للشاشة (تجاوز كاش المشغّل)",
+                            fontFamily = PlusJakartaSansFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.8.sp,
+                            color = textColor,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+
+            if (!pinFeedbackText.isNullOrBlank()) {
+                Text(
+                    text = pinFeedbackText!!,
+                    fontFamily = PlusJakartaSansFontFamily,
+                    fontSize = 9.5.sp,
+                    color = accentColor,
+                    lineHeight = 13.sp
+                )
+            }
+
+            Text(
+                text = "المشغّل: ${iconDiagnostics.launcherName} • سيتم العودة للرئيسية وتحديث الكاش عند التنفيذ الإجباري",
+                fontFamily = PlusJakartaSansFontFamily,
+                fontSize = 9.2.sp,
+                color = subTextColor,
+                lineHeight = 12.5.sp
+            )
+        }
     }
 }
 
@@ -1678,6 +2008,7 @@ private fun SettingsAccordionCard(
     borderColor: Color,
     textColor: Color,
     subTextColor: Color,
+    testTag: String? = null,
     content: @Composable () -> Unit
 ) {
     val arrowRotation by animateFloatAsState(
@@ -1694,6 +2025,7 @@ private fun SettingsAccordionCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .then(if (testTag != null) Modifier.testTag(testTag) else Modifier)
             .animateContentSize(
                 animationSpec = spring(
                     dampingRatio = 0.82f,
@@ -1782,12 +2114,14 @@ private fun DrawerToggleRow(
     onCheckedChange: (Boolean) -> Unit,
     accentColor: Color,
     textColor: Color,
-    subTextColor: Color = TextSlate
+    subTextColor: Color = TextSlate,
+    testTag: String? = null
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp)
+            .then(if (testTag != null) Modifier.testTag(testTag) else Modifier)
             .clickable { onCheckedChange(!checked) },
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
