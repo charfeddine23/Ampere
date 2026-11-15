@@ -39,6 +39,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.ui.theme.LocalAmpereTheme
 import com.example.ui.theme.NeumorphBorderDark
 import com.example.ui.theme.NeumorphBorderLight
 import com.example.ui.theme.NeumorphCardBottomLight
@@ -77,11 +78,15 @@ fun LiquidGlassCard(
     } else Modifier
 
     val tagModifier = if (testTag != null) Modifier.testTag(testTag) else Modifier
+    val theme = LocalAmpereTheme.current
+    val customThemeActive = theme.themeId != null
 
-    val surfaceColor = if (isDarkMode) NeumorphSurfaceDark else NeumorphSurfaceLight
+    val surfaceColor = if (customThemeActive) theme.surface else if (isDarkMode) NeumorphSurfaceDark else NeumorphSurfaceLight
     val shadowColor = if (isDarkMode) NeumorphShadowDark else NeumorphShadowLight
-    val highlightColor = if (isDarkMode) NeumorphHighlightDark else NeumorphHighlightLight
-    val borderColor = if (isDarkMode) NeumorphBorderDark else NeumorphBorderLight
+    val highlightColor = if (customThemeActive && theme.isGlassStyle) {
+        theme.accent.copy(alpha = if (isDarkMode) 0.14f else 0.25f)
+    } else if (isDarkMode) NeumorphHighlightDark else NeumorphHighlightLight
+    val borderColor = if (customThemeActive) theme.border else if (isDarkMode) NeumorphBorderDark else NeumorphBorderLight
 
     Box(
         modifier = modifier
@@ -113,7 +118,13 @@ fun LiquidGlassCard(
             .drawBehind {
                 drawRect(
                     brush = Brush.linearGradient(
-                        colors = if (isDarkMode) {
+                        colors = if (customThemeActive) {
+                            listOf(
+                                if (theme.isGlassStyle) Color.White.copy(alpha = if (isDarkMode) 0.08f else 0.22f)
+                                else Color.White.copy(alpha = if (isDarkMode) 0.03f else 0.12f),
+                                Color.Transparent
+                            )
+                        } else if (isDarkMode) {
                             listOf(
                                 Color.White.copy(alpha = 0.05f),
                                 Color.Transparent
@@ -211,11 +222,13 @@ fun NeonBadge(
     isDarkMode: Boolean = false,
     icon: ImageVector? = null
 ) {
+    val theme = LocalAmpereTheme.current
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
             .background(
-                if (isDarkMode) Color(0x33334155) else NeumorphInsetLight
+                if (theme.themeId != null) theme.surfaceInset
+                else if (isDarkMode) Color(0x33334155) else NeumorphInsetLight
             )
             .border(
                 width = 1.dp,

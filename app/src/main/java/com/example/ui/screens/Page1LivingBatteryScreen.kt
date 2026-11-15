@@ -57,17 +57,39 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.graphics.Bitmap
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.core.graphics.drawable.toBitmap
+import com.example.audio.CyberHapticsEngine
 import com.example.data.BatteryTelemetry
 import com.example.data.GlassThemeConfig
 import com.example.data.LivingBatteryState
 import com.example.data.PrizeRoadData
 import com.example.data.TelemetryPoint
+import com.example.data.telemetry.AppBatteryConsumption
+import com.example.data.telemetry.AppBatteryUsageTracker
+import com.example.data.telemetry.AppUsageSnapshot
 import com.example.ui.components.LiquidBatteryRing
 import com.example.ui.components.LiquidGlassCard
 import com.example.ui.components.PulsingNeonDot
 import com.example.ui.components.thermalLiquidGlassBackground
+import com.example.ui.theme.LocalAmpereTheme
 import com.example.ui.theme.OutfitFontFamily
 import com.example.ui.theme.PlusJakartaSansFontFamily
+import com.example.ui.theme.TactileAmber
+import com.example.ui.theme.TactileCoralRed
+import com.example.ui.theme.TactileCyan
 import com.example.ui.theme.TactileGreen
 import com.example.ui.theme.TextCharcoal
 import com.example.ui.theme.TextSlate
@@ -93,6 +115,8 @@ fun Page1LivingBatteryScreen(
     themeConfig: GlassThemeConfig,
     prizeRoadData: PrizeRoadData,
     isAutoSensorMode: Boolean = true,
+    appUsageSnapshot: AppUsageSnapshot = AppUsageSnapshot(),
+    onRefreshAppUsage: () -> Unit = {},
     onSelectLivingState: (LivingBatteryState?) -> Unit,
     onNavigateToPrizeRoad: () -> Unit = {},
     onToggleThermalTest: () -> Unit = {}
@@ -102,7 +126,8 @@ fun Page1LivingBatteryScreen(
     val state = telemetry.livingState
     val primaryColor = state.neonPrimary
     val glow = themeConfig.glowIntensity
-    val textColor = if (isDark) TextWhite else TextCharcoal
+    val resolvedTheme = LocalAmpereTheme.current
+    val textColor = if (resolvedTheme.themeId != null) resolvedTheme.textPrimary else if (isDark) TextWhite else TextCharcoal
 
     Column(
         modifier = Modifier
@@ -324,6 +349,457 @@ fun Page1LivingBatteryScreen(
                 isDarkMode = isDark,
                 onClick = onToggleThermalTest,
                 subtext = null
+            )
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // App Battery Consumption Ranking Section (Sorted Highest Consumer First)
+        AppBatteryConsumptionSection(
+            snapshot = appUsageSnapshot,
+            accentColor = primaryColor,
+            isDarkMode = isDark,
+            glowIntensity = glow,
+            onRefresh = onRefreshAppUsage
+        )
+    }
+}
+
+@Composable
+private fun AppBatteryConsumptionSection(
+    snapshot: AppUsageSnapshot,
+    accentColor: Color,
+    isDarkMode: Boolean,
+    glowIntensity: Float,
+    onRefresh: () -> Unit
+) {
+    val context = LocalContext.current
+    val resolvedTheme = LocalAmpereTheme.current
+    val textColor = if (resolvedTheme.themeId != null) resolvedTheme.textPrimary else if (isDarkMode) TextWhite else TextCharcoal
+    val subTextColor = if (resolvedTheme.themeId != null) resolvedTheme.textSecondary else TextSlate
+    val insetBg = if (resolvedTheme.themeId != null) resolvedTheme.surfaceInset else if (isDarkMode) Color(0xFF151F30) else Color(0xFFD2DBE6)
+
+    var showAllApps by remember { mutableStateOf(false) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+    ) {
+        LiquidGlassCard(
+            modifier = Modifier.fillMaxWidth(),
+            accentColor = accentColor,
+            isDarkMode = isDarkMode,
+            shape = RoundedCornerShape(22.dp),
+            glowIntensity = glowIntensity,
+            testTag = "app_battery_consumption_card"
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(RoundedCornerShape(11.dp))
+                                .background(accentColor.copy(alpha = if (isDarkMode) 0.22f else 0.13f))
+                                .border(1.dp, accentColor.copy(alpha = 0.45f), RoundedCornerShape(11.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Apps,
+                                contentDescription = null,
+                                tint = accentColor,
+                                modifier = Modifier.size(19.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = "استهلاك التطبيقات للبطارية",
+                                fontFamily = OutfitFontFamily,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                color = textColor
+                            )
+                            Text(
+                                text = if (snapshot.hasPermission) {
+                                    "مرتبة من الأعلى استهلاكاً • آخر ${snapshot.scanWindowHours} ساعة (${snapshot.totalTrackedMah} mAh)"
+                                } else {
+                                    "يتطلب صلاحية مراقبة استخدام التطبيقات"
+                                },
+                                fontFamily = PlusJakartaSansFontFamily,
+                                fontSize = 10.5.sp,
+                                color = subTextColor,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+
+                    // Manual Refresh Action (>= 48dp touch target)
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .background(insetBg.copy(alpha = 0.7f))
+                            .clickable {
+                                CyberHapticsEngine.triggerTactileTick(context)
+                                onRefresh()
+                            }
+                            .testTag("refresh_app_usage_button"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "تحديث قائمة الاستهلاك",
+                            tint = accentColor,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
+                when {
+                    snapshot.isLoading -> {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 14.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            CircularProgressIndicator(
+                                color = accentColor,
+                                strokeWidth = 2.5.dp,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = "جاري تحليل استهلاك التطبيقات...",
+                                fontFamily = PlusJakartaSansFontFamily,
+                                fontSize = 12.sp,
+                                color = subTextColor
+                            )
+                        }
+                    }
+
+                    !snapshot.hasPermission -> {
+                        // Permission Request Card for PACKAGE_USAGE_STATS
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(insetBg.copy(alpha = 0.75f))
+                                .border(1.dp, TactileAmber.copy(alpha = 0.45f), RoundedCornerShape(16.dp))
+                                .padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "منح صلاحية الوصول إلى بيانات الاستخدام",
+                                fontFamily = OutfitFontFamily,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.5.sp,
+                                color = textColor
+                            )
+                            Text(
+                                text = "لمعرفة التطبيقات التي تستهلك البطارية بشكل حقيقي وترتيبها من الأعلى استهلاكاً، يرجى تفعيل صلاحية مراقبة الاستخدام لتطبيق Ampere Pulse.",
+                                fontFamily = PlusJakartaSansFontFamily,
+                                fontSize = 11.sp,
+                                color = subTextColor,
+                                lineHeight = 16.sp
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 48.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(accentColor)
+                                    .clickable {
+                                        CyberHapticsEngine.triggerTactileTick(context)
+                                        AppBatteryUsageTracker.openUsageAccessSettings(context)
+                                    }
+                                    .padding(horizontal = 14.dp, vertical = 10.dp)
+                                    .testTag("grant_usage_access_button"),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.LockOpen,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "منح الصلاحية الآن",
+                                        fontFamily = OutfitFontFamily,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.5.sp,
+                                        color = Color.White
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    snapshot.apps.isEmpty() -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(insetBg.copy(alpha = 0.65f))
+                                .padding(14.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "لا توجد تطبيقات نشطة مسجلة خلال آخر 24 ساعة حتى الآن.",
+                                fontFamily = PlusJakartaSansFontFamily,
+                                fontSize = 11.5.sp,
+                                color = subTextColor
+                            )
+                        }
+                    }
+
+                    else -> {
+                        val visibleApps = if (showAllApps) snapshot.apps else snapshot.apps.take(5)
+                        val maxPercent = snapshot.apps.firstOrNull()?.consumptionPercent?.coerceAtLeast(1f) ?: 100f
+
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            visibleApps.forEach { app ->
+                                AppConsumptionRowItem(
+                                    app = app,
+                                    maxPercent = maxPercent,
+                                    accentColor = accentColor,
+                                    insetBg = insetBg,
+                                    textColor = textColor,
+                                    subTextColor = subTextColor,
+                                    isDarkMode = isDarkMode,
+                                    onClick = {
+                                        CyberHapticsEngine.triggerTactileTick(context)
+                                        AppBatteryUsageTracker.openAppBatteryDetailsSettings(context, app.packageName)
+                                    }
+                                )
+                            }
+
+                            if (snapshot.apps.size > 5) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(min = 48.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(insetBg.copy(alpha = 0.72f))
+                                        .border(1.dp, accentColor.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
+                                        .clickable {
+                                            CyberHapticsEngine.triggerTactileTick(context)
+                                            showAllApps = !showAllApps
+                                        }
+                                        .testTag("toggle_all_app_usage_button"),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = if (showAllApps) "عرض أعلى 5 تطبيقات فقط" else "عرض جميع التطبيقات (${snapshot.apps.size})",
+                                        fontFamily = OutfitFontFamily,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp,
+                                        color = accentColor
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AppConsumptionRowItem(
+    app: AppBatteryConsumption,
+    maxPercent: Float,
+    accentColor: Color,
+    insetBg: Color,
+    textColor: Color,
+    subTextColor: Color,
+    isDarkMode: Boolean,
+    onClick: () -> Unit
+) {
+    val context = LocalContext.current
+    val appIconBitmap: ImageBitmap? = remember(app.packageName) {
+        runCatching {
+            val drawable = context.packageManager.getApplicationIcon(app.packageName)
+            drawable.toBitmap(width = 72, height = 72, config = Bitmap.Config.ARGB_8888).asImageBitmap()
+        }.getOrNull()
+    }
+
+    val rankColor = when (app.rank) {
+        1 -> TactileCoralRed
+        2 -> TactileAmber
+        3 -> TactileCyan
+        else -> accentColor
+    }
+    val relativeFill = (app.consumptionPercent / maxPercent).coerceIn(0.06f, 1f)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 58.dp)
+            .clip(RoundedCornerShape(15.dp))
+            .background(insetBg.copy(alpha = if (isDarkMode) 0.58f else 0.68f))
+            .border(
+                width = if (app.rank == 1) 1.1.dp else 0.7.dp,
+                color = if (app.rank == 1) rankColor.copy(alpha = 0.55f) else rankColor.copy(alpha = 0.20f),
+                shape = RoundedCornerShape(15.dp)
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 9.dp)
+            .testTag("app_usage_row_${app.rank}"),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
+                // Rank Pill (#1 Highest)
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(rankColor.copy(alpha = if (isDarkMode) 0.24f else 0.14f))
+                        .padding(horizontal = 6.dp, vertical = 3.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "#${app.rank}",
+                        fontFamily = OutfitFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 10.5.sp,
+                        color = rankColor
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // Real App Icon
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color.White.copy(alpha = if (isDarkMode) 0.08f else 0.55f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (appIconBitmap != null) {
+                        Image(
+                            bitmap = appIconBitmap,
+                            contentDescription = app.appName,
+                            modifier = Modifier
+                                .size(30.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Apps,
+                            contentDescription = app.appName,
+                            tint = rankColor,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(9.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Text(
+                            text = app.appName,
+                            fontFamily = OutfitFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.5.sp,
+                            color = textColor,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        if (app.isHighDrain) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(TactileCoralRed.copy(alpha = 0.16f))
+                                    .padding(horizontal = 5.dp, vertical = 1.dp)
+                            ) {
+                                Text(
+                                    text = "استهلاك عالٍ",
+                                    fontFamily = PlusJakartaSansFontFamily,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 8.5.sp,
+                                    color = TactileCoralRed
+                                )
+                            }
+                        }
+                    }
+                    Text(
+                        text = "نشط ${app.formattedDurationAr()} • ≈ ${app.estimatedMah} mAh",
+                        fontFamily = PlusJakartaSansFontFamily,
+                        fontSize = 10.sp,
+                        color = subTextColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // Drain Percentage
+            Text(
+                text = "${String.format(Locale.US, "%.1f", app.consumptionPercent)}%",
+                fontFamily = OutfitFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.5.sp,
+                color = rankColor
+            )
+        }
+
+        // Consumption Bar
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(5.dp)
+                .clip(CircleShape)
+                .background(if (isDarkMode) Color(0x33475569) else Color(0x4D94A3B8))
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(relativeFill)
+                    .height(5.dp)
+                    .clip(CircleShape)
+                    .background(
+                        Brush.horizontalGradient(
+                            colors = listOf(rankColor, accentColor)
+                        )
+                    )
             )
         }
     }

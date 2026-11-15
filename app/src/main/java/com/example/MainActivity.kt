@@ -65,6 +65,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         viewModel.onResumeUpdateCheck()
+        viewModel.refreshAppBatteryUsage()
     }
 
     override fun onStop() {

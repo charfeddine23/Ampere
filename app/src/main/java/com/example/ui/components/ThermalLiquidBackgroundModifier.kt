@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
+import com.example.ui.theme.LocalAmpereTheme
 import com.example.ui.theme.NeumorphBgDark
 import com.example.ui.theme.NeumorphBgLight
 import kotlin.math.PI
@@ -105,8 +106,9 @@ fun Modifier.thermalLiquidGlassBackground(
         label = "thermalPulse"
     )
 
-    // Base Neumorphic background color
-    val rootBg = if (isDarkMode) NeumorphBgDark else NeumorphBgLight
+    // Base background (respects active Theme Engine preset or adapts smoothly)
+    val theme = LocalAmpereTheme.current
+    val rootBg = if (theme.themeId != null) theme.background else if (isDarkMode) NeumorphBgDark else NeumorphBgLight
 
     // Alpha multipliers calibrated for Soft Stone Light Neumorphism vs Dark Obsidian
     val alphaScale = if (isDarkMode) 1.0f else 0.78f

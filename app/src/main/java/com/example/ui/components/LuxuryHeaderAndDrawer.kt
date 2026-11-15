@@ -119,6 +119,7 @@ import com.example.data.GlassThemeConfig
 import com.example.data.LauncherIconVariant
 import com.example.data.TemperatureUnit
 import com.example.data.update.InAppUpdateUiState
+import com.example.ui.theme.LocalAmpereTheme
 import com.example.ui.theme.OutfitFontFamily
 import com.example.ui.theme.PlusJakartaSansFontFamily
 import com.example.ui.theme.TactileAmber
@@ -130,6 +131,7 @@ import com.example.ui.theme.TactileViolet
 import com.example.ui.theme.TextCharcoal
 import com.example.ui.theme.TextSlate
 import com.example.ui.theme.TextWhite
+import com.example.ui.theme.ThemeEngineCatalog
 import java.util.Locale
 
 /**
@@ -150,6 +152,7 @@ fun LuxuryTopBar(
 ) {
     val isDark = themeConfig.isDarkMode
     val accentColor = themeConfig.accentColor
+    val resolvedTheme = LocalAmpereTheme.current
 
     Row(
         modifier = modifier
@@ -177,7 +180,7 @@ fun LuxuryTopBar(
                     fontWeight = FontWeight.Bold,
                     fontSize = 21.sp,
                     letterSpacing = (-0.3).sp,
-                    color = if (isDark) TextWhite else TextCharcoal
+                    color = if (resolvedTheme.themeId != null) resolvedTheme.textPrimary else if (isDark) TextWhite else TextCharcoal
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 PulsingNeonDot(color = accentColor, sizeDp = 5.5.dp)
@@ -259,10 +262,10 @@ fun LuxuryTopBar(
                 modifier = Modifier
                     .size(40.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(if (isDark) Color(0xFF1E293B) else Color(0xFFE7ECF3))
+                    .background(if (resolvedTheme.themeId != null) resolvedTheme.surface else if (isDark) Color(0xFF1E293B) else Color(0xFFE7ECF3))
                     .border(
                         1.dp,
-                        if (isDark) Color(0x33475569) else Color(0x99BECAD8),
+                        if (resolvedTheme.themeId != null) resolvedTheme.border else if (isDark) Color(0x33475569) else Color(0x99BECAD8),
                         RoundedCornerShape(12.dp)
                     )
                     .clickable { onToggleDarkMode() },
@@ -390,6 +393,7 @@ fun LuxurySettingsDrawer(
     themeConfig: GlassThemeConfig,
     onConfigChange: (GlassThemeConfig) -> Unit,
     onSelectLauncherIcon: (LauncherIconVariant) -> Unit = {},
+    onOpenThemeEngine: () -> Unit = {},
     onOpenSkinVault: () -> Unit = {},
     onOpenRedeemDialog: () -> Unit = {},
     updateUiState: InAppUpdateUiState = InAppUpdateUiState(),
@@ -403,20 +407,28 @@ fun LuxurySettingsDrawer(
     }
 
     val context = LocalContext.current
+    val resolvedTheme = LocalAmpereTheme.current
     val isDark = themeConfig.isDarkMode
     val accentColor = themeConfig.accentColor
 
-    // Eye-friendly soft Nordic twilight (Dark) & warm muted stone mist (Light) palette
-    val drawerBgBrush = if (isDark) {
+    // Respects Theme Engine preset if active, otherwise uses Soft Nordic twilight / Stone Mist palette
+    val drawerBgBrush = if (resolvedTheme.themeId != null) {
+        Brush.verticalGradient(
+            colors = listOf(
+                resolvedTheme.background.copy(alpha = 0.98f),
+                resolvedTheme.surface.copy(alpha = 0.98f)
+            )
+        )
+    } else if (isDark) {
         Brush.verticalGradient(colors = listOf(Color(0xF8151D2C), Color(0xFA101622)))
     } else {
         Brush.verticalGradient(colors = listOf(Color(0xFCE5ECF4), Color(0xFCD9E1EC)))
     }
-    val surfaceCardColor = if (isDark) Color(0xFF1B2436) else Color(0xFFECF0F6)
-    val softTileColor = if (isDark) Color(0xFF212C42) else Color(0xFFD2DBE6)
-    val subtleBorder = if (isDark) Color(0xFF2A364F) else Color(0xFFC0CDDC)
-    val textColor = if (isDark) Color(0xFFE9EFF8) else TextCharcoal
-    val subTextColor = if (isDark) Color(0xFF93A5BF) else TextSlate
+    val surfaceCardColor = if (resolvedTheme.themeId != null) resolvedTheme.surface else if (isDark) Color(0xFF1B2436) else Color(0xFFECF0F6)
+    val softTileColor = if (resolvedTheme.themeId != null) resolvedTheme.surfaceInset else if (isDark) Color(0xFF212C42) else Color(0xFFD2DBE6)
+    val subtleBorder = if (resolvedTheme.themeId != null) resolvedTheme.border else if (isDark) Color(0xFF2A364F) else Color(0xFFC0CDDC)
+    val textColor = if (resolvedTheme.themeId != null) resolvedTheme.textPrimary else if (isDark) Color(0xFFE9EFF8) else TextCharcoal
+    val subTextColor = if (resolvedTheme.themeId != null) resolvedTheme.textSecondary else if (isDark) Color(0xFF93A5BF) else TextSlate
 
     var expandAppearance by remember { mutableStateOf(false) }
     var expandProtection by remember { mutableStateOf(false) }
@@ -582,6 +594,124 @@ fun LuxurySettingsDrawer(
                                     contentDescription = "إغلاق الإعدادات",
                                     tint = subTextColor,
                                     modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    // 2a. Theme Engine Studio Showcase Banner (60 Curated IDE & Liquid Glass Themes)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 68.dp)
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(
+                                Brush.horizontalGradient(
+                                    colors = listOf(
+                                        accentColor.copy(alpha = if (isDark) 0.26f else 0.14f),
+                                        resolvedTheme.secondaryAccent.copy(alpha = if (isDark) 0.14f else 0.08f),
+                                        surfaceCardColor
+                                    )
+                                )
+                            )
+                            .border(
+                                1.2.dp,
+                                accentColor.copy(alpha = if (isDark) 0.50f else 0.34f),
+                                RoundedCornerShape(20.dp)
+                            )
+                            .clickable {
+                                CyberHapticsEngine.triggerTactileTick(context)
+                                onClose()
+                                onOpenThemeEngine()
+                            }
+                            .padding(horizontal = 14.dp, vertical = 12.dp)
+                            .testTag("drawer_theme_engine_banner")
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(accentColor.copy(alpha = if (isDark) 0.25f else 0.15f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Palette,
+                                        contentDescription = null,
+                                        tint = accentColor,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(
+                                            text = "محرك الثيمات • Theme Engine",
+                                            fontFamily = OutfitFontFamily,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp,
+                                            color = textColor,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(accentColor.copy(alpha = 0.20f))
+                                                .padding(horizontal = 5.dp, vertical = 1.5.dp)
+                                        ) {
+                                            Text(
+                                                text = "${ThemeEngineCatalog.presets.size}",
+                                                fontFamily = OutfitFontFamily,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 9.5.sp,
+                                                color = accentColor
+                                            )
+                                        }
+                                    }
+                                    Text(
+                                        text = "النشط: ${resolvedTheme.themeName}",
+                                        fontFamily = PlusJakartaSansFontFamily,
+                                        fontSize = 10.5.sp,
+                                        color = subTextColor,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(3.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(9.dp)
+                                        .clip(CircleShape)
+                                        .background(accentColor)
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .size(9.dp)
+                                        .clip(CircleShape)
+                                        .background(resolvedTheme.secondaryAccent)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                                    contentDescription = null,
+                                    tint = accentColor,
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
                         }
@@ -1264,6 +1394,8 @@ private fun LauncherIconVariant.foregroundDrawableRes(): Int {
         LauncherIconVariant.CRIMSON -> R.drawable.ic_launcher_fg_crimson
         LauncherIconVariant.VIOLET -> R.drawable.ic_launcher_fg_violet
         LauncherIconVariant.AURIC -> R.drawable.ic_launcher_fg_auric
+        LauncherIconVariant.WHITE -> R.drawable.ic_launcher_fg_white
+        LauncherIconVariant.BLACK -> R.drawable.ic_launcher_fg_black
     }
 }
 
@@ -1328,84 +1460,111 @@ private fun LauncherIconColorCard(
                         text = "أيقونة الشاشة الرئيسية الحالية: ${selectedVariant.titleAr}",
                         fontFamily = PlusJakartaSansFontFamily,
                         fontSize = 10.5.sp,
-                        color = if (isDark) selectedVariant.secondaryColor else selectedVariant.primaryColor
+                        color = when {
+                            selectedVariant == LauncherIconVariant.WHITE -> if (isDark) Color(0xFFF1F5F9) else Color(0xFF475569)
+                            selectedVariant == LauncherIconVariant.BLACK -> if (isDark) Color(0xFFCBD5E1) else Color(0xFF0F172A)
+                            isDark -> selectedVariant.secondaryColor
+                            else -> selectedVariant.primaryColor
+                        }
                     )
                 }
             }
         }
 
-        Row(
+        Column(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            LauncherIconVariant.entries.forEach { variant ->
-                val isSelected = variant == selectedVariant
-                val tileBg by animateColorAsState(
-                    targetValue = if (isSelected) {
-                        variant.primaryColor.copy(alpha = if (isDark) 0.22f else 0.13f)
-                    } else {
-                        softColor.copy(alpha = if (isDark) 0.55f else 0.65f)
-                    },
-                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                    label = "iconVariantBg_${variant.key}"
-                )
-                val tileBorder by animateColorAsState(
-                    targetValue = if (isSelected) {
-                        if (isDark) variant.secondaryColor else variant.primaryColor
-                    } else {
-                        borderColor
-                    },
-                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                    label = "iconVariantBorder_${variant.key}"
-                )
-
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier
-                        .weight(1f)
-                        .heightIn(min = 68.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(tileBg)
-                        .border(if (isSelected) 1.5.dp else 0.9.dp, tileBorder, RoundedCornerShape(14.dp))
-                        .clickable { onSelectVariant(variant) }
-                        .padding(vertical = 8.dp, horizontal = 3.dp)
-                        .testTag("launcher_icon_${variant.key}")
+            LauncherIconVariant.entries.chunked(4).forEach { rowVariants ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(34.dp)
-                            .clip(CircleShape)
-                            .background(
-                                Brush.radialGradient(
-                                    colors = listOf(
-                                        variant.primaryColor.copy(alpha = if (isDark) 0.28f else 0.18f),
-                                        Color.Transparent
-                                    )
-                                )
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Image(
-                            painter = painterResource(id = variant.foregroundDrawableRes()),
-                            contentDescription = "أيقونة ${variant.titleAr}",
-                            modifier = Modifier
-                                .size(32.dp)
-                                .graphicsLayer {
-                                    scaleX = 1.52f
-                                    scaleY = 1.52f
-                                }
+                    rowVariants.forEach { variant ->
+                        val isSelected = variant == selectedVariant
+                        val tileBg by animateColorAsState(
+                            targetValue = if (isSelected) {
+                                variant.primaryColor.copy(alpha = if (isDark) 0.24f else 0.14f)
+                            } else {
+                                softColor.copy(alpha = if (isDark) 0.55f else 0.65f)
+                            },
+                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                            label = "iconVariantBg_${variant.key}"
                         )
+                        val tileBorder by animateColorAsState(
+                            targetValue = if (isSelected) {
+                                when {
+                                    variant == LauncherIconVariant.WHITE -> if (isDark) Color.White else Color(0xFF475569)
+                                    variant == LauncherIconVariant.BLACK -> if (isDark) Color(0xFFCBD5E1) else Color(0xFF0F172A)
+                                    isDark -> variant.secondaryColor
+                                    else -> variant.primaryColor
+                                }
+                            } else {
+                                borderColor
+                            },
+                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                            label = "iconVariantBorder_${variant.key}"
+                        )
+                        val previewHaloBrush = when (variant) {
+                            LauncherIconVariant.WHITE -> Brush.radialGradient(
+                                colors = listOf(Color(0xFF1E293B).copy(alpha = 0.24f), Color.Transparent)
+                            )
+                            LauncherIconVariant.BLACK -> Brush.radialGradient(
+                                colors = listOf(Color.White.copy(alpha = if (isDark) 0.28f else 0.20f), Color.Transparent)
+                            )
+                            else -> Brush.radialGradient(
+                                colors = listOf(
+                                    variant.primaryColor.copy(alpha = if (isDark) 0.28f else 0.18f),
+                                    Color.Transparent
+                                )
+                            )
+                        }
+
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 68.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(tileBg)
+                                .border(if (isSelected) 1.5.dp else 0.9.dp, tileBorder, RoundedCornerShape(14.dp))
+                                .clickable { onSelectVariant(variant) }
+                                .padding(vertical = 8.dp, horizontal = 3.dp)
+                                .testTag("launcher_icon_${variant.key}")
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(CircleShape)
+                                    .background(previewHaloBrush),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Image(
+                                    painter = painterResource(id = variant.foregroundDrawableRes()),
+                                    contentDescription = "أيقونة ${variant.titleAr}",
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .graphicsLayer {
+                                            scaleX = 1.52f
+                                            scaleY = 1.52f
+                                        }
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = variant.titleAr,
+                                fontFamily = PlusJakartaSansFontFamily,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                fontSize = 10.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                color = if (isSelected) textColor else subTextColor
+                            )
+                        }
                     }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = variant.titleAr,
-                        fontFamily = PlusJakartaSansFontFamily,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                        fontSize = 9.5.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        color = if (isSelected) textColor else subTextColor
-                    )
+                    repeat(4 - rowVariants.size) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
                 }
             }
         }

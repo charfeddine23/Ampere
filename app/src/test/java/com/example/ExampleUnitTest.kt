@@ -184,10 +184,85 @@ class ExampleUnitTest {
         assertEquals(com.example.data.LauncherIconVariant.SAPPHIRE, com.example.data.LauncherIconVariant.fromKey("unknown"))
 
         val variants = com.example.data.LauncherIconVariant.entries
-        assertEquals(5, variants.size)
-        assertEquals(5, variants.map { it.key }.distinct().size)
-        assertEquals(5, variants.map { it.aliasClassName }.distinct().size)
+        assertEquals(7, variants.size)
+        assertEquals(7, variants.map { it.key }.distinct().size)
+        assertEquals(7, variants.map { it.aliasClassName }.distinct().size)
+        assertTrue(variants.any { it == com.example.data.LauncherIconVariant.WHITE && it.key == "white" })
+        assertTrue(variants.any { it == com.example.data.LauncherIconVariant.BLACK && it.key == "black" })
         assertTrue(variants.all { it.aliasClassName.startsWith("com.example.Launcher") })
+    }
+
+    @Test
+    fun testThemeEngineCatalog60Themes() {
+        val presets = com.example.ui.theme.ThemeEngineCatalog.presets
+        assertEquals(60, presets.size)
+        assertEquals(60, presets.map { it.id }.distinct().size)
+        assertEquals(60, presets.map { it.name }.distinct().size)
+
+        val expectedNames = listOf(
+            "Monokai", "Monokai Pro", "Solarized Dark", "Solarized Light",
+            "One Dark Pro", "One Light", "Dracula", "Tomorrow Night Eighties",
+            "Nord", "Night Owl", "Bluloco Dark", "Ayu Dark", "Ayu Mirage", "Ayu Light",
+            "Winter is Coming", "Zenburn", "SynthWave '84", "Shades of Purple",
+            "LaserWave", "Abyss", "Cobalt2", "Red", "Poimandres", "Hopscotch",
+            "Gruvbox Dark", "Gruvbox Light", "Oceanic Next", "Base16 Eighties",
+            "Tomorrow Night Blue", "Material Theme (Oceanic)", "Material Theme (Palenight)",
+            "Material Theme (Darker)", "Catppuccin (Mocha)", "Kanagawa", "Rose Pine",
+            "GitHub Dark", "GitHub Light", "Panda Theme", "Atom One Dark", "Tokyo Night",
+            "Obsidian Liquid Glass", "Frosted Arctic Glass", "Cyber Neon Liquid",
+            "Smoked Quartz Glass", "Midnight Velvet Glass", "Aurora Borealis Glass",
+            "Crystal Prism Liquid", "Deep Ocean Glass", "Amber Mercury Glass",
+            "Titanium Mist Glass", "Holographic Liquid Glass", "Carbon Blur Glass",
+            "Emerald Translucent Glass", "Ultraviolet Frost Glass", "Sapphire Liquid Glass",
+            "Pearlescent Dark Glass", "Ruby Refractive Glass", "Chromatic Aberration Glass",
+            "Liquid Mercury Dark", "Bioluminescent Glass"
+        )
+        expectedNames.forEach { expectedName ->
+            assertTrue("Missing theme: $expectedName", presets.any { it.name == expectedName })
+        }
+        assertEquals(null, GlassThemeConfig().activeThemeId)
+    }
+
+    @Test
+    fun testAppBatteryUsageStrictDescendingSort() {
+        val raw = listOf(
+            com.example.data.telemetry.RawAppUsageMetric(
+                packageName = "com.example.notes",
+                appName = "Notes",
+                foregroundTimeMs = 15L * 60_000L,
+                wakeEventsCount = 2,
+                powerMultiplier = 0.9f
+            ),
+            com.example.data.telemetry.RawAppUsageMetric(
+                packageName = "com.example.heavygame",
+                appName = "Heavy Game",
+                foregroundTimeMs = 120L * 60_000L,
+                wakeEventsCount = 15,
+                powerMultiplier = 1.65f
+            ),
+            com.example.data.telemetry.RawAppUsageMetric(
+                packageName = "com.example.video",
+                appName = "Video Stream",
+                foregroundTimeMs = 60L * 60_000L,
+                wakeEventsCount = 5,
+                powerMultiplier = 1.40f
+            )
+        )
+
+        val sorted = com.example.data.telemetry.AppBatteryUsageTracker.calculateAndSortConsumption(
+            metrics = raw,
+            batteryCapacityMah = 5000
+        )
+        assertEquals(3, sorted.size)
+        assertEquals(1, sorted[0].rank)
+        assertEquals("Heavy Game", sorted[0].appName)
+        assertEquals(2, sorted[1].rank)
+        assertEquals("Video Stream", sorted[1].appName)
+        assertEquals(3, sorted[2].rank)
+        assertEquals("Notes", sorted[2].appName)
+        assertTrue(sorted[0].consumptionPercent > sorted[1].consumptionPercent)
+        assertTrue(sorted[1].consumptionPercent > sorted[2].consumptionPercent)
+        assertTrue(sorted.all { it.estimatedMah > 0 })
     }
 }
 

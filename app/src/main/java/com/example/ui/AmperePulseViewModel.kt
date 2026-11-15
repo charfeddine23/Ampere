@@ -17,12 +17,17 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.IntentSenderRequest
 import android.content.Context
 import com.example.data.TelemetryPoint
+import com.example.data.telemetry.AppBatteryUsageTracker
+import com.example.data.telemetry.AppUsageSnapshot
 import com.example.data.update.InAppUpdateEngine
 import com.example.data.update.InAppUpdateUiState
 import com.example.ui.components.NavigationTab
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class AmperePulseViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -66,6 +71,12 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
     private val _isRedeemDialogOpen = MutableStateFlow(false)
     val isRedeemDialogOpen: StateFlow<Boolean> = _isRedeemDialogOpen.asStateFlow()
 
+    private val _isThemeEngineOpen = MutableStateFlow(false)
+    val isThemeEngineOpen: StateFlow<Boolean> = _isThemeEngineOpen.asStateFlow()
+
+    private val _appUsageSnapshot = MutableStateFlow(AppUsageSnapshot(isLoading = true))
+    val appUsageSnapshot: StateFlow<AppUsageSnapshot> = _appUsageSnapshot.asStateFlow()
+
     private val updateEngine = InAppUpdateEngine(application.applicationContext)
     val updateUiState: StateFlow<InAppUpdateUiState> = updateEngine.uiState
 
@@ -81,11 +92,25 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
             multiplier = _themeConfig.value.currentMultiplier,
             zeroOffsetMa = _themeConfig.value.currentZeroOffsetMa
         )
+        refreshAppBatteryUsage()
         if (_themeConfig.value.autoUpdateEnabled) {
             updateEngine.checkForUpdates(
                 autoShowOnAvailable = true,
                 autoDownloadIfFound = true
             )
+        }
+    }
+
+    fun refreshAppBatteryUsage() {
+        viewModelScope.launch {
+            val capacityMah = telemetry.value.capacityMah
+            val snapshot = withContext(Dispatchers.IO) {
+                AppBatteryUsageTracker.collectUsageSnapshot(
+                    context = getApplication(),
+                    batteryCapacityMah = capacityMah
+                )
+            }
+            _appUsageSnapshot.value = snapshot
         }
     }
 
@@ -149,21 +174,69 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun updateThemeConfig(config: GlassThemeConfig) {
-        _themeConfig.value = config
-        prefsManager.saveThemeConfig(config)
-        com.example.audio.CyberSoundscapeEngine.isEnabled = config.soundEffectsEnabled
-        com.example.audio.CyberHapticsEngine.isEnabled = config.hapticFeedbackEnabled
+        val prev = _themeConfig.value
+        val activePreset = com.example.ui.theme.ThemeEngineCatalog.findById(config.activeThemeId)
+        val sanitized = if (activePreset != null && prev.isDarkMode != config.isDarkMode && activePreset.isDark != config.isDarkMode) {
+            config.copy(activeThemeId = null)
+        } else {
+            config
+        }
+        _themeConfig.value = sanitized
+        prefsManager.saveThemeConfig(sanitized)
+        com.example.audio.CyberSoundscapeEngine.isEnabled = sanitized.soundEffectsEnabled
+        com.example.audio.CyberHapticsEngine.isEnabled = sanitized.hapticFeedbackEnabled
         repository.updateCurrentCalibration(
-            multiplier = config.currentMultiplier,
-            zeroOffsetMa = config.currentZeroOffsetMa
+            multiplier = sanitized.currentMultiplier,
+            zeroOffsetMa = sanitized.currentZeroOffsetMa
         )
-        if (config.backgroundServiceEnabled) {
+        if (sanitized.backgroundServiceEnabled) {
             com.example.service.TelemetryForegroundService.startService(getApplication())
             com.example.service.AlarmScheduler.scheduleNextAlarm(getApplication())
         } else {
             com.example.service.TelemetryForegroundService.stopService(getApplication())
             com.example.service.AlarmScheduler.cancelAlarm(getApplication())
         }
+    }
+
+    fun toggleThemeEngine(open: Boolean) {
+        _isThemeEngineOpen.value = open
+    }
+
+    fun equipThemePreset(preset: com.example.ui.theme.AppThemePreset) {
+        val argb = (preset.accentColor.value shr 32).toLong()
+        val updated = _themeConfig.value.copy(
+            activeThemeId = preset.id,
+            isDarkMode = preset.isDark,
+            customAccentHex = argb,
+            glowIntensity = preset.glowIntensity
+        )
+        _themeConfig.value = updated
+        prefsManager.saveThemeConfig(updated)
+        com.example.audio.CyberHapticsEngine.triggerTactileTick(getApplication())
+        com.example.audio.CyberSoundscapeEngine.playCryoChime()
+        repository.addManualSessionLog(
+            title = "Theme Engine: ${preset.name}",
+            desc = "Applied ${preset.name} (${preset.category.labelAr}) across Ampere Pulse.",
+            statTag = "THEME",
+            type = "check"
+        )
+    }
+
+    fun resetThemeEngineToDefault() {
+        val updated = _themeConfig.value.copy(
+            activeThemeId = null,
+            customAccentHex = null,
+            glowIntensity = 0.75f
+        )
+        _themeConfig.value = updated
+        prefsManager.saveThemeConfig(updated)
+        com.example.audio.CyberHapticsEngine.triggerTactileTick(getApplication())
+        repository.addManualSessionLog(
+            title = "Theme Reset",
+            desc = "Restored default adaptive Eye-Comfort theme.",
+            statTag = "THEME",
+            type = "check"
+        )
     }
 
     fun updateLauncherIcon(variant: com.example.data.LauncherIconVariant) {

@@ -237,6 +237,20 @@ enum class LauncherIconVariant(
         aliasClassName = "com.example.LauncherAuric",
         primaryColor = Color(0xFFFFB300),
         secondaryColor = Color(0xFFFFE082)
+    ),
+    WHITE(
+        key = "white",
+        titleAr = "أبيض",
+        aliasClassName = "com.example.LauncherWhite",
+        primaryColor = Color(0xFF94A3B8),
+        secondaryColor = Color(0xFFF8FAFC)
+    ),
+    BLACK(
+        key = "black",
+        titleAr = "أسود",
+        aliasClassName = "com.example.LauncherBlack",
+        primaryColor = Color(0xFF0F172A),
+        secondaryColor = Color(0xFF94A3B8)
     );
 
     companion object {
@@ -270,10 +284,14 @@ data class GlassThemeConfig(
     val autoUpdateEnabled: Boolean = true,
     val currentMultiplier: Float = 1.0f,
     val currentZeroOffsetMa: Float = 0.0f,
-    val launcherIconKey: String = LauncherIconVariant.SAPPHIRE.key
+    val launcherIconKey: String = LauncherIconVariant.SAPPHIRE.key,
+    val activeThemeId: String? = null
 ) {
     val launcherIconVariant: LauncherIconVariant
         get() = LauncherIconVariant.fromKey(launcherIconKey)
+
+    val isUsingThemeEngine: Boolean
+        get() = !activeThemeId.isNullOrBlank()
 
     // Backward compatibility alias
     val target90FpsMode: Boolean

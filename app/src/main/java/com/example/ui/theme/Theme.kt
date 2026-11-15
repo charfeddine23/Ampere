@@ -1,11 +1,35 @@
 package com.example.ui.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+
+@Immutable
+data class AmpereResolvedTheme(
+    val themeId: String? = null,
+    val themeName: String = "الافتراضي الذكي",
+    val isDark: Boolean = false,
+    val isGlassStyle: Boolean = false,
+    val background: Color = NeumorphBgLight,
+    val surface: Color = NeumorphSurfaceLight,
+    val surfaceInset: Color = NeumorphInsetLight,
+    val border: Color = NeumorphBorderLight,
+    val textPrimary: Color = TextCharcoal,
+    val textSecondary: Color = TextSlate,
+    val accent: Color = TactileRoyalBlue,
+    val secondaryAccent: Color = TactileCyan
+)
+
+val LocalAmpereTheme = staticCompositionLocalOf { AmpereResolvedTheme() }
 
 private val LightNeumorphicColorScheme = lightColorScheme(
     primary = TactileRoyalBlue,
@@ -53,18 +77,66 @@ private val DarkNeumorphicColorScheme = darkColorScheme(
 fun MyApplicationTheme(
     isDarkMode: Boolean = false,
     accentColor: Color = TactileRoyalBlue,
+    activeThemeId: String? = null,
     content: @Composable () -> Unit
 ) {
-    val baseScheme = if (isDarkMode) DarkNeumorphicColorScheme else LightNeumorphicColorScheme
-    val colorScheme = baseScheme.copy(
-        primary = accentColor,
-        onPrimaryContainer = accentColor,
-        primaryContainer = accentColor.copy(alpha = 0.15f)
+    val preset = ThemeEngineCatalog.findById(activeThemeId)
+    val resolvedIsDark = preset?.isDark ?: isDarkMode
+
+    val targetBg = preset?.backgroundColor ?: if (resolvedIsDark) NeumorphBgDark else NeumorphBgLight
+    val targetSurface = preset?.surfaceColor ?: if (resolvedIsDark) NeumorphSurfaceDark else NeumorphSurfaceLight
+    val targetInset = preset?.surfaceInsetColor ?: if (resolvedIsDark) Color(0xFF243045) else NeumorphInsetLight
+    val targetBorder = preset?.borderColor ?: if (resolvedIsDark) NeumorphBorderDark else NeumorphBorderLight
+    val targetTextPrimary = preset?.textPrimaryColor ?: if (resolvedIsDark) TextWhite else TextCharcoal
+    val targetTextSecondary = preset?.textSecondaryColor ?: if (resolvedIsDark) Color(0xFF93A5BF) else TextSlate
+    val targetAccent = preset?.accentColor ?: accentColor
+    val targetSecondaryAccent = preset?.secondaryAccentColor ?: accentColor
+
+    val animSpec = tween<Color>(durationMillis = 360, easing = FastOutSlowInEasing)
+    val animBg by animateColorAsState(targetBg, animSpec, label = "themeBg")
+    val animSurface by animateColorAsState(targetSurface, animSpec, label = "themeSurface")
+    val animInset by animateColorAsState(targetInset, animSpec, label = "themeInset")
+    val animBorder by animateColorAsState(targetBorder, animSpec, label = "themeBorder")
+    val animTextPrimary by animateColorAsState(targetTextPrimary, animSpec, label = "themeTextPrimary")
+    val animTextSecondary by animateColorAsState(targetTextSecondary, animSpec, label = "themeTextSecondary")
+    val animAccent by animateColorAsState(targetAccent, animSpec, label = "themeAccent")
+    val animSecondaryAccent by animateColorAsState(targetSecondaryAccent, animSpec, label = "themeSecondaryAccent")
+
+    val resolvedTheme = AmpereResolvedTheme(
+        themeId = preset?.id,
+        themeName = preset?.name ?: if (resolvedIsDark) "الليلي الهادئ" else "النهاري المريح",
+        isDark = resolvedIsDark,
+        isGlassStyle = preset?.isGlassStyle ?: false,
+        background = animBg,
+        surface = animSurface,
+        surfaceInset = animInset,
+        border = animBorder,
+        textPrimary = animTextPrimary,
+        textSecondary = animTextSecondary,
+        accent = animAccent,
+        secondaryAccent = animSecondaryAccent
     )
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
-        content = content
+    val baseScheme = if (resolvedIsDark) DarkNeumorphicColorScheme else LightNeumorphicColorScheme
+    val colorScheme = baseScheme.copy(
+        primary = animAccent,
+        onPrimaryContainer = animAccent,
+        primaryContainer = animAccent.copy(alpha = 0.16f),
+        secondary = animSecondaryAccent,
+        background = animBg,
+        onBackground = animTextPrimary,
+        surface = animSurface,
+        onSurface = animTextPrimary,
+        surfaceVariant = animInset,
+        onSurfaceVariant = animTextSecondary,
+        outline = animBorder
     )
+
+    CompositionLocalProvider(LocalAmpereTheme provides resolvedTheme) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = Typography,
+            content = content
+        )
+    }
 }

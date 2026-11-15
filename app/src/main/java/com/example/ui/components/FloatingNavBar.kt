@@ -68,6 +68,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.audio.CyberHapticsEngine
+import com.example.ui.theme.LocalAmpereTheme
 import com.example.ui.theme.OutfitFontFamily
 import com.example.ui.theme.TactileRoyalBlue
 import com.example.ui.theme.TextCharcoal
@@ -225,9 +226,12 @@ fun FloatingGlassNavBar(
     val density = LocalDensity.current
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
 
-    val barBackground = if (isDarkMode) Color(0xEC1A2334) else Color(0xECE3E9F2)
+    val theme = LocalAmpereTheme.current
+    val barBackground = if (theme.themeId != null) theme.surface.copy(alpha = 0.94f)
+    else if (isDarkMode) Color(0xEC1A2334) else Color(0xECE3E9F2)
     val shadowColor = if (isDarkMode) Color(0x55000000) else Color(0x3B7589A2)
-    val borderColor = if (isDarkMode) Color(0x38475569) else Color(0x99B8C5D6)
+    val borderColor = if (theme.themeId != null) theme.border
+    else if (isDarkMode) Color(0x38475569) else Color(0x99B8C5D6)
 
     val maxStretchPx = with(density) { 46.dp.toPx() }
     val physics = remember { LiquidDropletPhysicsState() }
@@ -449,8 +453,11 @@ fun FloatingGlassNavBar(
                                     fontSize = 10.sp,
                                     letterSpacing = 0.2.sp,
                                     color = if (isCurrentActive) {
-                                        if (isDarkMode) TextWhite else TextCharcoal
-                                    } else TextSlate,
+                                        if (theme.themeId != null) theme.textPrimary
+                                        else if (isDarkMode) TextWhite else TextCharcoal
+                                    } else {
+                                        if (theme.themeId != null) theme.textSecondary else TextSlate
+                                    },
                                     maxLines = 1
                                 )
                             }

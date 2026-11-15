@@ -47,11 +47,13 @@ import com.example.ui.components.LuxurySettingsDrawer
 import com.example.ui.components.LuxuryTopBar
 import com.example.ui.components.NavigationTab
 import com.example.ui.components.PremiumRedeemDialog
+import com.example.ui.components.ThemeEngineDialog
 import com.example.ui.components.thermalLiquidGlassBackground
 import com.example.ui.screens.Page1LivingBatteryScreen
 import com.example.ui.screens.Page3BatterySohScreen
 import com.example.ui.screens.Page4CableDnaScreen
 import com.example.ui.screens.Page5MySpaceScreen
+import com.example.ui.theme.LocalAmpereTheme
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.NeumorphBgDark
 import com.example.ui.theme.NeumorphBgLight
@@ -78,6 +80,8 @@ fun AmperePulseApp(viewModel: AmperePulseViewModel) {
     val isSettingsOpen by viewModel.isSettingsMenuOpen.collectAsState()
     val isSkinVaultOpen by viewModel.isSkinVaultOpen.collectAsState()
     val isRedeemDialogOpen by viewModel.isRedeemDialogOpen.collectAsState()
+    val isThemeEngineOpen by viewModel.isThemeEngineOpen.collectAsState()
+    val appUsageSnapshot by viewModel.appUsageSnapshot.collectAsState()
     val isAutoSensorMode by viewModel.isAutoSensorMode.collectAsState()
     val userAccount by viewModel.userAccount.collectAsState()
     val updateUiState by viewModel.updateUiState.collectAsState()
@@ -100,12 +104,13 @@ fun AmperePulseApp(viewModel: AmperePulseViewModel) {
         }
     }
 
-    // Dynamic state-based primary accent color
+    // Dynamic state-based primary accent color (respects Theme Engine when below warm threshold)
     val activeAccent = when (selectedTab) {
         NavigationTab.BATTERY -> {
             when {
                 telemetry.temperatureC >= 40f -> Color(0xFFFF3D00)
                 telemetry.temperatureC >= 38f -> Color(0xFFFF9100)
+                themeConfig.isUsingThemeEngine -> themeConfig.accentColor
                 telemetry.temperatureC <= 34f -> Color(0xFF00B0FF)
                 else -> telemetry.livingState.neonPrimary
             }
@@ -115,9 +120,12 @@ fun AmperePulseApp(viewModel: AmperePulseViewModel) {
 
     MyApplicationTheme(
         isDarkMode = isDark,
-        accentColor = activeAccent
+        accentColor = activeAccent,
+        activeThemeId = themeConfig.activeThemeId
     ) {
-        val rootBg = if (isDark) NeumorphBgDark else NeumorphBgLight
+        val resolvedTheme = LocalAmpereTheme.current
+        val rootBg = if (resolvedTheme.themeId != null) resolvedTheme.background
+        else if (isDark) NeumorphBgDark else NeumorphBgLight
 
         Box(
             modifier = Modifier
@@ -280,6 +288,8 @@ fun AmperePulseApp(viewModel: AmperePulseViewModel) {
                                     themeConfig = themeConfig,
                                     prizeRoadData = prizeRoadData,
                                     isAutoSensorMode = isAutoSensorMode,
+                                    appUsageSnapshot = appUsageSnapshot,
+                                    onRefreshAppUsage = { viewModel.refreshAppBatteryUsage() },
                                     onSelectLivingState = { viewModel.selectLivingState(it) },
                                     onNavigateToPrizeRoad = { viewModel.selectTab(NavigationTab.BATTERY_SOH) },
                                     onToggleThermalTest = { viewModel.toggleThermalSimulation() }
@@ -333,6 +343,7 @@ fun AmperePulseApp(viewModel: AmperePulseViewModel) {
                 themeConfig = themeConfig,
                 onConfigChange = { viewModel.updateThemeConfig(it) },
                 onSelectLauncherIcon = { viewModel.updateLauncherIcon(it) },
+                onOpenThemeEngine = { viewModel.toggleThemeEngine(true) },
                 onOpenSkinVault = { viewModel.toggleSkinVault(true) },
                 onOpenRedeemDialog = { viewModel.toggleRedeemDialog(true) },
                 updateUiState = updateUiState,
@@ -363,6 +374,15 @@ fun AmperePulseApp(viewModel: AmperePulseViewModel) {
                 themeConfig = themeConfig,
                 onDismiss = { viewModel.toggleRedeemDialog(false) },
                 onRedeemCode = { code -> viewModel.redeemPremiumCode(code) }
+            )
+
+            // Theme Engine Studio Modal (60 Curated IDE & Liquid Glass Themes)
+            ThemeEngineDialog(
+                isOpen = isThemeEngineOpen,
+                onClose = { viewModel.toggleThemeEngine(false) },
+                themeConfig = themeConfig,
+                onSelectPreset = { preset -> viewModel.equipThemePreset(preset) },
+                onResetDefault = { viewModel.resetThemeEngineToDefault() }
             )
 
             // Cyber Skin (Liquid Glass Vault) Modal Dialog - متجر الأقنعة والثيمات السيبرانية

@@ -80,7 +80,8 @@ class SettingsPreferencesManager(context: Context) {
             currentMultiplier = prefs.getFloat(KEY_CURRENT_MULTIPLIER, 1.0f),
             currentZeroOffsetMa = prefs.getFloat(KEY_CURRENT_ZERO_OFFSET, 0.0f),
             launcherIconKey = prefs.getString(KEY_LAUNCHER_ICON_KEY, LauncherIconVariant.SAPPHIRE.key)
-                ?: LauncherIconVariant.SAPPHIRE.key
+                ?: LauncherIconVariant.SAPPHIRE.key,
+            activeThemeId = prefs.getString(KEY_ACTIVE_THEME_ID, null)
         )
     }
 
@@ -119,6 +120,11 @@ class SettingsPreferencesManager(context: Context) {
             putFloat(KEY_CURRENT_MULTIPLIER, config.currentMultiplier)
             putFloat(KEY_CURRENT_ZERO_OFFSET, config.currentZeroOffsetMa)
             putString(KEY_LAUNCHER_ICON_KEY, config.launcherIconKey)
+            if (config.activeThemeId != null) {
+                putString(KEY_ACTIVE_THEME_ID, config.activeThemeId)
+            } else {
+                remove(KEY_ACTIVE_THEME_ID)
+            }
             apply()
         }
     }
@@ -149,5 +155,6 @@ class SettingsPreferencesManager(context: Context) {
         private const val KEY_CURRENT_MULTIPLIER = "current_multiplier"
         private const val KEY_CURRENT_ZERO_OFFSET = "current_zero_offset"
         private const val KEY_LAUNCHER_ICON_KEY = "launcher_icon_key"
+        private const val KEY_ACTIVE_THEME_ID = "active_theme_id"
     }
 }
