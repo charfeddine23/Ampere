@@ -86,14 +86,19 @@ fun Page4CableDnaScreen(
     val scrollState = rememberScrollState()
     val resolvedTheme = LocalAmpereTheme.current
     val isDark = themeConfig.isDarkMode
-    val glow = themeConfig.glowIntensity
+    val isArabic = themeConfig.appLanguage.isArabic
+    val glow = when {
+        resolvedTheme.isSimpleMode -> 0f
+        resolvedTheme.isProMode -> 0.35f
+        else -> themeConfig.glowIntensity
+    }
     val textColor = if (resolvedTheme.themeId != null) resolvedTheme.textPrimary else if (isDark) TextWhite else TextCharcoal
     val subTextColor = if (resolvedTheme.themeId != null) resolvedTheme.textSecondary else if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
     val surfaceInset = if (resolvedTheme.themeId != null) resolvedTheme.surfaceInset else if (isDark) Color(0xFF151F30) else Color(0xFFD5DFEA)
 
     val activeResult = cableResult
     val tier = activeResult.tier
-    val tierColor = tier.badgeColor
+    val tierColor = if (resolvedTheme.isSimpleMode) resolvedTheme.accent else tier.badgeColor
 
     val targetResistance = activeResult.resistanceMilliOhms.toFloat()
     val animatedResistance by animateFloatAsState(
@@ -173,7 +178,7 @@ fun Page4CableDnaScreen(
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
                                 Text(
-                                    text = "CABLE DNA & IEC 62680 ANALYZER",
+                                    text = if (isArabic) "محلل الكابل والشاحن • IEC 62680" else "CABLE DNA & IEC 62680 ANALYZER",
                                     fontFamily = OutfitFontFamily,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 14.sp,
@@ -181,7 +186,7 @@ fun Page4CableDnaScreen(
                                     color = textColor
                                 )
                                 Text(
-                                    text = "${telemetry.plugType.label} • ${activeResult.standardCompliance}",
+                                    text = "${telemetry.plugType.localizedLabel(isArabic)} • ${activeResult.standardCompliance}",
                                     fontFamily = PlusJakartaSansFontFamily,
                                     fontSize = 10.5.sp,
                                     color = subTextColor,
@@ -218,7 +223,7 @@ fun Page4CableDnaScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "USB-IF LOOP RESISTANCE (VBUS + GND)",
+                        text = if (isArabic) "مقاومة حلقة التوصيل (VBUS + GND)" else "USB-IF LOOP RESISTANCE (VBUS + GND)",
                         fontFamily = OutfitFontFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 11.5.sp,
@@ -313,7 +318,11 @@ fun Page4CableDnaScreen(
                                 )
                             }
                             Text(
-                                text = "ΔV Loop: -${animatedVoltageDrop.toInt()} mV",
+                                text = if (isArabic) {
+                                    "هبوط الجهد: -${animatedVoltageDrop.toInt()} mV"
+                                } else {
+                                    "ΔV Loop: -${animatedVoltageDrop.toInt()} mV"
+                                },
                                 fontFamily = PlusJakartaSansFontFamily,
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 11.5.sp,
@@ -352,9 +361,9 @@ fun Page4CableDnaScreen(
                                 Column {
                                     Text(
                                         text = if (telemetry.plugType == ChargePlug.NONE) {
-                                            "شاحن غير موصول (0 mΩ)"
+                                            if (isArabic) "شاحن غير موصول (0 mΩ)" else "Charger Unplugged (0 mΩ)"
                                         } else {
-                                            tier.title
+                                            tier.localizedTitle(isArabic)
                                         },
                                         fontFamily = OutfitFontFamily,
                                         fontWeight = FontWeight.Bold,
@@ -363,9 +372,13 @@ fun Page4CableDnaScreen(
                                     )
                                     Text(
                                         text = if (telemetry.plugType == ChargePlug.NONE) {
-                                            "وصل الكابل للقياس التلقائي وفق IEC 62680"
+                                            if (isArabic) {
+                                                "وصّل الكابل للقياس التلقائي وفق IEC 62680"
+                                            } else {
+                                                "Connect cable for automatic IEC 62680 diagnostics"
+                                            }
                                         } else {
-                                            "${tier.grade} • ${activeResult.estimatedAwg}"
+                                            "${tier.localizedGrade(isArabic)} • ${activeResult.estimatedAwg}"
                                         },
                                         fontFamily = PlusJakartaSansFontFamily,
                                         fontWeight = FontWeight.Bold,
@@ -384,7 +397,11 @@ fun Page4CableDnaScreen(
                                     .padding(horizontal = 9.dp, vertical = 5.dp)
                             ) {
                                 Text(
-                                    text = if (telemetry.plugType == ChargePlug.NONE) "STANDBY" else "${activeResult.qualityScore}/100",
+                                    text = if (telemetry.plugType == ChargePlug.NONE) {
+                                        if (isArabic) "استعداد" else "STANDBY"
+                                    } else {
+                                        "${activeResult.qualityScore}/100"
+                                    },
                                     fontFamily = OutfitFontFamily,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 11.sp,
@@ -398,7 +415,11 @@ fun Page4CableDnaScreen(
 
                     Text(
                         text = activeResult.tailoredDeviceNote.ifBlank {
-                            "المستشعرات في وضع المراقبة المستمرة وفق معايير USB-IF Rev 2.3 و IEC 62680 (الحد الأقصى لهبوط الجهد ≤ 750 mV)."
+                            if (isArabic) {
+                                "المستشعرات في وضع المراقبة المستمرة وفق معايير USB-IF Rev 2.3 و IEC 62680 (الحد الأقصى لهبوط الجهد ≤ 750 mV)."
+                            } else {
+                                "Sensors continuously monitor per USB-IF Rev 2.3 & IEC 62680 (maximum loop voltage drop ≤ 750 mV)."
+                            }
                         },
                         fontFamily = PlusJakartaSansFontFamily,
                         fontSize = 11.sp,
@@ -423,25 +444,25 @@ fun Page4CableDnaScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         CableMetricCard(
                             modifier = Modifier.weight(1f),
-                            title = "WIRE GAUGE (AWG)",
+                            title = if (isArabic) "سُمك الموصل (AWG)" else "WIRE GAUGE (AWG)",
                             value = activeResult.estimatedAwg,
-                            subtext = "IEC 62680 Conductor Spec",
+                            subtext = if (isArabic) "مواصفة الموصل IEC 62680" else "IEC 62680 Conductor Spec",
                             accentColor = TactileCyan,
                             isDark = isDark
                         )
                         CableMetricCard(
                             modifier = Modifier.weight(1f),
-                            title = "LINE EFFICIENCY",
+                            title = if (isArabic) "كفاءة الخط" else "LINE EFFICIENCY",
                             value = "${String.format(Locale.US, "%.1f", activeResult.lineEfficiencyPercent)}%",
-                            subtext = "I²R Loss: ${activeResult.thermalDissipationMilliWatts} mW",
+                            subtext = if (isArabic) "فقد حراري: ${activeResult.thermalDissipationMilliWatts} mW" else "I²R Loss: ${activeResult.thermalDissipationMilliWatts} mW",
                             accentColor = TactileGreen,
                             isDark = isDark
                         )
                         CableMetricCard(
                             modifier = Modifier.weight(1f),
-                            title = "USB-IF LOOP DROP",
+                            title = if (isArabic) "هبوط جهد USB-IF" else "USB-IF LOOP DROP",
                             value = "-${animatedVoltageDrop.toInt()} mV",
-                            subtext = "Limit ≤ 750 mV @ 3A-5A",
+                            subtext = if (isArabic) "الحد ≤ 750 mV @ 3A-5A" else "Limit ≤ 750 mV @ 3A-5A",
                             accentColor = if (animatedVoltageDrop > 750f) TactileCoralRed else TactileRoyalBlue,
                             isDark = isDark
                         )
@@ -449,7 +470,7 @@ fun Page4CableDnaScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         CableMetricCard(
                             modifier = Modifier.weight(1f),
-                            title = "CHARGING PHASE",
+                            title = if (isArabic) "مرحلة الشحن" else "CHARGING PHASE",
                             value = activeResult.chargingPhase,
                             subtext = activeResult.cellTopology,
                             accentColor = TactileAmber,
@@ -457,15 +478,15 @@ fun Page4CableDnaScreen(
                         )
                         CableMetricCard(
                             modifier = Modifier.weight(1f),
-                            title = "PROTOCOL MATRIX",
+                            title = if (isArabic) "بروتوكول التفاوض" else "PROTOCOL MATRIX",
                             value = activeResult.usbProtocol,
-                            subtext = "Handshake & Stability ${activeResult.pinIntegrityPercent}%",
+                            subtext = if (isArabic) "استقرار التوصيل ${activeResult.pinIntegrityPercent}%" else "Handshake & Stability ${activeResult.pinIntegrityPercent}%",
                             accentColor = TactileCyan,
                             isDark = isDark
                         )
                         CableMetricCard(
                             modifier = Modifier.weight(1f),
-                            title = "CABLE SCORE",
+                            title = if (isArabic) "درجة جودة الكابل" else "CABLE SCORE",
                             value = if (telemetry.plugType == ChargePlug.NONE) "-- / 100" else "${activeResult.qualityScore} / 100",
                             subtext = activeResult.standardCompliance,
                             accentColor = tierColor,
@@ -481,17 +502,17 @@ fun Page4CableDnaScreen(
                     ) {
                         CableMetricCard(
                             modifier = Modifier.weight(1f),
-                            title = "WIRE GAUGE (AWG)",
+                            title = if (isArabic) "سُمك الموصل (AWG)" else "WIRE GAUGE (AWG)",
                             value = activeResult.estimatedAwg,
-                            subtext = "معيار المقطع العالمي",
+                            subtext = if (isArabic) "معيار المقطع العالمي" else "IEC 62680 Conductor",
                             accentColor = TactileCyan,
                             isDark = isDark
                         )
                         CableMetricCard(
                             modifier = Modifier.weight(1f),
-                            title = "LINE EFFICIENCY",
+                            title = if (isArabic) "كفاءة الخط" else "LINE EFFICIENCY",
                             value = "${String.format(Locale.US, "%.1f", activeResult.lineEfficiencyPercent)}%",
-                            subtext = "فقد حراري ${activeResult.thermalDissipationMilliWatts} mW",
+                            subtext = if (isArabic) "فقد حراري ${activeResult.thermalDissipationMilliWatts} mW" else "Loss ${activeResult.thermalDissipationMilliWatts} mW",
                             accentColor = TactileGreen,
                             isDark = isDark
                         )
@@ -502,15 +523,15 @@ fun Page4CableDnaScreen(
                     ) {
                         CableMetricCard(
                             modifier = Modifier.weight(1f),
-                            title = "USB-IF LOOP DROP",
+                            title = if (isArabic) "هبوط جهد USB-IF" else "USB-IF LOOP DROP",
                             value = if (animatedVoltageDrop.toInt() > 0) "-${animatedVoltageDrop.toInt()} mV" else "0 mV",
-                            subtext = "حد USB-IF ≤ 750 mV",
+                            subtext = if (isArabic) "حد USB-IF ≤ 750 mV" else "USB-IF Limit ≤ 750 mV",
                             accentColor = if (animatedVoltageDrop > 750f) TactileCoralRed else TactileRoyalBlue,
                             isDark = isDark
                         )
                         CableMetricCard(
                             modifier = Modifier.weight(1f),
-                            title = "PROTOCOL & PHASE",
+                            title = if (isArabic) "البروتوكول والمرحلة" else "PROTOCOL & PHASE",
                             value = activeResult.usbProtocol,
                             subtext = activeResult.chargingPhase,
                             accentColor = TactileAmber,
@@ -523,7 +544,7 @@ fun Page4CableDnaScreen(
                     ) {
                         CableMetricCard(
                             modifier = Modifier.weight(1f),
-                            title = "PIN INTEGRITY",
+                            title = if (isArabic) "سلامة الأقطاب" else "PIN INTEGRITY",
                             value = "${activeResult.pinIntegrityPercent}%",
                             subtext = activeResult.cellTopology,
                             accentColor = TactileRoyalBlue,
@@ -531,7 +552,7 @@ fun Page4CableDnaScreen(
                         )
                         CableMetricCard(
                             modifier = Modifier.weight(1f),
-                            title = "CABLE SCORE",
+                            title = if (isArabic) "تقييم الكابل" else "CABLE SCORE",
                             value = if (telemetry.plugType == ChargePlug.NONE) "-- / 100" else "${activeResult.qualityScore} / 100",
                             subtext = activeResult.standardCompliance,
                             accentColor = tierColor,
@@ -590,14 +611,14 @@ fun Page4CableDnaScreen(
                             Spacer(modifier = Modifier.width(10.dp))
                             Column {
                                 Text(
-                                    text = "ملف العتاد المخصص لجهازك",
+                                    text = if (isArabic) "ملف العتاد المخصص لجهازك" else "Device Hardware Profile",
                                     fontFamily = OutfitFontFamily,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 13.5.sp,
                                     color = textColor
                                 )
                                 Text(
-                                    text = "${deviceProfile.brand} ${deviceProfile.model} • ${deviceProfile.formFactor.labelAr}",
+                                    text = "${deviceProfile.brand} ${deviceProfile.model} • ${deviceProfile.formFactor.localizedLabel(isArabic)}",
                                     fontFamily = PlusJakartaSansFontFamily,
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 11.sp,
@@ -615,7 +636,7 @@ fun Page4CableDnaScreen(
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             Text(
-                                text = "${deviceProfile.recommendedPowerWatts}W Target",
+                                text = if (isArabic) "هدف ${deviceProfile.recommendedPowerWatts}W" else "${deviceProfile.recommendedPowerWatts}W Target",
                                 fontFamily = OutfitFontFamily,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 10.sp,
@@ -627,14 +648,25 @@ fun Page4CableDnaScreen(
                     // Device Specs Structured Matrix (adapts to Phone vs Tablet/Foldable width)
                     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
                         val wideDevice = maxWidth >= 520.dp || deviceProfile.formFactor != DeviceFormFactor.PHONE
-                        val specs = listOf(
-                            "المعالج (SoC)" to deviceProfile.chipset,
-                            "النظام والمعمارية" to "${deviceProfile.androidVersion} • ${deviceProfile.primaryAbi}",
-                            "الذاكرة والأنوية" to "${String.format(Locale.US, "%.1f", deviceProfile.totalRamGb)} GB RAM • ${deviceProfile.cpuCores} أنوية",
-                            "منظومة الشحن" to deviceProfile.chargingEcosystemAr,
-                            "السعة والخلية" to "${deviceProfile.nominalDesignCapacityMah} mAh • ${activeResult.cellTopology}",
-                            "الحد الحراري الآمن" to "≤ ${deviceProfile.safeThermalCeilingC}°C (معيار المصنّع)"
-                        )
+                        val specs = if (isArabic) {
+                            listOf(
+                                "المعالج (SoC)" to deviceProfile.chipset,
+                                "النظام والمعمارية" to "${deviceProfile.androidVersion} • ${deviceProfile.primaryAbi}",
+                                "الذاكرة والأنوية" to "${String.format(Locale.US, "%.1f", deviceProfile.totalRamGb)} GB RAM • ${deviceProfile.cpuCores} أنوية",
+                                "منظومة الشحن" to deviceProfile.localizedEcosystem(true),
+                                "السعة والخلية" to "${deviceProfile.nominalDesignCapacityMah} mAh • ${activeResult.cellTopology}",
+                                "الحد الحراري الآمن" to "≤ ${deviceProfile.safeThermalCeilingC}°C (معيار المصنّع)"
+                            )
+                        } else {
+                            listOf(
+                                "Processor (SoC)" to deviceProfile.chipset,
+                                "OS & Architecture" to "${deviceProfile.androidVersion} • ${deviceProfile.primaryAbi}",
+                                "Memory & Cores" to "${String.format(Locale.US, "%.1f", deviceProfile.totalRamGb)} GB RAM • ${deviceProfile.cpuCores} cores",
+                                "Charging Ecosystem" to deviceProfile.localizedEcosystem(false),
+                                "Design Capacity" to "${deviceProfile.nominalDesignCapacityMah} mAh • ${activeResult.cellTopology}",
+                                "Safe Thermal Limit" to "≤ ${deviceProfile.safeThermalCeilingC}°C (OEM Spec)"
+                            )
+                        }
                         val chunkCount = if (wideDevice) 3 else 2
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             specs.chunked(chunkCount).forEach { rowSpecs ->
@@ -696,7 +728,11 @@ fun Page4CableDnaScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "الكابل الموصى به لجهازك: ${deviceProfile.recommendedCableAr}",
+                            text = if (isArabic) {
+                                "الكابل الموصى به لجهازك: ${deviceProfile.localizedRecommendedCable(true)}"
+                            } else {
+                                "Recommended Cable: ${deviceProfile.localizedRecommendedCable(false)}"
+                            },
                             fontFamily = PlusJakartaSansFontFamily,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 10.5.sp,

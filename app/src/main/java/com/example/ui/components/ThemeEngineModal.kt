@@ -67,11 +67,13 @@ import com.example.ui.theme.PlusJakartaSansFontFamily
 import com.example.ui.theme.ThemeEngineCatalog
 import com.example.ui.theme.ThemePresetCategory
 
-private enum class ThemeFilterTab(val labelAr: String) {
-    ALL("الكل"),
-    CLASSIC_IDE("برمجي"),
-    LIQUID_GLASS("زجاج سائل"),
-    LIGHT_COMFORT("نهاري مريح")
+private enum class ThemeFilterTab(val labelAr: String, val labelEn: String) {
+    ALL("الكل", "All"),
+    CLASSIC_IDE("برمجي", "Code IDE"),
+    LIQUID_GLASS("زجاج سائل", "Liquid Glass"),
+    LIGHT_COMFORT("نهاري مريح", "Light Comfort");
+
+    fun localizedLabel(isArabic: Boolean): String = if (isArabic) labelAr else labelEn
 }
 
 @Composable
@@ -88,6 +90,7 @@ fun ThemeEngineDialog(
     val resolvedTheme = LocalAmpereTheme.current
     val isDark = resolvedTheme.isDark
     val activeAccent = resolvedTheme.accent
+    val isArabic = themeConfig.appLanguage.isArabic
 
     var searchQuery by remember { mutableStateOf("") }
     var selectedFilter by remember { mutableStateOf(ThemeFilterTab.ALL) }
@@ -148,7 +151,7 @@ fun ThemeEngineDialog(
                     Spacer(modifier = Modifier.width(10.dp))
                     Column {
                         Text(
-                            text = "محرك الثيمات • Theme Engine",
+                            text = if (isArabic) "محرك الثيمات" else "Theme Engine",
                             fontFamily = OutfitFontFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp,
@@ -157,7 +160,11 @@ fun ThemeEngineDialog(
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = "النشط: ${resolvedTheme.themeName} (${allPresets.size} ثيم)",
+                            text = if (isArabic) {
+                                "النشط: ${resolvedTheme.themeName} (${allPresets.size} ثيم)"
+                            } else {
+                                "Active: ${resolvedTheme.themeName} (${allPresets.size} themes)"
+                            },
                             fontFamily = PlusJakartaSansFontFamily,
                             fontSize = 11.sp,
                             color = activeAccent,
@@ -188,13 +195,13 @@ fun ThemeEngineDialog(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
                                     imageVector = Icons.Default.Refresh,
-                                    contentDescription = "استعادة الافتراضي",
+                                    contentDescription = if (isArabic) "استعادة الافتراضي" else "Reset to default",
                                     tint = activeAccent,
                                     modifier = Modifier.size(15.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = "افتراضي",
+                                    text = if (isArabic) "افتراضي" else "Default",
                                     fontFamily = PlusJakartaSansFontFamily,
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 11.sp,
@@ -218,7 +225,7 @@ fun ThemeEngineDialog(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
-                            contentDescription = "إغلاق محرك الثيمات",
+                            contentDescription = if (isArabic) "إغلاق محرك الثيمات" else "Close Theme Engine",
                             tint = resolvedTheme.textSecondary,
                             modifier = Modifier.size(18.dp)
                         )
@@ -235,7 +242,7 @@ fun ThemeEngineDialog(
                 singleLine = true,
                 placeholder = {
                     Text(
-                        text = "ابحث عن ثيم... (Monokai, Dracula, Glass)",
+                        text = if (isArabic) "ابحث عن ثيم... (Monokai, Dracula, Glass)" else "Search themes... (Monokai, Dracula, Glass)",
                         fontFamily = PlusJakartaSansFontFamily,
                         fontSize = 12.sp,
                         color = resolvedTheme.textSecondary
@@ -260,7 +267,7 @@ fun ThemeEngineDialog(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Close,
-                                contentDescription = "مسح البحث",
+                                contentDescription = if (isArabic) "مسح البحث" else "Clear search",
                                 tint = resolvedTheme.textSecondary,
                                 modifier = Modifier.size(16.dp)
                             )
@@ -321,7 +328,7 @@ fun ThemeEngineDialog(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "${tab.labelAr} ($count)",
+                            text = "${tab.localizedLabel(isArabic)} ($count)",
                             fontFamily = PlusJakartaSansFontFamily,
                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                             fontSize = 11.5.sp,
@@ -347,6 +354,7 @@ fun ThemeEngineDialog(
                     ThemePresetGridCard(
                         preset = preset,
                         isSelected = themeConfig.activeThemeId == preset.id,
+                        isArabic = isArabic,
                         onClick = { onSelectPreset(preset) }
                     )
                 }
@@ -359,6 +367,7 @@ fun ThemeEngineDialog(
 private fun ThemePresetGridCard(
     preset: AppThemePreset,
     isSelected: Boolean,
+    isArabic: Boolean,
     onClick: () -> Unit
 ) {
     val borderColor by animateColorAsState(
@@ -429,7 +438,7 @@ private fun ThemePresetGridCard(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Check,
-                                contentDescription = "مفعّل",
+                                contentDescription = if (isArabic) "مفعّل" else "Active",
                                 tint = if (preset.isDark) Color(0xFF0B101B) else Color.White,
                                 modifier = Modifier.size(12.dp)
                             )
@@ -473,7 +482,7 @@ private fun ThemePresetGridCard(
 
         Column {
             Text(
-                text = preset.name,
+                text = preset.localizedName(isArabic),
                 fontFamily = OutfitFontFamily,
                 fontWeight = FontWeight.Bold,
                 fontSize = 11.5.sp,
@@ -484,7 +493,11 @@ private fun ThemePresetGridCard(
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
-                text = if (preset.isGlassStyle) "زجاج سائل" else if (preset.isDark) "داكن" else "نهاري",
+                text = when {
+                    preset.isGlassStyle -> if (isArabic) "زجاج سائل" else "Liquid Glass"
+                    preset.isDark -> if (isArabic) "داكن" else "Dark"
+                    else -> if (isArabic) "نهاري" else "Light"
+                },
                 fontFamily = PlusJakartaSansFontFamily,
                 fontSize = 9.5.sp,
                 color = preset.textSecondaryColor

@@ -1,11 +1,14 @@
 package com.example
 
+import com.example.data.AppLanguage
 import com.example.data.AppTier
 import com.example.data.BatteryHealth
 import com.example.data.BatteryStatus
 import com.example.data.BatteryTelemetry
 import com.example.data.CableDnaTier
+import com.example.data.CellHealthStatus
 import com.example.data.ChargePlug
+import com.example.data.DeviceFormFactor
 import com.example.data.DeviceHardwareProfile
 import com.example.data.GlassThemeConfig
 import com.example.data.GraphicsMode
@@ -300,7 +303,7 @@ class ExampleUnitTest {
             safeThermalCeilingC = 41.0f
         )
 
-        // Genuine 20AWG E-Marked 5A fast cable
+        // Genuine 20AWG E-Marked 5A fast cable (English telemetry)
         val oemCable = CableDnaStandardsEngine.evaluate(
             telemetry = BatteryTelemetry(
                 percentage = 50,
@@ -313,11 +316,32 @@ class ExampleUnitTest {
             deviceProfile = profile,
             observedBaselineOcvMv = 3830,
             dynamicDeltaImpedanceMilliOhms = 90,
-            currentRipplePercent = 2.0f
+            currentRipplePercent = 2.0f,
+            isArabic = false
         )
         assertEquals(CableDnaTier.LEGENDARY_ORIGINAL, oemCable.tier)
         assertTrue(oemCable.estimatedAwg.contains("20 AWG"))
         assertTrue(oemCable.standardCompliance.contains("PASS"))
+
+        // Same OEM cable evaluated in Arabic mode emits pure Arabic standard compliance
+        val oemCableAr = CableDnaStandardsEngine.evaluate(
+            telemetry = BatteryTelemetry(
+                percentage = 50,
+                status = BatteryStatus.CHARGING,
+                plugType = ChargePlug.AC,
+                voltageMv = 4130,
+                currentMa = 3500,
+                temperatureC = 33.0f
+            ),
+            deviceProfile = profile,
+            observedBaselineOcvMv = 3830,
+            dynamicDeltaImpedanceMilliOhms = 90,
+            currentRipplePercent = 2.0f,
+            isArabic = true
+        )
+        assertEquals(CableDnaTier.LEGENDARY_ORIGINAL, oemCableAr.tier)
+        assertTrue(oemCableAr.standardCompliance.contains("اجتياز"))
+        assertFalse(oemCableAr.standardCompliance.contains("PASS"))
 
         // 2S Dual-Cell (8.15V pack) high-speed charge does not miscalculate against 5V rail
         val dualCellCable = CableDnaStandardsEngine.evaluate(
@@ -332,7 +356,8 @@ class ExampleUnitTest {
             deviceProfile = profile.copy(isDualCellSuspected = true),
             observedBaselineOcvMv = 7660,
             dynamicDeltaImpedanceMilliOhms = 98,
-            currentRipplePercent = 2.2f
+            currentRipplePercent = 2.2f,
+            isArabic = false
         )
         assertEquals(CableDnaTier.LEGENDARY_ORIGINAL, dualCellCable.tier)
         assertTrue(dualCellCable.cellTopology.contains("2S"))
@@ -395,5 +420,48 @@ class ExampleUnitTest {
         for (i in 1 until trendKnots.size) {
             assertTrue(trendKnots[i] >= trendKnots[i - 1])
         }
+    }
+
+    @Test
+    fun testBilingualLocalizationSupport() {
+        assertEquals("ar", AppLanguage.ARABIC.code)
+        assertTrue(AppLanguage.ARABIC.isRtl)
+        assertTrue(AppLanguage.ARABIC.isArabic)
+        assertEquals("en", AppLanguage.ENGLISH.code)
+        assertFalse(AppLanguage.ENGLISH.isRtl)
+        assertFalse(AppLanguage.ENGLISH.isArabic)
+        assertEquals(AppLanguage.ENGLISH, AppLanguage.fromCode("en"))
+        assertEquals(AppLanguage.ARABIC, AppLanguage.fromCode("ar"))
+        assertEquals(AppLanguage.ARABIC, GlassThemeConfig().appLanguage)
+
+        val telemetry = BatteryTelemetry(
+            percentage = 52,
+            voltageMv = 4150,
+            currentMa = 2500,
+            temperatureC = 33.5f,
+            status = BatteryStatus.CHARGING,
+            plugType = ChargePlug.AC,
+            livingState = LivingBatteryState.ENERGY_STORING
+        )
+        val profile = DeviceHardwareProfile(
+            brand = "Samsung",
+            model = "Galaxy Ultra",
+            safeThermalCeilingC = 42.0f,
+            nominalDesignCapacityMah = 5000
+        )
+
+        val scienceAr = BatteryScienceClassifier.buildScienceProfile(telemetry, profile, isArabic = true)
+        val scienceEn = BatteryScienceClassifier.buildScienceProfile(telemetry, profile, isArabic = false)
+        assertTrue(scienceAr.reasonAr != scienceEn.reasonAr)
+        assertTrue(scienceAr.phaseLabelAr != scienceEn.phaseLabelAr)
+        assertTrue(scienceAr.scienceReference != scienceEn.scienceReference)
+        assertTrue(scienceAr.thermalAssessment.zoneTitleAr != scienceEn.thermalAssessment.zoneTitleAr)
+
+        assertTrue(LivingBatteryState.ENERGY_STORING.localizedTitle(true) != LivingBatteryState.ENERGY_STORING.localizedTitle(false))
+        assertTrue(AppTier.FREE.localizedLabel(true) != AppTier.FREE.localizedLabel(false))
+        assertTrue(GraphicsMode.PRO.localizedTitle(true) != GraphicsMode.PRO.localizedTitle(false))
+        assertTrue(CableDnaTier.LEGENDARY_ORIGINAL.localizedTitle(true) != CableDnaTier.LEGENDARY_ORIGINAL.localizedTitle(false))
+        assertTrue(CellHealthStatus.PRISTINE.localizedLabel(true) != CellHealthStatus.PRISTINE.localizedLabel(false))
+        assertTrue(DeviceFormFactor.PHONE.localizedLabel(true) != DeviceFormFactor.PHONE.localizedLabel(false))
     }
 }

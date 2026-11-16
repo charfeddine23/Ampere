@@ -301,6 +301,7 @@ fun LiquidBatteryRing(
         }
 
         // Center Digital Display Readout
+        val isArabic = com.example.ui.theme.LocalAppLanguage.current.isArabic
         Column(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -316,16 +317,17 @@ fun LiquidBatteryRing(
             ) {
                 Icon(
                     imageVector = stateIcon,
-                    contentDescription = livingState.title,
+                    contentDescription = livingState.localizedTitle(isArabic),
                     tint = activePrimary,
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
-                    text = if (status == BatteryStatus.CHARGING)
-                        "${String.format("%.1f", wattageW)}W CHARGING"
-                    else
-                        livingState.title.uppercase(),
+                    text = if (status == BatteryStatus.CHARGING) {
+                        if (isArabic) "${String.format("%.1f", wattageW)}W شحن" else "${String.format("%.1f", wattageW)}W CHARGING"
+                    } else {
+                        livingState.localizedTitle(isArabic).uppercase()
+                    },
                     fontFamily = OutfitFontFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = 11.sp,
@@ -361,10 +363,11 @@ fun LiquidBatteryRing(
 
             // Real-time hardware sensor status indicator (no XP display)
             Text(
-                text = if (status == BatteryStatus.CHARGING)
-                    "${String.format("%.1f", wattageW)}W • ACTIVE CHARGE"
-                else
-                    "HARDWARE SENSORS ACTIVE",
+                text = if (status == BatteryStatus.CHARGING) {
+                    if (isArabic) "${String.format("%.1f", wattageW)}W • شحن نشط" else "${String.format("%.1f", wattageW)}W • ACTIVE CHARGE"
+                } else {
+                    if (isArabic) "مستشعرات العتاد نشطة" else "HARDWARE SENSORS ACTIVE"
+                },
                 fontFamily = PlusJakartaSansFontFamily,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 10.sp,

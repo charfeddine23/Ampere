@@ -131,6 +131,7 @@ fun Page5MySpaceScreen(
 ) {
     val scrollState = rememberScrollState()
     val isDark = themeConfig.isDarkMode
+    val isArabic = themeConfig.appLanguage.isArabic
     val resolvedTheme = com.example.ui.theme.LocalAmpereTheme.current
     val baseAccent = if (resolvedTheme.themeId != null || resolvedTheme.isSimpleMode || resolvedTheme.isProMode) resolvedTheme.accent else themeConfig.accentColor
     val glow = when {
@@ -254,7 +255,7 @@ fun Page5MySpaceScreen(
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Icon(
                                             imageVector = Icons.Default.Verified,
-                                            contentDescription = "Verified Account",
+                                            contentDescription = if (isArabic) "حساب موثّق" else "Verified Account",
                                             tint = themeConfig.appTier.displayColor(isDark),
                                             modifier = Modifier.size(17.dp)
                                         )
@@ -273,7 +274,7 @@ fun Page5MySpaceScreen(
                                         )
                                         Spacer(modifier = Modifier.width(5.dp))
                                         Text(
-                                            text = "Ampere Pulse • ${themeConfig.appTier.label}",
+                                            text = "Ampere Pulse • ${themeConfig.appTier.localizedLabel(isArabic)}",
                                             fontFamily = PlusJakartaSansFontFamily,
                                             fontWeight = FontWeight.SemiBold,
                                             fontSize = 11.sp,
@@ -310,7 +311,7 @@ fun Page5MySpaceScreen(
                                             )
                                             Spacer(modifier = Modifier.width(4.dp))
                                             Text(
-                                                text = "Redeem",
+                                                text = if (isArabic) "تفعيل" else "Redeem",
                                                 fontFamily = OutfitFontFamily,
                                                 fontWeight = FontWeight.Bold,
                                                 fontSize = 10.5.sp,
@@ -329,7 +330,7 @@ fun Page5MySpaceScreen(
                                         .padding(horizontal = 10.dp, vertical = 6.dp)
                                 ) {
                                     Text(
-                                        text = "تعديل",
+                                        text = if (isArabic) "تعديل" else "Edit",
                                         fontFamily = OutfitFontFamily,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 11.sp,
@@ -353,7 +354,8 @@ fun Page5MySpaceScreen(
                 CurrentFlowVfxBar(
                     currentMa = activeCurrentMa,
                     ambientColor = animatedAmbientColor,
-                    isDarkMode = isDark
+                    isDarkMode = isDark,
+                    isArabic = isArabic
                 )
             }
 
@@ -373,10 +375,10 @@ fun Page5MySpaceScreen(
                 ) {
                     MySpaceMetricCard(
                         modifier = Modifier.weight(1f),
-                        title = "VOLTAGE",
+                        title = if (isArabic) "الجهد الكهربائي" else "VOLTAGE",
                         value = numberFormat.format(telemetry.voltageMv),
                         unit = "mV",
-                        subtext = "Nominal 3.7V - 4.4V",
+                        subtext = if (isArabic) "القياسي 3.7V – 4.4V" else "Nominal 3.7V - 4.4V",
                         points = voltageHistory,
                         minVisualSpan = 80f,
                         accentColor = if (selectedMetric == MetricType.VOLTAGE) animatedAmbientColor else baseAccent,
@@ -390,10 +392,14 @@ fun Page5MySpaceScreen(
                     val currentSign = if (activeCurrentMa >= 0) "+" else ""
                     MySpaceMetricCard(
                         modifier = Modifier.weight(1f),
-                        title = "CURRENT",
+                        title = if (isArabic) "شدة التيار" else "CURRENT",
                         value = "$currentSign${numberFormat.format(activeCurrentMa)}",
                         unit = "mA",
-                        subtext = if (activeCurrentMa >= 0) "Inflow charge" else "Discharge draw",
+                        subtext = if (isArabic) {
+                            if (activeCurrentMa >= 0) "تدفق شحن داخل" else "سحب تفريغ الطاقة"
+                        } else {
+                            if (activeCurrentMa >= 0) "Inflow charge" else "Discharge draw"
+                        },
                         points = currentHistory,
                         minVisualSpan = 180f,
                         accentColor = animatedAmbientColor,
@@ -413,10 +419,10 @@ fun Page5MySpaceScreen(
                     val instantaneousWattage = (telemetry.voltageMv / 1000f) * (abs(activeCurrentMa) / 1000f)
                     MySpaceMetricCard(
                         modifier = Modifier.weight(1f),
-                        title = "WATTAGE",
+                        title = if (isArabic) "القدرة الكهربائية" else "WATTAGE",
                         value = String.format(Locale.US, "%.2f", instantaneousWattage),
                         unit = "W",
-                        subtext = "P = V × I Real-time",
+                        subtext = if (isArabic) "P = V × I قياس حي" else "P = V × I Real-time",
                         points = wattageHistory,
                         minVisualSpan = 1.2f,
                         accentColor = if (selectedMetric == MetricType.WATTAGE) animatedAmbientColor else baseAccent,
@@ -436,10 +442,14 @@ fun Page5MySpaceScreen(
                     val tempAccent = if (isThermalStress) TactileCoralRed else baseAccent
                     MySpaceMetricCard(
                         modifier = Modifier.weight(1f),
-                        title = "TEMPERATURE",
+                        title = if (isArabic) "درجة الحرارة" else "TEMPERATURE",
                         value = String.format(Locale.US, "%.1f", displayTemp),
                         unit = themeConfig.temperatureUnit.symbol,
-                        subtext = if (isThermalStress) "Thermal Stress (≥42°C)" else "JEITA Nominal Zone",
+                        subtext = if (isArabic) {
+                            if (isThermalStress) "إجهاد حراري (≥42°C)" else "نطاق JEITA المثالي"
+                        } else {
+                            if (isThermalStress) "Thermal Stress (≥42°C)" else "JEITA Nominal Zone"
+                        },
                         points = temperatureHistory,
                         minVisualSpan = 2.0f,
                         accentColor = if (selectedMetric == MetricType.TEMPERATURE) animatedAmbientColor else tempAccent,
@@ -463,7 +473,7 @@ fun Page5MySpaceScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "VITAL PULSE HARDWARE LOG",
+                    text = if (isArabic) "سجل نبضات العتاد الحيوي" else "VITAL PULSE HARDWARE LOG",
                     fontFamily = OutfitFontFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
@@ -477,12 +487,21 @@ fun Page5MySpaceScreen(
                         .background(animatedAmbientColor.copy(alpha = if (isDark) 0.22f else 0.12f))
                         .border(1.dp, animatedAmbientColor, RoundedCornerShape(10.dp))
                         .clickable {
-                            onAddVitalLog(
-                                "Vital Pulse Diagnostics Sweep",
-                                "All 12 battery registers verified OK: ${telemetry.voltageMv}mV, ${activeCurrentMa}mA, ${telemetry.temperatureC}°C, 0 degradation.",
-                                "PASS OK",
-                                "check"
-                            )
+                            if (isArabic) {
+                                onAddVitalLog(
+                                    "فحص تشخيصي فوري للبطارية",
+                                    "تم فحص مسجلات الطاقة بنجاح: ${telemetry.voltageMv}mV، ${activeCurrentMa}mA، ${telemetry.temperatureC}°C.",
+                                    "ناجح",
+                                    "check"
+                                )
+                            } else {
+                                onAddVitalLog(
+                                    "Vital Pulse Diagnostics Sweep",
+                                    "Battery hardware registers verified: ${telemetry.voltageMv}mV, ${activeCurrentMa}mA, ${telemetry.temperatureC}°C.",
+                                    "PASS OK",
+                                    "check"
+                                )
+                            }
                         }
                         .padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
@@ -495,7 +514,7 @@ fun Page5MySpaceScreen(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "BENCHMARK NOW",
+                            text = if (isArabic) "فحص الآن" else "BENCHMARK NOW",
                             fontFamily = OutfitFontFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 11.sp,
@@ -529,6 +548,7 @@ fun Page5MySpaceScreen(
             UserProfileEditDialog(
                 userAccount = userAccount,
                 isDarkMode = isDark,
+                isArabic = isArabic,
                 onDismiss = { showProfileEditDialog = false },
                 onUpdateOwnerName = { name ->
                     onUpdateOwnerName(name)
@@ -605,17 +625,28 @@ private fun CurrentDrivenAmbientGlowBackdrop(
 private fun CurrentFlowVfxBar(
     currentMa: Int,
     ambientColor: Color,
-    isDarkMode: Boolean
+    isDarkMode: Boolean,
+    isArabic: Boolean
 ) {
     val isCharging = currentMa >= 0
     val absCurrent = abs(currentMa)
 
-    val stateTitle = when {
-        currentMa > 2500 -> "⚡ HIGH INFLOW SURGE (+${currentMa} mA)"
-        currentMa in 400..2500 -> "🌿 SERENE SAFE CHARGING (+${currentMa} mA)"
-        currentMa in 0..399 -> "🔋 SERENE TRICKLE FLOW (+${currentMa} mA)"
-        currentMa < -600 -> "🔥 HEAVY LOAD DRAIN (${currentMa} mA)"
-        else -> "⚡ IDLE SYSTEM DRAW (${currentMa} mA)"
+    val stateTitle = if (isArabic) {
+        when {
+            currentMa > 2500 -> "⚡ اندفاع شحن عالٍ (+${currentMa} mA)"
+            currentMa in 400..2500 -> "🌿 شحن آمن ومستقر (+${currentMa} mA)"
+            currentMa in 0..399 -> "🔋 شحن هادئ منخفض (+${currentMa} mA)"
+            currentMa < -600 -> "🔥 استهلاك حمل مرتفع (${currentMa} mA)"
+            else -> "⚡ سحب نظام خامل (${currentMa} mA)"
+        }
+    } else {
+        when {
+            currentMa > 2500 -> "⚡ HIGH INFLOW SURGE (+${currentMa} mA)"
+            currentMa in 400..2500 -> "🌿 SERENE SAFE CHARGING (+${currentMa} mA)"
+            currentMa in 0..399 -> "🔋 SERENE TRICKLE FLOW (+${currentMa} mA)"
+            currentMa < -600 -> "🔥 HEAVY LOAD DRAIN (${currentMa} mA)"
+            else -> "⚡ IDLE SYSTEM DRAW (${currentMa} mA)"
+        }
     }
 
     // 90 FPS traveling wave phase
@@ -663,7 +694,11 @@ private fun CurrentFlowVfxBar(
                 }
 
                 Text(
-                    text = if (isCharging) "INFLOW →" else "← OUTFLOW",
+                    text = if (isArabic) {
+                        if (isCharging) "تدفق داخل →" else "← تدفق خارج"
+                    } else {
+                        if (isCharging) "INFLOW →" else "← OUTFLOW"
+                    },
                     fontFamily = OutfitFontFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = 10.sp,
@@ -916,6 +951,7 @@ fun VitalLogItem(
 fun UserProfileEditDialog(
     userAccount: UserAccount,
     isDarkMode: Boolean,
+    isArabic: Boolean,
     onDismiss: () -> Unit,
     onUpdateOwnerName: (String) -> Unit
 ) {
@@ -954,14 +990,14 @@ fun UserProfileEditDialog(
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text(
-                        text = "ملف المستخدم",
+                        text = if (isArabic) "ملف المستخدم" else "User Profile",
                         fontFamily = OutfitFontFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 17.sp,
                         color = textColor
                     )
                     Text(
-                        text = "Ampere Pulse Local Core",
+                        text = if (isArabic) "النواة المحلية لـ Ampere Pulse" else "Ampere Pulse Local Core",
                         fontFamily = PlusJakartaSansFontFamily,
                         fontSize = 10.sp,
                         color = subTextColor
@@ -997,14 +1033,18 @@ fun UserProfileEditDialog(
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text(
-                                text = "حساب عتاد محلي نشط 100%",
+                                text = if (isArabic) "حساب عتاد محلي نشط 100%" else "100% Active Local Hardware Profile",
                                 fontFamily = OutfitFontFamily,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp,
                                 color = TactileGreen
                             )
                             Text(
-                                text = "البيانات مخزنة ومحمية محلياً في جهازك (Room WAL)",
+                                text = if (isArabic) {
+                                    "البيانات مخزنة ومحمية محلياً في جهازك (Room WAL)"
+                                } else {
+                                    "Stored locally & encrypted on your device (Room WAL)"
+                                },
                                 fontFamily = PlusJakartaSansFontFamily,
                                 fontSize = 11.sp,
                                 color = subTextColor
@@ -1016,7 +1056,7 @@ fun UserProfileEditDialog(
                 // Name Input
                 Column {
                     Text(
-                        text = "اسم صاحب الحساب",
+                        text = if (isArabic) "اسم صاحب الحساب" else "Owner Display Name",
                         fontFamily = OutfitFontFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 12.sp,
@@ -1030,7 +1070,9 @@ fun UserProfileEditDialog(
                         },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
-                        placeholder = { Text("أدخل اسم صاحب الحساب...") },
+                        placeholder = {
+                            Text(if (isArabic) "أدخل اسم صاحب الحساب..." else "Enter display name...")
+                        },
                         leadingIcon = {
                             Icon(Icons.Default.Person, contentDescription = null, tint = TactileRoyalBlue)
                         },
@@ -1060,7 +1102,7 @@ fun UserProfileEditDialog(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "رتبة الحساب",
+                                text = if (isArabic) "رتبة الحساب" else "Account Tier",
                                 fontFamily = PlusJakartaSansFontFamily,
                                 fontSize = 11.sp,
                                 color = subTextColor
@@ -1072,7 +1114,7 @@ fun UserProfileEditDialog(
                                     .padding(horizontal = 6.dp, vertical = 2.dp)
                             ) {
                                 Text(
-                                    text = userAccount.accountTier,
+                                    text = userAccount.localizedAccountTier(isArabic),
                                     fontSize = 9.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = TactileRoyalBlue
@@ -1081,7 +1123,11 @@ fun UserProfileEditDialog(
                         }
 
                         Text(
-                            text = "الأحرف الأولى: ${userAccount.avatarInitials}",
+                            text = if (isArabic) {
+                                "الأحرف الأولى: ${userAccount.avatarInitials}"
+                            } else {
+                                "Initials: ${userAccount.avatarInitials}"
+                            },
                             fontFamily = PlusJakartaSansFontFamily,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 12.sp,
@@ -1093,7 +1139,7 @@ fun UserProfileEditDialog(
                 // Privacy and Security Bullets
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
-                        text = "مواصفات الأمان المحلي:",
+                        text = if (isArabic) "مواصفات الأمان المحلي:" else "Local Privacy Architecture:",
                         fontFamily = OutfitFontFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 11.sp,
@@ -1102,13 +1148,21 @@ fun UserProfileEditDialog(
                     ProfileFeatureBullet(
                         icon = Icons.Default.Bolt,
                         tint = TactileGreen,
-                        text = "قاعدة بيانات Room محلية مع وضع WAL لسرعة القراءة والكتابة",
+                        text = if (isArabic) {
+                            "قاعدة بيانات Room محلية مع وضع WAL لسرعة القراءة والكتابة"
+                        } else {
+                            "Local Room WAL database for low-latency hardware telemetry"
+                        },
                         isDarkMode = isDarkMode
                     )
                     ProfileFeatureBullet(
                         icon = Icons.Default.Verified,
                         tint = TactileRoyalBlue,
-                        text = "خصوصية تامة 100% دون إرسال أو ربط أي بيانات بأي جهات خارجية",
+                        text = if (isArabic) {
+                            "خصوصية تامة 100% دون إرسال أو ربط أي بيانات بأي جهات خارجية"
+                        } else {
+                            "100% private storage with zero external data sharing"
+                        },
                         isDarkMode = isDarkMode
                     )
                 }
@@ -1126,7 +1180,7 @@ fun UserProfileEditDialog(
                 )
             ) {
                 Text(
-                    text = "حفظ الاسم",
+                    text = if (isArabic) "حفظ الاسم" else "Save Name",
                     fontFamily = OutfitFontFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = 12.sp,
@@ -1137,7 +1191,7 @@ fun UserProfileEditDialog(
         dismissButton = {
             TextButton(onClick = onDismiss) {
                 Text(
-                    text = "إلغاء",
+                    text = if (isArabic) "إلغاء" else "Cancel",
                     fontFamily = OutfitFontFamily,
                     fontWeight = FontWeight.Bold,
                     color = subTextColor

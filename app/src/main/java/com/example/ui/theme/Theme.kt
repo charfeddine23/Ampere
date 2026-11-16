@@ -12,6 +12,9 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
+import com.example.data.AppLanguage
 import com.example.data.GraphicsMode
 
 @Immutable
@@ -84,6 +87,7 @@ fun MyApplicationTheme(
     accentColor: Color = TactileRoyalBlue,
     activeThemeId: String? = null,
     graphicsMode: GraphicsMode = GraphicsMode.STANDARD,
+    appLanguage: AppLanguage = AppLanguage.ARABIC,
     content: @Composable () -> Unit
 ) {
     val preset = ThemeEngineCatalog.findById(activeThemeId)
@@ -179,9 +183,13 @@ fun MyApplicationTheme(
             GraphicsMode.STANDARD -> preset?.id
         },
         themeName = when (graphicsMode) {
-            GraphicsMode.SIMPLE -> "الوضع البسيط (Simple Mode)"
-            GraphicsMode.PRO -> "وضع المحترفين الكلاسيكي (Pro Mode)"
-            GraphicsMode.STANDARD -> preset?.name ?: if (resolvedIsDark) "الليلي الهادئ" else "النهاري المريح"
+            GraphicsMode.SIMPLE -> if (appLanguage.isArabic) "الوضع البسيط" else "Simple Mode"
+            GraphicsMode.PRO -> if (appLanguage.isArabic) "وضع المحترفين الكلاسيكي" else "Classic Pro Mode"
+            GraphicsMode.STANDARD -> preset?.name ?: if (appLanguage.isArabic) {
+                if (resolvedIsDark) "الليلي الهادئ" else "النهاري المريح"
+            } else {
+                if (resolvedIsDark) "Quiet Dark" else "Soft Light"
+            }
         },
         isDark = resolvedIsDark,
         isGlassStyle = if (graphicsMode == GraphicsMode.STANDARD) (preset?.isGlassStyle ?: false) else false,
@@ -211,7 +219,13 @@ fun MyApplicationTheme(
         outline = animBorder
     )
 
-    CompositionLocalProvider(LocalAmpereTheme provides resolvedTheme) {
+    val layoutDirection = if (appLanguage.isRtl) LayoutDirection.Rtl else LayoutDirection.Ltr
+
+    CompositionLocalProvider(
+        LocalAmpereTheme provides resolvedTheme,
+        LocalAppLanguage provides appLanguage,
+        LocalLayoutDirection provides layoutDirection
+    ) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = Typography,

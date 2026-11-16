@@ -46,12 +46,33 @@ class LivingBatteryGlanceWidget : GlanceAppWidget() {
         val voltageMv = prefs.getInt("battery_voltage", 4182)
         val currentMa = prefs.getInt("battery_current", 2340)
         val stateName = prefs.getString("battery_state", "ENERGY_STORING") ?: "ENERGY_STORING"
+        val isArabic = if (prefs.contains("is_arabic")) {
+            prefs.getBoolean("is_arabic", true)
+        } else {
+            com.example.data.local.SettingsPreferencesManager(context).loadThemeConfig().appLanguage.isArabic
+        }
 
         val (accentColor, stateTitle, stateSubtitle) = when (stateName) {
-            "OVERDRIVE_HEATING" -> Triple(Color(0xFFFF3D00), "THERMAL STRESS", "JEITA Ceiling ≥ 42°C")
-            "COOLING" -> Triple(Color(0xFF00B0FF), "THERMAL RECOVERY", "Active Dissipation")
-            "ENERGY_STORING" -> Triple(Color(0xFF00C853), "ACTIVE CHARGING", "Safe CC/CV Window")
-            else -> Triple(Color(0xFF7C4DFF), "QUIESCENT STANDBY", "Low C-Rate Preservation")
+            "OVERDRIVE_HEATING" -> Triple(
+                Color(0xFFFF3D00),
+                if (isArabic) "إجهاد حراري" else "THERMAL STRESS",
+                if (isArabic) "سقف JEITA ≥ 42°C" else "JEITA Ceiling ≥ 42°C"
+            )
+            "COOLING" -> Triple(
+                Color(0xFF00B0FF),
+                if (isArabic) "تبريد حراري" else "THERMAL RECOVERY",
+                if (isArabic) "تبديد حراري نشط" else "Active Dissipation"
+            )
+            "ENERGY_STORING" -> Triple(
+                Color(0xFF00C853),
+                if (isArabic) "شحن نشط" else "ACTIVE CHARGING",
+                if (isArabic) "نطاق CC/CV آمن" else "Safe CC/CV Window"
+            )
+            else -> Triple(
+                Color(0xFF7C4DFF),
+                if (isArabic) "وضع السكون" else "QUIESCENT STANDBY",
+                if (isArabic) "استهلاك منخفض مستقر" else "Low C-Rate Preservation"
+            )
         }
 
         provideContent {
@@ -83,7 +104,7 @@ class LivingBatteryGlanceWidget : GlanceAppWidget() {
                             ) {}
                             Spacer(modifier = GlanceModifier.width(8.dp))
                             Text(
-                                text = "AMPERE PULSE",
+                                text = if (isArabic) "أمبير بالس" else "AMPERE PULSE",
                                 style = TextStyle(
                                     color = androidx.glance.unit.ColorProvider(Color(0xFF94A3B8)),
                                     fontSize = 10.sp,
@@ -177,6 +198,7 @@ object WidgetTelemetryUpdater {
         }
 
         val appContext = context.applicationContext
+        val isArabic = com.example.data.local.SettingsPreferencesManager(appContext).loadThemeConfig().appLanguage.isArabic
         val prefs = appContext.getSharedPreferences("ampere_pulse_widget_prefs", Context.MODE_PRIVATE)
         prefs.edit()
             .putInt("battery_pct", pct)
@@ -184,6 +206,7 @@ object WidgetTelemetryUpdater {
             .putInt("battery_voltage", voltageMv)
             .putInt("battery_current", currentMa)
             .putString("battery_state", stateName)
+            .putBoolean("is_arabic", isArabic)
             .apply()
 
         try {
@@ -199,6 +222,18 @@ object WidgetTelemetryUpdater {
             lastPct = pct
             lastStateName = stateName
             LivingBatteryGlanceWidget().updateAll(appContext)
+        } catch (_: Exception) {}
+    }
+
+    suspend fun forceRefresh(context: Context, isArabic: Boolean) {
+        val appContext = context.applicationContext
+        val prefs = appContext.getSharedPreferences("ampere_pulse_widget_prefs", Context.MODE_PRIVATE)
+        prefs.edit().putBoolean("is_arabic", isArabic).apply()
+        try {
+            val glanceIds = GlanceAppWidgetManager(appContext).getGlanceIds(LivingBatteryGlanceWidget::class.java)
+            if (glanceIds.isNotEmpty()) {
+                LivingBatteryGlanceWidget().updateAll(appContext)
+            }
         } catch (_: Exception) {}
     }
 }

@@ -481,15 +481,16 @@ fun FloatingGlassNavBar(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.Center
                             ) {
+                                val isArabic = com.example.ui.theme.LocalAppLanguage.current.isArabic
                                 Icon(
                                     imageVector = tab.icon,
-                                    contentDescription = tab.label,
+                                    contentDescription = tab.getLocalizedLabel(isArabic),
                                     tint = iconColor,
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = tab.getLocalizedLabel(isRtl),
+                                    text = tab.getLocalizedLabel(isArabic),
                                     fontFamily = OutfitFontFamily,
                                     fontWeight = if (isCurrentActive) FontWeight.Bold else FontWeight.Medium,
                                     fontSize = 10.sp,

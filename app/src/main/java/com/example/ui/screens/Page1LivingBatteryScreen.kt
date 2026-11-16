@@ -100,6 +100,7 @@ fun Page1LivingBatteryScreen(
 ) {
     val scrollState = rememberScrollState()
     val isDark = themeConfig.isDarkMode
+    val isArabic = themeConfig.appLanguage.isArabic
     val state = telemetry.livingState
     val resolvedTheme = LocalAmpereTheme.current
     val primaryColor = when {
@@ -120,8 +121,8 @@ fun Page1LivingBatteryScreen(
     val textColor = if (resolvedTheme.themeId != null) resolvedTheme.textPrimary else if (isDark) TextWhite else TextCharcoal
     val subTextColor = if (resolvedTheme.themeId != null) resolvedTheme.textSecondary else TextSlate
 
-    val scienceProfile = remember(telemetry, deviceProfile) {
-        BatteryScienceClassifier.buildScienceProfile(telemetry, deviceProfile)
+    val scienceProfile = remember(telemetry, deviceProfile, isArabic) {
+        BatteryScienceClassifier.buildScienceProfile(telemetry, deviceProfile, isArabic = isArabic)
     }
 
     val displayTemp = if (themeConfig.temperatureUnit == TemperatureUnit.FAHRENHEIT) {
@@ -177,7 +178,7 @@ fun Page1LivingBatteryScreen(
                                     LivingBatteryState.ENERGY_STORING -> Icons.Default.Bolt
                                     LivingBatteryState.DEEP_SLEEP -> Icons.Default.Bedtime
                                 },
-                                contentDescription = state.title,
+                                contentDescription = state.localizedTitle(isArabic),
                                 tint = primaryColor,
                                 modifier = Modifier.size(17.dp)
                             )
@@ -187,8 +188,11 @@ fun Page1LivingBatteryScreen(
 
                         Column {
                             Row(verticalAlignment = Alignment.CenterVertically) {
+                                val titleText = state.localizedTitle(isArabic).let {
+                                    if (isArabic) it else it.uppercase()
+                                }
                                 Text(
-                                    text = state.title.uppercase(),
+                                    text = titleText,
                                     fontFamily = OutfitFontFamily,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 13.sp,
@@ -198,7 +202,9 @@ fun Page1LivingBatteryScreen(
                                 Spacer(modifier = Modifier.width(6.dp))
                                 PulsingNeonDot(color = primaryColor, sizeDp = 5.dp)
                             }
-                            val syncTag = if (themeConfig.isProMode) " • 1ms PRO" else ""
+                            val syncTag = if (themeConfig.isProMode) {
+                                if (isArabic) " • 1ms محترف" else " • 1ms PRO"
+                            } else ""
                             Text(
                                 text = "${scienceProfile.phaseLabelAr} • $formattedTemp • ${String.format(Locale.US, "%.2f", scienceProfile.cRate)}C$syncTag",
                                 fontFamily = PlusJakartaSansFontFamily,
@@ -224,13 +230,13 @@ fun Page1LivingBatteryScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 imageVector = Icons.Default.Sensors,
-                                contentDescription = "مستشعرات تلقائية نشطة",
+                                contentDescription = if (isArabic) "مستشعرات تلقائية نشطة" else "Active Auto Sensors",
                                 tint = autoSensorsColor,
                                 modifier = Modifier.size(12.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "100% AUTO SENSORS",
+                                text = if (isArabic) "100% مستشعرات تلقائية" else "100% AUTO SENSORS",
                                 fontFamily = OutfitFontFamily,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 9.sp,
@@ -285,13 +291,17 @@ fun Page1LivingBatteryScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 imageVector = Icons.Default.Warning,
-                                contentDescription = "تحذير إجهاد حراري",
+                                contentDescription = if (isArabic) "تحذير إجهاد حراري" else "Thermal Stress Warning",
                                 tint = TactileCoralRed,
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "THERMAL STRESS: JEITA CEILING (≥${deviceProfile.safeThermalCeilingC}°C)",
+                                text = if (isArabic) {
+                                    "إجهاد حراري: سقف JEITA (≥${deviceProfile.safeThermalCeilingC}°C)"
+                                } else {
+                                    "THERMAL STRESS: JEITA CEILING (≥${deviceProfile.safeThermalCeilingC}°C)"
+                                },
                                 fontFamily = OutfitFontFamily,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 12.sp,
@@ -301,7 +311,11 @@ fun Page1LivingBatteryScreen(
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "${scienceProfile.thermalAssessment.detailAr} القراءة الحالية: $formattedTemp.",
+                            text = if (isArabic) {
+                                "${scienceProfile.thermalAssessment.detailAr} القراءة الحالية: $formattedTemp."
+                            } else {
+                                "${scienceProfile.thermalAssessment.detailAr} Current reading: $formattedTemp."
+                            },
                             fontFamily = PlusJakartaSansFontFamily,
                             fontSize = 11.sp,
                             color = subTextColor,
@@ -380,6 +394,7 @@ fun Page1LivingBatteryScreen(
             accentColor = primaryColor,
             isDarkMode = isDark,
             glowIntensity = glow,
+            isArabic = isArabic,
             onRefresh = onRefreshAppUsage
         )
     }
@@ -462,6 +477,7 @@ private fun AppBatteryConsumptionSection(
     accentColor: Color,
     isDarkMode: Boolean,
     glowIntensity: Float,
+    isArabic: Boolean,
     onRefresh: () -> Unit
 ) {
     val context = LocalContext.current
@@ -518,7 +534,7 @@ private fun AppBatteryConsumptionSection(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = "استهلاك التطبيقات للبطارية",
+                                text = if (isArabic) "استهلاك التطبيقات للبطارية" else "App Battery Usage",
                                 fontFamily = OutfitFontFamily,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 14.sp,
@@ -526,9 +542,13 @@ private fun AppBatteryConsumptionSection(
                             )
                             Text(
                                 text = if (snapshot.hasPermission) {
-                                    "مرتبة من الأعلى استهلاكاً • آخر ${snapshot.scanWindowHours} ساعة (${snapshot.totalTrackedMah} mAh)"
+                                    if (isArabic) {
+                                        "مرتبة من الأعلى استهلاكاً • آخر ${snapshot.scanWindowHours} ساعة (${snapshot.totalTrackedMah} mAh)"
+                                    } else {
+                                        "Highest drain first • Last ${snapshot.scanWindowHours}h (${snapshot.totalTrackedMah} mAh)"
+                                    }
                                 } else {
-                                    "يتطلب صلاحية مراقبة استخدام التطبيقات"
+                                    if (isArabic) "يتطلب صلاحية مراقبة استخدام التطبيقات" else "Requires App Usage Access permission"
                                 },
                                 fontFamily = PlusJakartaSansFontFamily,
                                 fontSize = 10.5.sp,
@@ -553,7 +573,7 @@ private fun AppBatteryConsumptionSection(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Refresh,
-                            contentDescription = "تحديث قائمة الاستهلاك",
+                            contentDescription = if (isArabic) "تحديث قائمة الاستهلاك" else "Refresh App Usage",
                             tint = accentColor,
                             modifier = Modifier.size(18.dp)
                         )
@@ -576,7 +596,7 @@ private fun AppBatteryConsumptionSection(
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Text(
-                                text = "جاري تحليل استهلاك التطبيقات...",
+                                text = if (isArabic) "جاري تحليل استهلاك التطبيقات..." else "Analyzing app battery consumption...",
                                 fontFamily = PlusJakartaSansFontFamily,
                                 fontSize = 12.sp,
                                 color = subTextColor
@@ -595,14 +615,18 @@ private fun AppBatteryConsumptionSection(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Text(
-                                text = "منح صلاحية الوصول إلى بيانات الاستخدام",
+                                text = if (isArabic) "منح صلاحية الوصول إلى بيانات الاستخدام" else "Grant Usage Access Permission",
                                 fontFamily = OutfitFontFamily,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 12.5.sp,
                                 color = textColor
                             )
                             Text(
-                                text = "لمعرفة التطبيقات التي تستهلك البطارية بشكل حقيقي وترتيبها من الأعلى استهلاكاً، يرجى تفعيل صلاحية مراقبة الاستخدام لتطبيق Ampere Pulse.",
+                                text = if (isArabic) {
+                                    "لمعرفة التطبيقات التي تستهلك البطارية بشكل حقيقي وترتيبها من الأعلى استهلاكاً، يرجى تفعيل صلاحية مراقبة الاستخدام لتطبيق Ampere Pulse."
+                                } else {
+                                    "To inspect real app battery drain and rank the highest consumers, please grant Usage Access permission to Ampere Pulse."
+                                },
                                 fontFamily = PlusJakartaSansFontFamily,
                                 fontSize = 11.sp,
                                 color = subTextColor,
@@ -634,7 +658,7 @@ private fun AppBatteryConsumptionSection(
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "منح الصلاحية الآن",
+                                        text = if (isArabic) "منح الصلاحية الآن" else "Grant Permission Now",
                                         fontFamily = OutfitFontFamily,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 12.5.sp,
@@ -655,7 +679,11 @@ private fun AppBatteryConsumptionSection(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "لا توجد تطبيقات نشطة مسجلة خلال آخر 24 ساعة حتى الآن.",
+                                text = if (isArabic) {
+                                    "لا توجد تطبيقات نشطة مسجلة خلال آخر 24 ساعة حتى الآن."
+                                } else {
+                                    "No active app battery usage recorded in the last 24 hours yet."
+                                },
                                 fontFamily = PlusJakartaSansFontFamily,
                                 fontSize = 11.5.sp,
                                 color = subTextColor
@@ -677,6 +705,7 @@ private fun AppBatteryConsumptionSection(
                                     textColor = textColor,
                                     subTextColor = subTextColor,
                                     isDarkMode = isDarkMode,
+                                    isArabic = isArabic,
                                     onClick = {
                                         CyberHapticsEngine.triggerTactileTick(context)
                                         AppBatteryUsageTracker.openAppBatteryDetailsSettings(context, app.packageName)
@@ -700,7 +729,11 @@ private fun AppBatteryConsumptionSection(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        text = if (showAllApps) "عرض أعلى 5 تطبيقات فقط" else "عرض جميع التطبيقات (${snapshot.apps.size})",
+                                        text = if (isArabic) {
+                                            if (showAllApps) "عرض أعلى 5 تطبيقات فقط" else "عرض جميع التطبيقات (${snapshot.apps.size})"
+                                        } else {
+                                            if (showAllApps) "Show Top 5 Apps Only" else "Show All Apps (${snapshot.apps.size})"
+                                        },
                                         fontFamily = OutfitFontFamily,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 12.sp,
@@ -725,6 +758,7 @@ private fun AppConsumptionRowItem(
     textColor: Color,
     subTextColor: Color,
     isDarkMode: Boolean,
+    isArabic: Boolean,
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
@@ -836,7 +870,7 @@ private fun AppConsumptionRowItem(
                                     .padding(horizontal = 5.dp, vertical = 1.dp)
                             ) {
                                 Text(
-                                    text = "استهلاك عالٍ",
+                                    text = if (isArabic) "استهلاك عالٍ" else "High Drain",
                                     fontFamily = PlusJakartaSansFontFamily,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 8.5.sp,
@@ -846,7 +880,11 @@ private fun AppConsumptionRowItem(
                         }
                     }
                     Text(
-                        text = "نشط ${app.formattedDurationAr()} • ≈ ${app.estimatedMah} mAh",
+                        text = if (isArabic) {
+                            "نشط ${app.formattedDuration(true)} • ≈ ${app.estimatedMah} mAh"
+                        } else {
+                            "Active ${app.formattedDuration(false)} • ≈ ${app.estimatedMah} mAh"
+                        },
                         fontFamily = PlusJakartaSansFontFamily,
                         fontSize = 10.sp,
                         color = subTextColor,

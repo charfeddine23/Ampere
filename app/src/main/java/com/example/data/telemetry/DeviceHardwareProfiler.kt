@@ -62,6 +62,7 @@ object DeviceHardwareProfiler {
             chargingEcosystemAr = ecosystem.ecosystemAr,
             chargingEcosystemEn = ecosystem.ecosystemEn,
             recommendedCableAr = ecosystem.recommendedCableAr,
+            recommendedCableEn = ecosystem.recommendedCableEn,
             recommendedPowerWatts = ecosystem.targetWatts,
             safeThermalCeilingC = ecosystem.safeThermalCeilingC,
             nominalDesignCapacityMah = designCapacity,
@@ -73,6 +74,7 @@ object DeviceHardwareProfiler {
         val ecosystemAr: String,
         val ecosystemEn: String,
         val recommendedCableAr: String,
+        val recommendedCableEn: String,
         val targetWatts: Int,
         val safeThermalCeilingC: Float
     )
@@ -89,6 +91,7 @@ object DeviceHardwareProfiler {
                     ecosystemAr = "Samsung Super Fast Charging 2.0 (USB-PD 3.0 + PPS)",
                     ecosystemEn = "Samsung SFC 2.0 • USB-PD PPS",
                     recommendedCableAr = "كابل Type-C 5A E-Marked أصلي (مقاومة < 130 mΩ) لدعم 45W PPS",
+                    recommendedCableEn = "OEM 5A E-Marked Type-C cable (< 130 mΩ) for 45W PPS",
                     targetWatts = watts,
                     safeThermalCeilingC = 41.0f
                 )
@@ -101,6 +104,7 @@ object DeviceHardwareProfiler {
                 },
                 ecosystemEn = "Xiaomi HyperCharge / Mi Turbo",
                 recommendedCableAr = "كابل Xiaomi 6A/5A منخفض المقاومة (< 120 mΩ • 20AWG)",
+                recommendedCableEn = "Low-resistance 6A/5A Type-C cable (< 120 mΩ • 20AWG)",
                 targetWatts = if (isDualCell) 67 else 33,
                 safeThermalCeilingC = 42.5f
             )
@@ -112,6 +116,7 @@ object DeviceHardwareProfiler {
                 },
                 ecosystemEn = "SUPERVOOC / USB-PD",
                 recommendedCableAr = "كابل SUPERVOOC 8A/10A سميك (مقاومة < 110 mΩ)",
+                recommendedCableEn = "Heavy-gauge 8A/10A SUPERVOOC cable (< 110 mΩ)",
                 targetWatts = if (isDualCell) 80 else 45,
                 safeThermalCeilingC = 42.5f
             )
@@ -119,6 +124,7 @@ object DeviceHardwareProfiler {
                 ecosystemAr = "Google USB-IF PD 3.0 + PPS القياسي الدقيق",
                 ecosystemEn = "USB-IF PD 3.0 + PPS",
                 recommendedCableAr = "كابل USB-IF معتمد 3A/5A (هبوط جهد ≤ 750 mV وفق IEC 62680)",
+                recommendedCableEn = "Certified USB-IF 3A/5A cable (≤ 750 mV drop per IEC 62680)",
                 targetWatts = if (formFactor == DeviceFormFactor.TABLET) 30 else 27,
                 safeThermalCeilingC = 40.5f
             )
@@ -126,6 +132,7 @@ object DeviceHardwareProfiler {
                 ecosystemAr = "Vivo FlashCharge + USB-PD PPS",
                 ecosystemEn = "Vivo FlashCharge",
                 recommendedCableAr = "كابل FlashCharge 6A (20AWG • مقاومة < 130 mΩ)",
+                recommendedCableEn = "FlashCharge 6A cable (20AWG • < 130 mΩ)",
                 targetWatts = if (isDualCell) 80 else 44,
                 safeThermalCeilingC = 42.0f
             )
@@ -133,6 +140,7 @@ object DeviceHardwareProfiler {
                 ecosystemAr = "SuperCharge (SCP / FCP) + PD",
                 ecosystemEn = "SuperCharge SCP / FCP",
                 recommendedCableAr = "كابل SuperCharge 5A/6A أصلي (مقاومة < 130 mΩ)",
+                recommendedCableEn = "OEM 5A/6A SuperCharge cable (< 130 mΩ)",
                 targetWatts = 66,
                 safeThermalCeilingC = 41.5f
             )
@@ -140,6 +148,7 @@ object DeviceHardwareProfiler {
                 ecosystemAr = "Motorola TurboPower (USB-PD 3.0 / PPS)",
                 ecosystemEn = "TurboPower USB-PD PPS",
                 recommendedCableAr = "كابل USB-C 5A 20AWG متوافق مع TurboPower",
+                recommendedCableEn = "TurboPower-rated 5A 20AWG USB-C cable",
                 targetWatts = 45,
                 safeThermalCeilingC = 41.0f
             )
@@ -147,6 +156,7 @@ object DeviceHardwareProfiler {
                 ecosystemAr = "USB-IF PD 3.0 + PPS عالية الكفاءة",
                 ecosystemEn = "USB-IF PD 3.0 PPS",
                 recommendedCableAr = "كابل USB-C 3A/5A معتمد من USB-IF (< 160 mΩ)",
+                recommendedCableEn = "USB-IF certified 3A/5A USB-C cable (< 160 mΩ)",
                 targetWatts = 30,
                 safeThermalCeilingC = 40.5f
             )
@@ -154,6 +164,7 @@ object DeviceHardwareProfiler {
                 ecosystemAr = "بروتوكول شحن الأجهزة اللوحية عالي القدرة (USB-PD 3.0)",
                 ecosystemEn = "Tablet High-Power USB-PD",
                 recommendedCableAr = "كابل USB-PD 5A E-Marker 100W (< 130 mΩ)",
+                recommendedCableEn = "100W 5A E-Marked USB-PD cable (< 130 mΩ)",
                 targetWatts = 45,
                 safeThermalCeilingC = 40.0f
             )
@@ -161,6 +172,7 @@ object DeviceHardwareProfiler {
                 ecosystemAr = "بروتوكول الشحن القياسي USB-IF PD 3.0 / BC 1.2",
                 ecosystemEn = "USB-IF PD 3.0 / BC 1.2",
                 recommendedCableAr = "كابل Type-C 3A/5A معتمد (مقاومة < 180 mΩ)",
+                recommendedCableEn = "Certified Type-C 3A/5A cable (< 180 mΩ)",
                 targetWatts = 25,
                 safeThermalCeilingC = 41.0f
             )

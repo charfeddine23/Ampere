@@ -2,10 +2,12 @@ package com.example.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-enum class ThemePresetCategory(val labelAr: String) {
-    CLASSIC_IDE("ثيمات برمجية"),
-    LIQUID_GLASS("زجاج سائل"),
-    LIGHT_COMFORT("نهاري مريح")
+enum class ThemePresetCategory(val labelAr: String, val labelEn: String) {
+    CLASSIC_IDE("ثيمات برمجية", "IDE & Code"),
+    LIQUID_GLASS("زجاج سائل", "Liquid Glass"),
+    LIGHT_COMFORT("نهاري مريح", "Light Comfort");
+
+    fun localizedLabel(isArabic: Boolean): String = if (isArabic) labelAr else labelEn
 }
 
 data class AppThemePreset(
@@ -23,7 +25,12 @@ data class AppThemePreset(
     val secondaryAccentColor: Color,
     val glowIntensity: Float = 0.85f,
     val isGlassStyle: Boolean = false
-)
+) {
+    fun localizedName(isArabic: Boolean): String {
+        if (!isArabic) return name
+        return ThemeEngineCatalog.arabicThemeNames[id] ?: name
+    }
+}
 
 object ThemeEngineCatalog {
 
@@ -951,6 +958,69 @@ object ThemeEngineCatalog {
             glowIntensity = 0.95f,
             isGlassStyle = true
         )
+    )
+
+    val arabicThemeNames: Map<String, String> = mapOf(
+        "monokai" to "مونوكاي",
+        "monokai_pro" to "مونوكاي برو",
+        "solarized_dark" to "سولارايزد داكن",
+        "solarized_light" to "سولارايزد فاتح",
+        "one_dark_pro" to "ون دارك برو",
+        "one_light" to "ون لايت",
+        "dracula" to "دراكولا",
+        "tomorrow_night_eighties" to "تومورو نايت 80",
+        "nord" to "نورد القطبي",
+        "night_owl" to "بومة الليل",
+        "bluloco_dark" to "بلولوكو داكن",
+        "ayu_dark" to "أيو داكن",
+        "ayu_mirage" to "سراب أيو",
+        "ayu_light" to "أيو فاتح",
+        "winter_is_coming" to "شتاء جليدي",
+        "zenburn" to "زينبيرن",
+        "synthwave_84" to "سينثويف 84",
+        "shades_of_purple" to "ظلال البنفسجي",
+        "laserwave" to "موجة الليزر",
+        "abyss" to "الهاوية العميقة",
+        "cobalt2" to "كوبالت 2",
+        "red" to "الأحمر الداكن",
+        "poimandres" to "بويماندرس",
+        "hopscotch" to "هوبسكوتش",
+        "gruvbox_dark" to "جروفبوكس داكن",
+        "gruvbox_light" to "جروفبوكس فاتح",
+        "oceanic_next" to "أوشيانيك نيكست",
+        "base16_eighties" to "بيس 16 الثمانيني",
+        "tomorrow_night_blue" to "ليلة الغد الزرقاء",
+        "material_oceanic" to "ماتيريال محيطي",
+        "material_palenight" to "ماتيريال ليلي باهت",
+        "material_darker" to "ماتيريال الأغمق",
+        "catppuccin_mocha" to "كاتبوتشين موكا",
+        "kanagawa" to "كاناغاوا",
+        "rose_pine" to "صنوبر وردي",
+        "github_dark" to "جيت هب داكن",
+        "github_light" to "جيت هب فاتح",
+        "panda_theme" to "ثيم الباندا",
+        "atom_one_dark" to "أتوم ون داكن",
+        "tokyo_night" to "ليلة طوكيو",
+        "obsidian_liquid_glass" to "زجاج الأوبسيديان السائل",
+        "frosted_arctic_glass" to "زجاج قطبي مصقول",
+        "cyber_neon_liquid" to "نيون سائل متوهج",
+        "smoked_quartz_glass" to "زجاج الكوارتز المدخن",
+        "midnight_velvet_glass" to "زجاج مخمل منتصف الليل",
+        "aurora_borealis_glass" to "زجاج الشفق القطبي",
+        "crystal_prism_liquid" to "منشور الكريستال السائل",
+        "deep_ocean_glass" to "زجاج أعماق المحيط",
+        "amber_mercury_glass" to "زجاج الزئبق الكهرماني",
+        "titanium_mist_glass" to "زجاج ضباب التيتانيوم",
+        "holographic_liquid_glass" to "زجاج هولوغرافي سائل",
+        "carbon_blur_glass" to "زجاج الكربون الضبابي",
+        "emerald_translucent_glass" to "زجاج الزمرد الشفاف",
+        "ultraviolet_frost_glass" to "زجاج الصقيع البنفسجي",
+        "sapphire_liquid_glass" to "زجاج الياقوت السائل",
+        "pearlescent_dark_glass" to "زجاج اللؤلؤ الداكن",
+        "ruby_refractive_glass" to "زجاج الياقوت الأحمر الانكساري",
+        "chromatic_aberration_glass" to "زجاج الانكسار اللوني",
+        "liquid_mercury_dark" to "زجاج الزئبق السائل الداكن",
+        "bioluminescent_glass" to "زجاج التوهج الحيوي"
     )
 
     fun findById(id: String?): AppThemePreset? {

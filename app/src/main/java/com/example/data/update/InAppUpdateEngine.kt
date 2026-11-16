@@ -87,24 +87,91 @@ class InAppUpdateEngine(private val context: Context) {
     private var cachedAppUpdateInfo: AppUpdateInfo? = null
     private var activityResultLauncher: ActivityResultLauncher<IntentSenderRequest>? = null
 
-    private val _uiState = MutableStateFlow(InAppUpdateUiState())
+    @Volatile
+    private var isArabicLanguage: Boolean =
+        com.example.data.local.SettingsPreferencesManager(appContext).loadThemeConfig().appLanguage.isArabic
+
+    private fun buildDefaultUiState(isAr: Boolean): InAppUpdateUiState = InAppUpdateUiState(
+        statusBadgeText = if (isAr) "تحديث جديد" else "Update",
+        headlineText = if (isAr) "تحديث جديد متاح" else "Update Available",
+        descriptionText = if (isAr) {
+            "يتوفر تحديث جديد للتطبيق جاهز للتنزيل والتثبيت المباشر من الداخل."
+        } else {
+            "A new version of Ampere Pulse is ready for direct in-app download and installation."
+        },
+        lastCheckSummary = if (isAr) {
+            "الإصدار الحالي v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})"
+        } else {
+            "Current version v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})"
+        }
+    )
+
+    private val _uiState = MutableStateFlow(buildDefaultUiState(isArabicLanguage))
     val uiState: StateFlow<InAppUpdateUiState> = _uiState.asStateFlow()
 
+    fun setLanguage(language: com.example.data.AppLanguage) {
+        val isAr = language.isArabic
+        if (isArabicLanguage == isAr) return
+        isArabicLanguage = isAr
+        val cur = _uiState.value
+        val targetLabel = cur.availableVersionName ?: cur.currentVersionName
+        val pct = (cur.downloadProgress * 100).toInt()
+        _uiState.value = when {
+            cur.isDownloading -> cur.copy(
+                headlineText = if (isAr) "جاري تحميل التحديث..." else "Downloading Update...",
+                statusBadgeText = if (isAr) "جاري التنزيل • $pct%" else "Downloading • $pct%",
+                descriptionText = if (isAr) "يتم تحميل التحديث داخل التطبيق مباشرة بدون تطبيقات خارجية..." else "Downloading the update directly inside the app...",
+                lastCheckSummary = if (isAr) "جاري التنزيل داخل التطبيق ($pct%)" else "Downloading in-app ($pct%)"
+            )
+            cur.isDownloadedReadyToInstall -> cur.copy(
+                headlineText = if (isAr) "اكتمل تنزيل التحديث" else "Update Downloaded",
+                statusBadgeText = if (cur.needsInstallPermission) {
+                    if (isAr) "يتطلب إذن التثبيت" else "Permission Required"
+                } else {
+                    if (isAr) "جاهز للتثبيت" else "Ready to Install"
+                },
+                descriptionText = if (cur.needsInstallPermission) {
+                    if (isAr) "تم التحميل بنجاح. فعّل خيار السماح بالتثبيت من هذا المصدر لإكمال التحديث." else "Download complete. Allow installing packages from this source to finish updating."
+                } else {
+                    if (isAr) "تم التحميل داخل التطبيق بنجاح وجاهز للتثبيت المباشر فوق النسخة الحالية." else "Downloaded in-app and ready to install over the current build."
+                },
+                lastCheckSummary = if (isAr) "اكتمل التنزيل • جاهز للتثبيت" else "Downloaded • Ready to install"
+            )
+            cur.isChecking -> cur.copy(
+                lastCheckSummary = if (isAr) "جاري البحث عن تحديثات..." else "Checking for updates..."
+            )
+            cur.updateAvailable -> cur.copy(
+                statusBadgeText = if (isAr) "تحديث جديد • v$targetLabel" else "New Update • v$targetLabel",
+                headlineText = if (isAr) "تحديث جديد متاح" else "Update Available",
+                descriptionText = if (isAr) "الإصدار v$targetLabel جاهز للتنزيل والتثبيت مباشرة داخل التطبيق." else "Version v$targetLabel is ready for direct in-app download and installation.",
+                lastCheckSummary = if (isAr) "يتوفر تحديث: v$targetLabel" else "Update available: v$targetLabel"
+            )
+            else -> cur.copy(
+                statusBadgeText = if (isAr) "محدّث • v${BuildConfig.VERSION_NAME}" else "Up to date • v${BuildConfig.VERSION_NAME}",
+                headlineText = if (isAr) "أنت على أحدث إصدار" else "You're Up to Date",
+                descriptionText = if (isAr) "الإصدار الحالي v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})." else "Current version v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE}).",
+                lastCheckSummary = if (isAr) "الإصدار الحالي v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})" else "Current version v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})"
+            )
+        }
+    }
+
     private val installStateListener = InstallStateUpdatedListener { state ->
+        val isAr = isArabicLanguage
         when (state.installStatus()) {
             InstallStatus.DOWNLOADING -> {
                 val downloaded = state.bytesDownloaded().coerceAtLeast(0L)
                 val total = state.totalBytesToDownload().coerceAtLeast(1L)
                 val fraction = (downloaded.toFloat() / total.toFloat()).coerceIn(0f, 1f)
+                val pct = (fraction * 100).toInt()
                 _uiState.value = _uiState.value.copy(
                     isDownloading = true,
                     isDownloadedReadyToInstall = false,
                     downloadProgress = fraction,
                     downloadedMb = downloaded / (1024f * 1024f),
                     totalMb = total / (1024f * 1024f),
-                    statusBadgeText = "جاري التنزيل • ${(fraction * 100).toInt()}%",
-                    descriptionText = "يتم تنزيل التحديث الآن داخل التطبيق...",
-                    lastCheckSummary = "جاري التنزيل داخلياً (${(fraction * 100).toInt()}%)"
+                    statusBadgeText = if (isAr) "جاري التنزيل • $pct%" else "Downloading • $pct%",
+                    descriptionText = if (isAr) "يتم تنزيل التحديث الآن داخل التطبيق..." else "Downloading update inside the app...",
+                    lastCheckSummary = if (isAr) "جاري التنزيل داخلياً ($pct%)" else "Downloading in-app ($pct%)"
                 )
             }
             InstallStatus.DOWNLOADED -> {
@@ -113,10 +180,10 @@ class InAppUpdateEngine(private val context: Context) {
                     isDownloadedReadyToInstall = true,
                     isDialogVisible = true,
                     downloadProgress = 1f,
-                    statusBadgeText = "جاهز للتثبيت",
-                    headlineText = "اكتمل تنزيل التحديث",
-                    descriptionText = "التحديث جاهز للتثبيت المباشر فوق النسخة الحالية بدون حذف التطبيق.",
-                    lastCheckSummary = "اكتمل التنزيل • جاهز للتثبيت المباشر"
+                    statusBadgeText = if (isAr) "جاهز للتثبيت" else "Ready to Install",
+                    headlineText = if (isAr) "اكتمل تنزيل التحديث" else "Update Downloaded",
+                    descriptionText = if (isAr) "التحديث جاهز للتثبيت المباشر فوق النسخة الحالية بدون حذف التطبيق." else "The update is ready to install directly over your current version.",
+                    lastCheckSummary = if (isAr) "اكتمل التنزيل • جاهز للتثبيت المباشر" else "Download complete • Ready to install"
                 )
             }
             InstallStatus.INSTALLED -> {
@@ -133,8 +200,8 @@ class InAppUpdateEngine(private val context: Context) {
                 _uiState.value = _uiState.value.copy(
                     isDownloading = false,
                     downloadProgress = 0f,
-                    statusBadgeText = "تحديث جديد",
-                    descriptionText = "تعذر إكمال التنزيل. يمكنك المحاولة مرة أخرى."
+                    statusBadgeText = if (isAr) "تحديث جديد" else "Update",
+                    descriptionText = if (isAr) "تعذر إكمال التنزيل. يمكنك المحاولة مرة أخرى." else "Could not complete download. Please try again."
                 )
             }
             else -> Unit
@@ -173,23 +240,28 @@ class InAppUpdateEngine(private val context: Context) {
     ) {
         if (_uiState.value.isChecking || _uiState.value.isDownloading) return
 
-        // If an APK was already downloaded and is awaiting permission or install, check permission state
+        val isAr = isArabicLanguage
         val existingApkPath = _uiState.value.downloadedApkPath
         if (_uiState.value.isDownloadedReadyToInstall && existingApkPath != null && File(existingApkPath).exists()) {
             val canInstall = canInstallPackages()
             _uiState.value = _uiState.value.copy(
                 needsInstallPermission = !canInstall,
-                lastCheckSummary = if (canInstall) "جاهز للتثبيت المباشر" else "فعّل إذن التثبيت لإكمال التحديث"
+                lastCheckSummary = if (canInstall) {
+                    if (isAr) "جاهز للتثبيت المباشر" else "Ready to install"
+                } else {
+                    if (isAr) "فعّل إذن التثبيت لإكمال التحديث" else "Enable install permission to continue"
+                }
             )
             return
         }
 
         _uiState.value = _uiState.value.copy(
             isChecking = true,
-            lastCheckSummary = "جاري البحث عن تحديثات..."
+            lastCheckSummary = if (isAr) "جاري البحث عن تحديثات..." else "Checking for updates..."
         )
 
         scope.launch {
+            val ar = isArabicLanguage
             val githubResult = fetchLatestGithubRelease()
             if (githubResult != null) {
                 val isNewer = compareSemanticVersions(githubResult.versionName, BuildConfig.VERSION_NAME) > 0
@@ -206,10 +278,14 @@ class InAppUpdateEngine(private val context: Context) {
                         apkFileName = githubResult.apkFileName,
                         apkSizeMb = githubResult.apkSizeMb,
                         hasPlayUpdatePayload = false,
-                        statusBadgeText = "تحديث جديد • v${githubResult.versionName}",
-                        headlineText = "تحديث جديد متاح",
-                        descriptionText = "الإصدار v${githubResult.versionName}$sizeLabel متاح للتنزيل والتثبيت المباشر داخل التطبيق.",
-                        lastCheckSummary = "يتوفر تحديث: v${githubResult.versionName}$sizeLabel"
+                        statusBadgeText = if (ar) "تحديث جديد • v${githubResult.versionName}" else "New Update • v${githubResult.versionName}",
+                        headlineText = if (ar) "تحديث جديد متاح" else "Update Available",
+                        descriptionText = if (ar) {
+                            "الإصدار v${githubResult.versionName}$sizeLabel متاح للتنزيل والتثبيت المباشر داخل التطبيق."
+                        } else {
+                            "Version v${githubResult.versionName}$sizeLabel is ready for direct in-app download and installation."
+                        },
+                        lastCheckSummary = if (ar) "يتوفر تحديث: v${githubResult.versionName}$sizeLabel" else "Update available: v${githubResult.versionName}$sizeLabel"
                     )
 
                     if (autoDownloadIfFound && githubResult.downloadUrl.contains(".apk", ignoreCase = true)) {
@@ -231,14 +307,18 @@ class InAppUpdateEngine(private val context: Context) {
                         apkSizeMb = githubResult.apkSizeMb,
                         hasPlayUpdatePayload = false,
                         isDialogVisible = openDialogImmediatelyOnManual,
-                        statusBadgeText = "محدّث • v${BuildConfig.VERSION_NAME}",
-                        headlineText = if (openDialogImmediatelyOnManual) "أنت على أحدث إصدار" else "تحديث جديد متاح",
-                        descriptionText = if (openDialogImmediatelyOnManual) {
-                            "أنت تستخدم أحدث إصدار متاح من Ampere Pulse (v${BuildConfig.VERSION_NAME})."
+                        statusBadgeText = if (ar) "محدّث • v${BuildConfig.VERSION_NAME}" else "Up to date • v${BuildConfig.VERSION_NAME}",
+                        headlineText = if (openDialogImmediatelyOnManual) {
+                            if (ar) "أنت على أحدث إصدار" else "You're Up to Date"
                         } else {
-                            "تحديث جديد متاح"
+                            if (ar) "تحديث جديد متاح" else "Update Available"
                         },
-                        lastCheckSummary = "أنت على أحدث إصدار (v${githubResult.versionName})"
+                        descriptionText = if (openDialogImmediatelyOnManual) {
+                            if (ar) "أنت تستخدم أحدث إصدار متاح من Ampere Pulse (v${BuildConfig.VERSION_NAME})." else "You are running the latest version of Ampere Pulse (v${BuildConfig.VERSION_NAME})."
+                        } else {
+                            if (ar) "تحديث جديد متاح" else "Update Available"
+                        },
+                        lastCheckSummary = if (ar) "أنت على أحدث إصدار (v${githubResult.versionName})" else "Up to date (v${githubResult.versionName})"
                     )
                     return@launch
                 }
@@ -319,6 +399,7 @@ class InAppUpdateEngine(private val context: Context) {
                     val availability = info.updateAvailability()
                     val installStatus = info.installStatus()
 
+                    val isAr = isArabicLanguage
                     when {
                         installStatus == InstallStatus.DOWNLOADED -> {
                             _uiState.value = _uiState.value.copy(
@@ -328,10 +409,10 @@ class InAppUpdateEngine(private val context: Context) {
                                 isDialogVisible = true,
                                 availableVersionCode = info.availableVersionCode(),
                                 hasPlayUpdatePayload = true,
-                                statusBadgeText = "جاهز للتثبيت",
-                                headlineText = "اكتمل تنزيل التحديث",
-                                descriptionText = "اضغط على تحديث لإكمال التثبيت وإعادة تشغيل التطبيق.",
-                                lastCheckSummary = "تحديث جاهز للتثبيت (Build ${info.availableVersionCode()})"
+                                statusBadgeText = if (isAr) "جاهز للتثبيت" else "Ready to Install",
+                                headlineText = if (isAr) "اكتمل تنزيل التحديث" else "Update Downloaded",
+                                descriptionText = if (isAr) "اضغط على تحديث لإكمال التثبيت وإعادة تشغيل التطبيق." else "Tap update to finish installing and restart the app.",
+                                lastCheckSummary = if (isAr) "تحديث جاهز للتثبيت (Build ${info.availableVersionCode()})" else "Ready to install (Build ${info.availableVersionCode()})"
                             )
                         }
                         availability == UpdateAvailability.UPDATE_AVAILABLE -> {
@@ -342,10 +423,10 @@ class InAppUpdateEngine(private val context: Context) {
                                 isDialogVisible = autoShowOnAvailable || openDialogImmediatelyOnManual,
                                 availableVersionCode = verCode,
                                 hasPlayUpdatePayload = true,
-                                statusBadgeText = "تحديث جديد • Build $verCode",
-                                headlineText = "تحديث جديد متاح",
-                                descriptionText = "يتوفر تحديث جديد متاح للتنزيل من داخل التطبيق.",
-                                lastCheckSummary = "يتوفر تحديث جديد (Build $verCode)"
+                                statusBadgeText = if (isAr) "تحديث جديد • Build $verCode" else "New Update • Build $verCode",
+                                headlineText = if (isAr) "تحديث جديد متاح" else "Update Available",
+                                descriptionText = if (isAr) "يتوفر تحديث جديد متاح للتنزيل من داخل التطبيق." else "A new update is ready to download inside the app.",
+                                lastCheckSummary = if (isAr) "يتوفر تحديث جديد (Build $verCode)" else "New update available (Build $verCode)"
                             )
                         }
                         else -> {
@@ -355,56 +436,62 @@ class InAppUpdateEngine(private val context: Context) {
                                 hasPlayUpdatePayload = false,
                                 downloadUrl = GITHUB_LATEST_RELEASE_URL,
                                 isDialogVisible = openDialogImmediatelyOnManual,
-                                statusBadgeText = "محدّث • v${BuildConfig.VERSION_NAME}",
-                                headlineText = if (openDialogImmediatelyOnManual) "أنت على أحدث إصدار" else "تحديث جديد متاح",
-                                descriptionText = "الإصدار الحالي v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE}).",
-                                lastCheckSummary = "الإصدار الحالي v${BuildConfig.VERSION_NAME} • محدّث"
+                                statusBadgeText = if (isAr) "محدّث • v${BuildConfig.VERSION_NAME}" else "Up to date • v${BuildConfig.VERSION_NAME}",
+                                headlineText = if (openDialogImmediatelyOnManual) {
+                                    if (isAr) "أنت على أحدث إصدار" else "You're Up to Date"
+                                } else {
+                                    if (isAr) "تحديث جديد متاح" else "Update Available"
+                                },
+                                descriptionText = if (isAr) "الإصدار الحالي v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})." else "Current version v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE}).",
+                                lastCheckSummary = if (isAr) "الإصدار الحالي v${BuildConfig.VERSION_NAME} • محدّث" else "Current v${BuildConfig.VERSION_NAME} • Up to date"
                             )
                         }
                     }
                 }
                 .addOnFailureListener {
                     cachedAppUpdateInfo = null
+                    val isAr = isArabicLanguage
                     _uiState.value = _uiState.value.copy(
                         isChecking = false,
                         hasPlayUpdatePayload = false,
                         downloadUrl = GITHUB_LATEST_RELEASE_URL,
                         isDialogVisible = openDialogImmediatelyOnManual,
                         statusBadgeText = "v${BuildConfig.VERSION_NAME} • GitHub Releases",
-                        headlineText = "التحديث التلقائي",
-                        descriptionText = "تعذر الاتصال بخادم التحديثات الآن. تأكد من الاتصال بالإنترنت وأعد المحاولة.",
-                        lastCheckSummary = "تعذر الاتصال • الإصدار الحالي v${BuildConfig.VERSION_NAME}"
+                        headlineText = if (isAr) "التحديث التلقائي" else "Auto Update",
+                        descriptionText = if (isAr) "تعذر الاتصال بخادم التحديثات الآن. تأكد من الاتصال بالإنترنت وأعد المحاولة." else "Unable to reach update server right now. Check your connection and try again.",
+                        lastCheckSummary = if (isAr) "تعذر الاتصال • الإصدار الحالي v${BuildConfig.VERSION_NAME}" else "Connection failed • Current v${BuildConfig.VERSION_NAME}"
                     )
                 }
         } catch (_: Exception) {
             _uiState.value = _uiState.value.copy(
                 isChecking = false,
                 downloadUrl = GITHUB_LATEST_RELEASE_URL,
-                lastCheckSummary = "الإصدار الحالي v${BuildConfig.VERSION_NAME}"
+                lastCheckSummary = if (isArabicLanguage) "الإصدار الحالي v${BuildConfig.VERSION_NAME}" else "Current version v${BuildConfig.VERSION_NAME}"
             )
         }
     }
 
     fun openUpdateDialogPreview() {
         val current = _uiState.value
+        val isAr = isArabicLanguage
         val targetLabel = current.availableVersionName ?: current.currentVersionName
         _uiState.value = current.copy(
             isDialogVisible = true,
             statusBadgeText = when {
-                current.isDownloadedReadyToInstall -> "جاهز للتثبيت"
-                current.isDownloading -> "جاري التنزيل • ${(current.downloadProgress * 100).toInt()}%"
-                current.updateAvailable -> "تحديث جديد • v$targetLabel"
-                else -> "تحديث جديد • v$targetLabel"
+                current.isDownloadedReadyToInstall -> if (isAr) "جاهز للتثبيت" else "Ready to Install"
+                current.isDownloading -> if (isAr) "جاري التنزيل • ${(current.downloadProgress * 100).toInt()}%" else "Downloading • ${(current.downloadProgress * 100).toInt()}%"
+                current.updateAvailable -> if (isAr) "تحديث جديد • v$targetLabel" else "New Update • v$targetLabel"
+                else -> if (isAr) "تحديث جديد • v$targetLabel" else "Update • v$targetLabel"
             },
             headlineText = when {
-                current.isDownloadedReadyToInstall -> "اكتمل تنزيل التحديث"
-                current.updateAvailable -> "تحديث جديد متاح"
-                else -> "تحديث جديد متاح"
+                current.isDownloadedReadyToInstall -> if (isAr) "اكتمل تنزيل التحديث" else "Update Downloaded"
+                current.updateAvailable -> if (isAr) "تحديث جديد متاح" else "Update Available"
+                else -> if (isAr) "تحديث جديد متاح" else "Check for Updates"
             },
             descriptionText = when {
-                current.isDownloadedReadyToInstall -> "تم التنزيل داخل التطبيق بنجاح وجاهز للتثبيت المباشر."
-                current.updateAvailable -> "الإصدار v$targetLabel جاهز للتنزيل والتثبيت مباشرة داخل التطبيق."
-                else -> "اضغط تحديث لفحص وتحميل أحدث نسخة مباشرة داخل التطبيق دون مغادرته."
+                current.isDownloadedReadyToInstall -> if (isAr) "تم التنزيل داخل التطبيق بنجاح وجاهز للتثبيت المباشر." else "Downloaded inside the app and ready to install directly."
+                current.updateAvailable -> if (isAr) "الإصدار v$targetLabel جاهز للتنزيل والتثبيت مباشرة داخل التطبيق." else "Version v$targetLabel is ready to download and install inside the app."
+                else -> if (isAr) "اضغط تحديث لفحص وتحميل أحدث نسخة مباشرة داخل التطبيق دون مغادرته." else "Tap Update to check and download the latest release directly inside the app."
             }
         )
     }
@@ -479,6 +566,7 @@ class InAppUpdateEngine(private val context: Context) {
             val targetFile = File(updatesDir, safeFileName)
             val tempFile = File(updatesDir, "$safeFileName.part")
 
+            val isArStart = isArabicLanguage
             _uiState.value = _uiState.value.copy(
                 isDownloading = true,
                 isDownloadedReadyToInstall = false,
@@ -486,10 +574,10 @@ class InAppUpdateEngine(private val context: Context) {
                 downloadProgress = 0f,
                 downloadedMb = 0f,
                 totalMb = expectedSizeMb ?: 0f,
-                headlineText = "جاري تحميل التحديث...",
-                statusBadgeText = "تنزيل داخلي • 0%",
-                descriptionText = "يتم تحميل التحديث داخل التطبيق مباشرة بدون تطبيقات خارجية...",
-                lastCheckSummary = "جاري التنزيل داخل التطبيق (0%)"
+                headlineText = if (isArStart) "جاري تحميل التحديث..." else "Downloading Update...",
+                statusBadgeText = if (isArStart) "تنزيل داخلي • 0%" else "In-App Download • 0%",
+                descriptionText = if (isArStart) "يتم تحميل التحديث داخل التطبيق مباشرة بدون تطبيقات خارجية..." else "Downloading update directly inside the app...",
+                lastCheckSummary = if (isArStart) "جاري التنزيل داخل التطبيق (0%)" else "Downloading in-app (0%)"
             )
 
             try {
@@ -528,12 +616,17 @@ class InAppUpdateEngine(private val context: Context) {
                                     } else 0.5f
                                     val downloadedMbVal = bytesReadTotal / (1024f * 1024f)
                                     val pct = (fraction * 100).toInt()
+                                    val arLoop = isArabicLanguage
                                     _uiState.value = _uiState.value.copy(
                                         downloadProgress = fraction,
                                         downloadedMb = downloadedMbVal,
                                         totalMb = totalMbVal,
-                                        statusBadgeText = "تنزيل داخلي • $pct%",
-                                        lastCheckSummary = "جاري التحميل داخلياً: $pct% (${String.format(Locale.US, "%.1f", downloadedMbVal)} MB)"
+                                        statusBadgeText = if (arLoop) "تنزيل داخلي • $pct%" else "In-App Download • $pct%",
+                                        lastCheckSummary = if (arLoop) {
+                                            "جاري التحميل داخلياً: $pct% (${String.format(Locale.US, "%.1f", downloadedMbVal)} MB)"
+                                        } else {
+                                            "Downloading: $pct% (${String.format(Locale.US, "%.1f", downloadedMbVal)} MB)"
+                                        }
                                     )
                                 }
                             }
@@ -549,20 +642,29 @@ class InAppUpdateEngine(private val context: Context) {
                 }
 
                 val canInstall = canInstallPackages()
+                val arDone = isArabicLanguage
                 _uiState.value = _uiState.value.copy(
                     isDownloading = false,
                     isDownloadedReadyToInstall = true,
                     needsInstallPermission = !canInstall,
                     downloadProgress = 1f,
                     downloadedApkPath = targetFile.absolutePath,
-                    headlineText = "اكتمل تنزيل التحديث",
-                    statusBadgeText = if (canInstall) "جاهز للتثبيت المباشر" else "يتطلب إذن التثبيت",
-                    descriptionText = if (canInstall) {
-                        "تم تحميل التحديث داخل التطبيق بنجاح وجاهز للتثبيت مباشرة فوق النسخة الحالية."
+                    headlineText = if (arDone) "اكتمل تنزيل التحديث" else "Update Downloaded",
+                    statusBadgeText = if (canInstall) {
+                        if (arDone) "جاهز للتثبيت المباشر" else "Ready to Install"
                     } else {
-                        "تم التحميل بنجاح. فعّل خيار السماح بالتثبيت من هذا المصدر لإكمال التحديث."
+                        if (arDone) "يتطلب إذن التثبيت" else "Permission Required"
                     },
-                    lastCheckSummary = if (canInstall) "اكتمل التنزيل • جاهز للتثبيت المباشر" else "تم التنزيل • فعّل إذن التثبيت"
+                    descriptionText = if (canInstall) {
+                        if (arDone) "تم تحميل التحديث داخل التطبيق بنجاح وجاهز للتثبيت مباشرة فوق النسخة الحالية." else "Update downloaded in-app and ready to install directly over the current version."
+                    } else {
+                        if (arDone) "تم التحميل بنجاح. فعّل خيار السماح بالتثبيت من هذا المصدر لإكمال التحديث." else "Download complete. Allow installing packages from this source to finish."
+                    },
+                    lastCheckSummary = if (canInstall) {
+                        if (arDone) "اكتمل التنزيل • جاهز للتثبيت المباشر" else "Downloaded • Ready to install"
+                    } else {
+                        if (arDone) "تم التنزيل • فعّل إذن التثبيت" else "Downloaded • Enable install permission"
+                    }
                 )
 
                 withContext(Dispatchers.Main) {
@@ -573,13 +675,14 @@ class InAppUpdateEngine(private val context: Context) {
                 throw ce
             } catch (_: Exception) {
                 runCatching { tempFile.delete() }
+                val arErr = isArabicLanguage
                 _uiState.value = _uiState.value.copy(
                     isDownloading = false,
                     downloadProgress = 0f,
-                    headlineText = "تعذر تحميل التحديث",
-                    statusBadgeText = "فشل التنزيل",
-                    descriptionText = "تعذر تنزيل الحزمة داخل التطبيق الآن. تأكد من استقرار الشبكة وحاول مرة أخرى.",
-                    lastCheckSummary = "تعذر تنزيل التحديث • أعد المحاولة"
+                    headlineText = if (arErr) "تعذر تحميل التحديث" else "Download Failed",
+                    statusBadgeText = if (arErr) "فشل التنزيل" else "Failed",
+                    descriptionText = if (arErr) "تعذر تنزيل الحزمة داخل التطبيق الآن. تأكد من استقرار الشبكة وحاول مرة أخرى." else "Could not download the package inside the app. Check your network connection and retry.",
+                    lastCheckSummary = if (arErr) "تعذر تنزيل التحديث • أعد المحاولة" else "Download failed • Retry"
                 )
             }
         }
@@ -588,13 +691,14 @@ class InAppUpdateEngine(private val context: Context) {
     fun cancelInAppDownload() {
         activeDownloadJob?.cancel()
         activeDownloadJob = null
+        val isAr = isArabicLanguage
         _uiState.value = _uiState.value.copy(
             isDownloading = false,
             downloadProgress = 0f,
-            headlineText = "تحديث جديد متاح",
-            statusBadgeText = "تحديث جديد",
-            descriptionText = "تم إيقاف التنزيل مؤقتاً. يمكنك استئنافه في أي وقت.",
-            lastCheckSummary = "تم إلغاء التنزيل"
+            headlineText = if (isAr) "تحديث جديد متاح" else "Update Available",
+            statusBadgeText = if (isAr) "تحديث جديد" else "Update",
+            descriptionText = if (isAr) "تم إيقاف التنزيل مؤقتاً. يمكنك استئنافه في أي وقت." else "Download paused. You can resume at any time.",
+            lastCheckSummary = if (isAr) "تم إلغاء التنزيل" else "Download canceled"
         )
     }
 
@@ -675,7 +779,11 @@ class InAppUpdateEngine(private val context: Context) {
         if (resultCode != android.app.Activity.RESULT_OK) {
             _uiState.value = _uiState.value.copy(
                 isDownloading = false,
-                lastCheckSummary = "تم تأجيل التحديث — يمكنك التحديث في أي وقت من الإعدادات"
+                lastCheckSummary = if (isArabicLanguage) {
+                    "تم تأجيل التحديث — يمكنك التحديث في أي وقت من الإعدادات"
+                } else {
+                    "Update postponed — you can update anytime from Settings"
+                }
             )
         }
     }

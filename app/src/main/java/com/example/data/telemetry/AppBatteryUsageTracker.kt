@@ -33,16 +33,28 @@ data class AppBatteryConsumption(
     val isHighDrain: Boolean,
     val isSystemApp: Boolean
 ) {
-    fun formattedDurationAr(): String {
+    fun formattedDurationAr(): String = formattedDuration(isArabic = true)
+
+    fun formattedDuration(isArabic: Boolean): String {
         val totalMinutes = (foregroundTimeMs / 60_000L).toInt()
         val hours = totalMinutes / 60
         val minutes = totalMinutes % 60
-        return when {
-            hours > 0 && minutes > 0 -> "${hours} س ${minutes} د"
-            hours > 0 -> "${hours} ساعة"
-            minutes > 0 -> "${minutes} دقيقة"
-            foregroundTimeMs >= 1_000L -> "${(foregroundTimeMs / 1000L).toInt()} ثانية"
-            else -> "< 1 ثانية"
+        return if (isArabic) {
+            when {
+                hours > 0 && minutes > 0 -> "${hours} س ${minutes} د"
+                hours > 0 -> "${hours} ساعة"
+                minutes > 0 -> "${minutes} دقيقة"
+                foregroundTimeMs >= 1_000L -> "${(foregroundTimeMs / 1000L).toInt()} ثانية"
+                else -> "< 1 ثانية"
+            }
+        } else {
+            when {
+                hours > 0 && minutes > 0 -> "${hours}h ${minutes}m"
+                hours > 0 -> "${hours} hr"
+                minutes > 0 -> "${minutes} min"
+                foregroundTimeMs >= 1_000L -> "${(foregroundTimeMs / 1000L).toInt()}s"
+                else -> "< 1s"
+            }
         }
     }
 }

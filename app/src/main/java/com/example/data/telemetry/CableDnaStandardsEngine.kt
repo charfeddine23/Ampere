@@ -29,7 +29,8 @@ object CableDnaStandardsEngine {
         dynamicDeltaImpedanceMilliOhms: Int?,
         currentRipplePercent: Float,
         tierOverride: CableDnaTier? = null,
-        timestampMs: Long = System.currentTimeMillis()
+        timestampMs: Long = System.currentTimeMillis(),
+        isArabic: Boolean = true
     ): CableDiagnosticResult {
         val currentV = telemetry.voltageMv.coerceAtLeast(3000)
         val rawCurrentI = abs(telemetry.currentMa)
@@ -38,7 +39,11 @@ object CableDnaStandardsEngine {
             rawCurrentI > 180
 
         val isDualCell = currentV > 6000 || deviceProfile.isDualCellSuspected
-        val topologyLabel = if (isDualCell) "2S Dual-Cell (ثنائي الخلية)" else "1S Single-Cell (خلية مفردة)"
+        val topologyLabel = if (isArabic) {
+            if (isDualCell) "ثنائي الخلية (2S)" else "خلية مفردة (1S)"
+        } else {
+            if (isDualCell) "2S Dual-Cell" else "1S Single-Cell"
+        }
 
         if (!isPlugged && tierOverride == null) {
             return CableDiagnosticResult(
@@ -49,16 +54,24 @@ object CableDnaStandardsEngine {
                 maxWattageW = 0.0f,
                 qualityScore = 100,
                 tier = CableDnaTier.LEGENDARY_ORIGINAL,
-                usbProtocol = "Standby • ${deviceProfile.chargingEcosystemEn}",
+                usbProtocol = if (isArabic) {
+                    "وضع الاستعداد • ${deviceProfile.chargingEcosystemEn}"
+                } else {
+                    "Standby • ${deviceProfile.chargingEcosystemEn}"
+                },
                 pinIntegrityPercent = 100,
                 thermalDissipationMilliWatts = 0,
-                estimatedAwg = "بانتظار التوصيل",
+                estimatedAwg = if (isArabic) "بانتظار التوصيل" else "Awaiting Connection",
                 lineEfficiencyPercent = 100.0f,
-                standardCompliance = "IEC 62680 • USB-IF Ready",
-                chargingPhase = "Standby (غير موصول)",
-                recommendedCableSpec = deviceProfile.recommendedCableAr,
+                standardCompliance = if (isArabic) "جاهز • معيار IEC 62680 و USB-IF" else "IEC 62680 • USB-IF Ready",
+                chargingPhase = if (isArabic) "وضع الاستعداد (غير موصول)" else "Standby (Unplugged)",
+                recommendedCableSpec = deviceProfile.localizedRecommendedCable(isArabic),
                 cellTopology = topologyLabel,
-                tailoredDeviceNote = "تمت معايرة القياس لجهاز ${deviceProfile.brand} ${deviceProfile.model} (${deviceProfile.chargingEcosystemEn}).",
+                tailoredDeviceNote = if (isArabic) {
+                    "تمت معايرة القياس لجهاز ${deviceProfile.brand} ${deviceProfile.model} (${deviceProfile.chargingEcosystemEn})."
+                } else {
+                    "Calibrated for ${deviceProfile.brand} ${deviceProfile.model} (${deviceProfile.chargingEcosystemEn})."
+                },
                 scanTimestamp = timestampMs
             )
         }
@@ -77,12 +90,22 @@ object CableDnaStandardsEngine {
 
         // 2. Determine charging phase (CC Fast, CV Taper >= 80%, USB Host, Wireless)
         val isCvTaper = telemetry.percentage >= 82 && telemetry.plugType == ChargePlug.AC
-        val chargingPhase = when {
-            telemetry.plugType == ChargePlug.WIRELESS -> "Wireless Inductive Coil (شحن لاسلكي)"
-            telemetry.plugType == ChargePlug.USB -> "USB Host Rail (500–900mA قياسي)"
-            isCvTaper -> "CV Taper Phase (امتلاء >80% - خفض تيار آمن)"
-            watts >= 18f -> "CC High-Power Fast Charge (شحن سريع مباشر)"
-            else -> "CC Standard Charge (تيار مستقر)"
+        val chargingPhase = if (isArabic) {
+            when {
+                telemetry.plugType == ChargePlug.WIRELESS -> "ملف الشحن اللاسلكي (Qi)"
+                telemetry.plugType == ChargePlug.USB -> "منفذ USB قياسي (500–900mA)"
+                isCvTaper -> "مرحلة الامتلاء (CV Taper >80%)"
+                watts >= 18f -> "شحن سريع مباشر عالي القدرة (CC)"
+                else -> "شحن قياسي بتيار مستقر (CC)"
+            }
+        } else {
+            when {
+                telemetry.plugType == ChargePlug.WIRELESS -> "Wireless Inductive Coil (Qi)"
+                telemetry.plugType == ChargePlug.USB -> "USB Host Rail (500–900mA Standard)"
+                isCvTaper -> "CV Taper Phase (>80% Safe Step-Down)"
+                watts >= 18f -> "CC High-Power Fast Charge"
+                else -> "CC Standard Steady Charge"
+            }
         }
 
         // 3. Compute loop resistance (mOhm) using polarization delta & dynamic dV/dI impedance
@@ -134,36 +157,73 @@ object CableDnaStandardsEngine {
         }
 
         // 7. Wire Gauge AWG & USB-IF Standard Compliance
-        val estimatedAwg = when {
-            telemetry.plugType == ChargePlug.WIRELESS -> "Qi Inductive Coil"
-            adjustedResistance <= 115 -> "20 AWG E-Marked (240W / 5A)"
-            adjustedResistance <= 190 -> "22 AWG Fast-PD (100W / 5A)"
-            adjustedResistance <= 290 -> "24 AWG Standard (60W / 3A)"
-            adjustedResistance <= 410 -> "26 AWG Legacy (15W–18W)"
-            else -> "28 AWG+ High-Loss (خطر هبوط جهد)"
+        val estimatedAwg = if (isArabic) {
+            when {
+                telemetry.plugType == ChargePlug.WIRELESS -> "ملف شحن لاسلكي Qi"
+                adjustedResistance <= 115 -> "20 AWG E-Marked (240W / 5A)"
+                adjustedResistance <= 190 -> "22 AWG شحن سريع (100W / 5A)"
+                adjustedResistance <= 290 -> "24 AWG قياسي (60W / 3A)"
+                adjustedResistance <= 410 -> "26 AWG تقليدي (15W–18W)"
+                else -> "28 AWG+ فاقد عالٍ (هبوط جهد)"
+            }
+        } else {
+            when {
+                telemetry.plugType == ChargePlug.WIRELESS -> "Qi Inductive Coil"
+                adjustedResistance <= 115 -> "20 AWG E-Marked (240W / 5A)"
+                adjustedResistance <= 190 -> "22 AWG Fast-PD (100W / 5A)"
+                adjustedResistance <= 290 -> "24 AWG Standard (60W / 3A)"
+                adjustedResistance <= 410 -> "26 AWG Legacy (15W–18W)"
+                else -> "28 AWG+ High-Loss (Voltage Drop)"
+            }
         }
 
-        val standardCompliance = when {
-            telemetry.plugType == ChargePlug.WIRELESS -> "Qi Wireless Certified Path"
-            estimatedCableDropMv <= 500 && adjustedResistance <= 180 ->
-                "IEC 62680 PASS (≤500mV VBUS)"
-            estimatedCableDropMv <= 750 && adjustedResistance <= 280 ->
-                "USB-IF PASS (≤750mV Loop)"
-            estimatedCableDropMv <= 900 && adjustedResistance <= 390 ->
-                "USB-IF THROTTLED (فقد جهد متوسط)"
-            else ->
-                "IEC 62680 FAIL (>750mV Drop)"
+        val standardCompliance = if (isArabic) {
+            when {
+                telemetry.plugType == ChargePlug.WIRELESS -> "مسار شحن لاسلكي Qi معتمد"
+                estimatedCableDropMv <= 500 && adjustedResistance <= 180 ->
+                    "اجتياز IEC 62680 (≤500mV VBUS)"
+                estimatedCableDropMv <= 750 && adjustedResistance <= 280 ->
+                    "اجتياز USB-IF (≤750mV Loop)"
+                estimatedCableDropMv <= 900 && adjustedResistance <= 390 ->
+                    "تقييد USB-IF (فقد جهد متوسط)"
+                else ->
+                    "إخفاق IEC 62680 (>750mV هبوط)"
+            }
+        } else {
+            when {
+                telemetry.plugType == ChargePlug.WIRELESS -> "Qi Wireless Certified Path"
+                estimatedCableDropMv <= 500 && adjustedResistance <= 180 ->
+                    "IEC 62680 PASS (≤500mV VBUS)"
+                estimatedCableDropMv <= 750 && adjustedResistance <= 280 ->
+                    "USB-IF PASS (≤750mV Loop)"
+                estimatedCableDropMv <= 900 && adjustedResistance <= 390 ->
+                    "USB-IF THROTTLED (Moderate Drop)"
+                else ->
+                    "IEC 62680 FAIL (>750mV Drop)"
+            }
         }
 
         // 8. Negotiated Protocol Classification
-        val usbProtocol = when {
-            telemetry.plugType == ChargePlug.WIRELESS ->
-                if (watts >= 12f) "Qi Fast Wireless (EPP)" else "Qi Standard Wireless (BPP)"
-            telemetry.plugType == ChargePlug.USB -> "USB 2.0 / 3.x Host Port"
-            watts >= 36f -> "${deviceProfile.chargingEcosystemEn} (High-W)"
-            watts >= 20f -> "USB-PD 3.0 / PPS Fast"
-            watts >= 12f -> "USB-PD / QC 3.0 (15W+)"
-            else -> "USB BC 1.2 (5V Standard)"
+        val usbProtocol = if (isArabic) {
+            when {
+                telemetry.plugType == ChargePlug.WIRELESS ->
+                    if (watts >= 12f) "شحن لاسلكي سريع Qi (EPP)" else "شحن لاسلكي قياسي Qi (BPP)"
+                telemetry.plugType == ChargePlug.USB -> "منفذ بيانات USB 2.0 / 3.x"
+                watts >= 36f -> "${deviceProfile.chargingEcosystemEn} (قدرة عالية)"
+                watts >= 20f -> "شحن سريع USB-PD 3.0 / PPS"
+                watts >= 12f -> "شحن سريع USB-PD / QC 3.0"
+                else -> "USB BC 1.2 (5V قياسي)"
+            }
+        } else {
+            when {
+                telemetry.plugType == ChargePlug.WIRELESS ->
+                    if (watts >= 12f) "Qi Fast Wireless (EPP)" else "Qi Standard Wireless (BPP)"
+                telemetry.plugType == ChargePlug.USB -> "USB 2.0 / 3.x Host Port"
+                watts >= 36f -> "${deviceProfile.chargingEcosystemEn} (High-W)"
+                watts >= 20f -> "USB-PD 3.0 / PPS Fast"
+                watts >= 12f -> "USB-PD / QC 3.0 (15W+)"
+                else -> "USB BC 1.2 (5V Standard)"
+            }
         }
 
         // 9. Continuous Quality Score (0..100), Pin Integrity (%), Line Efficiency (%)
@@ -198,7 +258,8 @@ object CableDnaStandardsEngine {
             resistance = adjustedResistance,
             watts = watts,
             isCvTaper = isCvTaper,
-            overThermal = overThermalCeiling
+            overThermal = overThermalCeiling,
+            isArabic = isArabic
         )
 
         return CableDiagnosticResult(
@@ -216,7 +277,7 @@ object CableDnaStandardsEngine {
             lineEfficiencyPercent = ((lineEfficiency * 10f).roundToInt() / 10f),
             standardCompliance = standardCompliance,
             chargingPhase = chargingPhase,
-            recommendedCableSpec = deviceProfile.recommendedCableAr,
+            recommendedCableSpec = deviceProfile.localizedRecommendedCable(isArabic),
             cellTopology = topologyLabel,
             tailoredDeviceNote = tailoredNote,
             scanTimestamp = timestampMs
@@ -239,14 +300,25 @@ object CableDnaStandardsEngine {
         resistance: Int,
         watts: Float,
         isCvTaper: Boolean,
-        overThermal: Boolean
+        overThermal: Boolean,
+        isArabic: Boolean
     ): String {
-        return when {
-            overThermal -> "حرارة البطارية تجاوزت الحد الآمن لجهاز ${profile.model} (${profile.safeThermalCeilingC}°C) — يخفض النظام الشحن لحماية الخلايا."
-            isCvTaper -> "البطارية في مرحلة الامتلاء النهائي (CV Taper)؛ خفض التيار الآن سلوك طبيعي من متحكم شحن ${profile.brand}."
-            resistance <= 130 -> "توافق ممتاز مع ${profile.chargingEcosystemEn}: المسار يحافظ على كفاءة نقل عالية بقدرة ${String.format("%.1f", watts)}W."
-            resistance <= 230 -> "كابل جيد؛ قد لا يبلغ الذروة القصوى (${profile.recommendedPowerWatts}W) لجهاز ${profile.model} لكنه آمن ومطابق لـ USB-IF."
-            else -> "مقاومة مرتفعة تحدّ من قدرة شحن ${profile.brand} ${profile.model}؛ يُنصح باستخدام: ${profile.recommendedCableAr}."
+        return if (isArabic) {
+            when {
+                overThermal -> "حرارة البطارية تجاوزت الحد الآمن لجهاز ${profile.model} (${profile.safeThermalCeilingC}°C) — يخفض النظام الشحن لحماية الخلايا."
+                isCvTaper -> "البطارية في مرحلة الامتلاء النهائي (CV Taper)؛ خفض التيار الآن سلوك طبيعي من متحكم شحن ${profile.brand}."
+                resistance <= 130 -> "توافق ممتاز مع ${profile.chargingEcosystemEn}: المسار يحافظ على كفاءة نقل عالية بقدرة ${String.format("%.1f", watts)}W."
+                resistance <= 230 -> "كابل جيد؛ قد لا يبلغ الذروة القصوى (${profile.recommendedPowerWatts}W) لجهاز ${profile.model} لكنه آمن ومطابق لـ USB-IF."
+                else -> "مقاومة مرتفعة تحدّ من قدرة شحن ${profile.brand} ${profile.model}؛ يُنصح باستخدام: ${profile.recommendedCableAr}."
+            }
+        } else {
+            when {
+                overThermal -> "Battery temperature exceeded the safe ceiling for ${profile.model} (${profile.safeThermalCeilingC}°C) — charging is throttled to protect the cells."
+                isCvTaper -> "Cell is in final Constant-Voltage Taper; reduced current is normal behavior by the ${profile.brand} PMIC."
+                resistance <= 130 -> "Optimal match with ${profile.chargingEcosystemEn}: line maintains high power efficiency at ${String.format("%.1f", watts)}W."
+                resistance <= 230 -> "Solid cable; may not hit ${profile.model}'s full ${profile.recommendedPowerWatts}W peak, yet stays safe and USB-IF compliant."
+                else -> "Elevated resistance is limiting ${profile.brand} ${profile.model} charge rate; recommended: ${profile.recommendedCableEn}."
+            }
         }
     }
 }

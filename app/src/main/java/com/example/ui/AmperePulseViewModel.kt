@@ -78,6 +78,8 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
         com.example.audio.CyberSoundscapeEngine.isEnabled = _themeConfig.value.soundEffectsEnabled
         com.example.audio.CyberHapticsEngine.isEnabled = _themeConfig.value.hapticFeedbackEnabled
         repository.setProModeActive(_themeConfig.value.isProMode)
+        repository.setLanguage(_themeConfig.value.appLanguage)
+        updateEngine.setLanguage(_themeConfig.value.appLanguage)
         repository.updateCurrentCalibration(
             multiplier = _themeConfig.value.currentMultiplier,
             zeroOffsetMa = _themeConfig.value.currentZeroOffsetMa
@@ -177,6 +179,16 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
         _themeConfig.value = sanitized
         prefsManager.saveThemeConfig(sanitized)
         repository.setProModeActive(sanitized.isProMode)
+        if (prev.appLanguage != sanitized.appLanguage) {
+            repository.setLanguage(sanitized.appLanguage)
+            updateEngine.setLanguage(sanitized.appLanguage)
+            viewModelScope.launch {
+                com.example.widget.WidgetTelemetryUpdater.forceRefresh(
+                    context = getApplication(),
+                    isArabic = sanitized.appLanguage.isArabic
+                )
+            }
+        }
         com.example.audio.CyberSoundscapeEngine.isEnabled = sanitized.soundEffectsEnabled
         com.example.audio.CyberHapticsEngine.isEnabled = sanitized.hapticFeedbackEnabled
         repository.updateCurrentCalibration(
@@ -211,10 +223,15 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
         repository.setProModeActive(false)
         com.example.audio.CyberHapticsEngine.triggerTactileTick(getApplication())
         com.example.audio.CyberSoundscapeEngine.playCryoChime()
+        val isAr = updated.appLanguage.isArabic
         repository.addManualSessionLog(
-            title = "Theme Engine: ${preset.name}",
-            desc = "Applied ${preset.name} (${preset.category.labelAr}) across Ampere Pulse.",
-            statTag = "THEME",
+            title = if (isAr) "محرك الثيمات: ${preset.localizedName(true)}" else "Theme Engine: ${preset.localizedName(false)}",
+            desc = if (isAr) {
+                "تم تطبيق ثيم ${preset.localizedName(true)} (${preset.category.localizedLabel(true)}) في Ampere Pulse."
+            } else {
+                "Applied ${preset.localizedName(false)} (${preset.category.localizedLabel(false)}) across Ampere Pulse."
+            },
+            statTag = if (isAr) "ثيم" else "THEME",
             type = "check"
         )
     }
@@ -228,10 +245,11 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
         _themeConfig.value = updated
         prefsManager.saveThemeConfig(updated)
         com.example.audio.CyberHapticsEngine.triggerTactileTick(getApplication())
+        val isAr = updated.appLanguage.isArabic
         repository.addManualSessionLog(
-            title = "Theme Reset",
-            desc = "Restored default adaptive Eye-Comfort theme.",
-            statTag = "THEME",
+            title = if (isAr) "إعادة ضبط الثيم" else "Theme Reset",
+            desc = if (isAr) "تمت استعادة المظهر المريح الافتراضي." else "Restored default adaptive Eye-Comfort theme.",
+            statTag = if (isAr) "ثيم" else "THEME",
             type = "check"
         )
     }
@@ -260,10 +278,15 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
             prefsManager.saveThemeConfig(updated)
             com.example.audio.CyberHapticsEngine.triggerBenchmarkSuccess(getApplication())
             com.example.audio.CyberSoundscapeEngine.playCryoChime()
+            val isAr = updated.appLanguage.isArabic
             repository.addManualSessionLog(
-                title = "Premium Tier Unlocked",
-                desc = "Activated lifetime PREMIUM access via Redeem Code ($PREMIUM_REDEEM_CODE).",
-                statTag = "PREMIUM",
+                title = if (isAr) "تم تفعيل النسخة المميزة" else "Premium Tier Unlocked",
+                desc = if (isAr) {
+                    "تم تفعيل صلاحية بريميوم مدى الحياة عبر الرمز ($PREMIUM_REDEEM_CODE)."
+                } else {
+                    "Activated lifetime PREMIUM access via Redeem Code ($PREMIUM_REDEEM_CODE)."
+                },
+                statTag = if (isAr) "بريميوم" else "PREMIUM",
                 type = "check"
             )
             return true
@@ -282,11 +305,16 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
         )
         _themeConfig.value = updatedConfig
         prefsManager.saveThemeConfig(updatedConfig)
+        val isAr = updatedConfig.appLanguage.isArabic
 
         repository.addManualSessionLog(
-            title = "Cyber Skin Equipped: ${skin.name}",
-            desc = "Liquid Glass holographic aesthetic applied. Aura: ${skin.tag} (${skin.codename}).",
-            statTag = skin.tag,
+            title = if (isAr) "تفعيل المظهر: ${skin.localizedName(true)}" else "Cyber Skin Equipped: ${skin.localizedName(false)}",
+            desc = if (isAr) {
+                "تم تطبيق المظهر الزجاجي الشفاف • الهالة: ${skin.localizedTag(true)}."
+            } else {
+                "Liquid Glass holographic aesthetic applied. Aura: ${skin.localizedTag(false)} (${skin.codename})."
+            },
+            statTag = skin.localizedTag(isAr),
             type = "check"
         )
     }

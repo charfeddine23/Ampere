@@ -54,8 +54,12 @@ class TelemetryForegroundService : Service() {
             initialOffsetMa = initialConfig.currentZeroOffsetMa
         )
 
-        createNotificationChannel()
-        promoteToForeground("Ampere Pulse Active", "Silent Hardware Telemetry Active")
+        val isAr = initialConfig.appLanguage.isArabic
+        createNotificationChannel(isAr)
+        promoteToForeground(
+            title = if (isAr) "أمبير بالس نشط" else "Ampere Pulse Active",
+            text = if (isAr) "المراقبة الصامتة للعتاد نشطة" else "Silent Hardware Telemetry Active"
+        )
 
         if (!initialConfig.backgroundServiceEnabled) {
             stopSelf()
@@ -73,11 +77,16 @@ class TelemetryForegroundService : Service() {
             return START_NOT_STICKY
         }
 
+        val isAr = config.appLanguage.isArabic
+        createNotificationChannel(isAr)
         calibrationEngine.updateCalibration(
             newMultiplier = config.currentMultiplier,
             newOffsetMa = config.currentZeroOffsetMa
         )
-        promoteToForeground("Ampere Pulse Active", "Silent Hardware Telemetry Active")
+        promoteToForeground(
+            title = if (isAr) "أمبير بالس نشط" else "Ampere Pulse Active",
+            text = if (isAr) "المراقبة الصامتة للعتاد نشطة" else "Silent Hardware Telemetry Active"
+        )
         return START_NOT_STICKY
     }
 
@@ -182,24 +191,35 @@ class TelemetryForegroundService : Service() {
                 lastNotifiedPct = pct
                 lastNotifiedState = stateString
                 lastNotificationUpdateMs = now
+                val isAr = prefsManager.loadThemeConfig().appLanguage.isArabic
                 val currentText = if (currentMa >= 0) "+$currentMa" else "$currentMa"
                 val notificationText = "${pct}% • ${voltageMv}mV • ${currentText}mA • ${String.format(Locale.US, "%.1f", tempC)}°C"
                 val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
-                notificationManager?.notify(NOTIFICATION_ID, createNotification("Ampere Pulse Telemetry", notificationText))
+                notificationManager?.notify(
+                    NOTIFICATION_ID,
+                    createNotification(
+                        if (isAr) "قياسات Ampere Pulse" else "Ampere Pulse Telemetry",
+                        notificationText
+                    )
+                )
             }
         } catch (_: Exception) {
             // Guard against background receiver quirks
         }
     }
 
-    private fun createNotificationChannel() {
+    private fun createNotificationChannel(isArabic: Boolean) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "Ampere Pulse Telemetry Service",
+                if (isArabic) "خدمة قياسات Ampere Pulse" else "Ampere Pulse Telemetry Service",
                 NotificationManager.IMPORTANCE_MIN
             ).apply {
-                description = "Silent foreground indicator when background battery monitoring is enabled."
+                description = if (isArabic) {
+                    "مؤشر صامت عند تفعيل مراقبة البطارية في الخلفية."
+                } else {
+                    "Silent foreground indicator when background battery monitoring is enabled."
+                }
                 setShowBadge(false)
                 setSound(null, null)
                 enableVibration(false)

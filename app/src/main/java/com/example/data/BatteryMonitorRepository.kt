@@ -91,11 +91,56 @@ class BatteryMonitorRepository(
     private val _hourlyStats = MutableStateFlow<List<com.example.data.local.HourlyBatteryStatEntity>>(emptyList())
     val hourlyStats: StateFlow<List<com.example.data.local.HourlyBatteryStatEntity>> = _hourlyStats.asStateFlow()
 
+    @Volatile
+    private var currentLanguage: AppLanguage = AppLanguage.ARABIC
+
     init {
+        currentLanguage = com.example.data.local.SettingsPreferencesManager(context).loadThemeConfig().appLanguage
         initSessionLogsSeed()
         initHourlyStatsFromDatabase()
         refreshWalLogCountAsync()
         startPolling()
+    }
+
+    fun setLanguage(language: AppLanguage) {
+        if (currentLanguage == language) return
+        currentLanguage = language
+        val isAr = language.isArabic
+
+        _sessionLogs.value = _sessionLogs.value.map { log ->
+            if (log.id == "init_0") {
+                log.copy(
+                    title = if (isAr) "تهيئة مستشعرات العتاد" else "Hardware Telemetry Initialized",
+                    timestampFormatted = if (isAr) "الآن" else "Just now",
+                    description = if (isAr) {
+                        "ربط مستشعرات BatteryManager المباشرة بمعايير IEEE 1625 / JEITA / IEC 62680."
+                    } else {
+                        "Direct BatteryManager sensors bound to IEEE 1625 / JEITA / IEC 62680 standards."
+                    },
+                    statTag = if (isAr) "لحظي" else "REALTIME"
+                )
+            } else {
+                log
+            }
+        }
+
+        val latestTelemetry = _telemetry.value
+        _cableResult.value = CableDnaStandardsEngine.evaluate(
+            telemetry = latestTelemetry,
+            deviceProfile = _deviceProfile.value,
+            observedBaselineOcvMv = observedBaselineOcvMv,
+            dynamicDeltaImpedanceMilliOhms = smoothedDynamicImpedanceMohm,
+            currentRipplePercent = smoothedRipplePercent,
+            isArabic = isAr
+        )
+
+        val rawChargeCounter = queryHardwareChargeCounterUah()
+        computeLiveSohPrediction(
+            telemetry = latestTelemetry,
+            chargeCounterUah = if (rawChargeCounter > 0L) rawChargeCounter else latestTelemetry.chargeCounterUah,
+            hwCycleCount = latestTelemetry.cycleCount,
+            hasHwChargeCounter = rawChargeCounter > 0L
+        )
     }
 
     fun setAppInForeground(inForeground: Boolean) {
@@ -140,13 +185,18 @@ class BatteryMonitorRepository(
     }
 
     private fun initSessionLogsSeed() {
+        val isAr = currentLanguage.isArabic
         _sessionLogs.value = listOf(
             SessionLog(
                 id = "init_0",
-                title = "Hardware Telemetry Initialized",
-                timestampFormatted = "Just now",
-                description = "Direct BatteryManager sensors bound to IEEE 1625 / JEITA / IEC 62680 standards.",
-                statTag = "REALTIME",
+                title = if (isAr) "تهيئة مستشعرات العتاد" else "Hardware Telemetry Initialized",
+                timestampFormatted = if (isAr) "الآن" else "Just now",
+                description = if (isAr) {
+                    "ربط مستشعرات BatteryManager المباشرة بمعايير IEEE 1625 / JEITA / IEC 62680."
+                } else {
+                    "Direct BatteryManager sensors bound to IEEE 1625 / JEITA / IEC 62680 standards."
+                },
+                statTag = if (isAr) "لحظي" else "REALTIME",
                 type = "check"
             )
         )
@@ -400,7 +450,8 @@ class BatteryMonitorRepository(
                     deviceProfile = currentDeviceProfile,
                     observedBaselineOcvMv = observedBaselineOcvMv,
                     dynamicDeltaImpedanceMilliOhms = smoothedDynamicImpedanceMohm,
-                    currentRipplePercent = smoothedRipplePercent
+                    currentRipplePercent = smoothedRipplePercent,
+                    isArabic = currentLanguage.isArabic
                 )
             }
         } else if (isNowCharging) {
@@ -483,7 +534,7 @@ class BatteryMonitorRepository(
         val newLog = SessionLog(
             id = System.currentTimeMillis().toString(),
             title = title,
-            timestampFormatted = "Just now",
+            timestampFormatted = if (currentLanguage.isArabic) "الآن" else "Just now",
             description = desc,
             statTag = statTag,
             type = type
@@ -507,20 +558,30 @@ class BatteryMonitorRepository(
     }
 
     fun runCableDiagnosticSweep(tierOverride: CableDnaTier? = null) {
+        val isAr = currentLanguage.isArabic
         val result = CableDnaStandardsEngine.evaluate(
             telemetry = _telemetry.value,
             deviceProfile = _deviceProfile.value,
             observedBaselineOcvMv = observedBaselineOcvMv,
             dynamicDeltaImpedanceMilliOhms = smoothedDynamicImpedanceMohm,
             currentRipplePercent = smoothedRipplePercent,
-            tierOverride = tierOverride
+            tierOverride = tierOverride,
+            isArabic = isAr
         )
         _cableResult.value = result
 
         addManualSessionLog(
-            title = "Cable DNA Audit: ${result.tier.title}",
-            desc = "Resistance ${result.resistanceMilliOhms}mΩ (${result.estimatedAwg}), Drop -${result.voltageDropMv}mV, ${result.standardCompliance}.",
-            statTag = result.tier.grade,
+            title = if (isAr) {
+                "فحص الكابل: ${result.tier.localizedTitle(true)}"
+            } else {
+                "Cable DNA Audit: ${result.tier.localizedTitle(false)}"
+            },
+            desc = if (isAr) {
+                "المقاومة ${result.resistanceMilliOhms}mΩ (${result.estimatedAwg}) • الهبوط -${result.voltageDropMv}mV • ${result.standardCompliance}."
+            } else {
+                "Resistance ${result.resistanceMilliOhms}mΩ (${result.estimatedAwg}), Drop -${result.voltageDropMv}mV, ${result.standardCompliance}."
+            },
+            statTag = result.tier.localizedGrade(isAr),
             type = if (result.tier.isDangerous) "warning" else "check"
         )
     }
@@ -531,7 +592,8 @@ class BatteryMonitorRepository(
             deviceProfile = _deviceProfile.value,
             observedBaselineOcvMv = observedBaselineOcvMv,
             dynamicDeltaImpedanceMilliOhms = smoothedDynamicImpedanceMohm,
-            currentRipplePercent = smoothedRipplePercent
+            currentRipplePercent = smoothedRipplePercent,
+            isArabic = currentLanguage.isArabic
         )
     }
 
@@ -591,7 +653,8 @@ class BatteryMonitorRepository(
 
         val cal = Calendar.getInstance()
         cal.add(Calendar.DAY_OF_YEAR, lifespanDays)
-        val projectedDate = SimpleDateFormat("MMM yyyy", Locale.US).format(cal.time)
+        val dateLocale = if (currentLanguage.isArabic) Locale("ar") else Locale.US
+        val projectedDate = SimpleDateFormat("MMM yyyy", dateLocale).format(cal.time)
 
         val cellStatus = when {
             liveHealthPct >= 95f -> CellHealthStatus.PRISTINE
@@ -634,9 +697,14 @@ class BatteryMonitorRepository(
 
                 if (addLog) {
                     val latest = _sohPrediction.value
+                    val isAr = currentLanguage.isArabic
                     addManualSessionLog(
-                        title = "Cell SOH Synchronized",
-                        desc = "Hardware SOH verified (${cachedWalLogCount} WAL records). Health: ${latest.healthPercentage}%, ESR: ${latest.internalResistanceEstimateMilliOhms}mΩ.",
+                        title = if (isAr) "مزامنة صحة الخلية (SOH)" else "Cell SOH Synchronized",
+                        desc = if (isAr) {
+                            "تم التحقق من صحة البطارية (${cachedWalLogCount} سجل WAL) • الصحة: ${latest.healthPercentage}% • المقاومة: ${latest.internalResistanceEstimateMilliOhms}mΩ."
+                        } else {
+                            "Hardware SOH verified (${cachedWalLogCount} WAL records). Health: ${latest.healthPercentage}%, ESR: ${latest.internalResistanceEstimateMilliOhms}mΩ."
+                        },
                         statTag = "SOH ${latest.healthPercentage}%",
                         type = "check"
                     )

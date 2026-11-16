@@ -122,7 +122,8 @@ fun AmperePulseApp(viewModel: AmperePulseViewModel) {
         isDarkMode = isDark,
         accentColor = activeAccent,
         activeThemeId = themeConfig.activeThemeId,
-        graphicsMode = themeConfig.graphicsMode
+        graphicsMode = themeConfig.graphicsMode,
+        appLanguage = themeConfig.appLanguage
     ) {
         val resolvedTheme = LocalAmpereTheme.current
         val rootBg = if (resolvedTheme.themeId != null) resolvedTheme.background
@@ -179,13 +180,14 @@ fun AmperePulseApp(viewModel: AmperePulseViewModel) {
                 modifier = Modifier.fillMaxSize()
             ) {
                 // Luxury 3-Line Top Settings Header Bar with Dark Mode Toggle & Cyber Vault Button
+                val isArabic = themeConfig.appLanguage.isArabic
                 LuxuryTopBar(
                     title = "AMPERE PULSE",
                     subtitle = when (selectedTab) {
-                        NavigationTab.BATTERY -> "PAGE 1: LIVING BATTERY MATRIX"
-                        NavigationTab.BATTERY_SOH -> "PAGE 2: BATTERY SOH & CYCLE PREDICTOR"
-                        NavigationTab.CABLE_DNA -> "PAGE 3: CABLE DNA & CHARGER ANALYZER"
-                        NavigationTab.MY_SPACE -> "PAGE 4: TELEMETRY SPACE & LOG"
+                        NavigationTab.BATTERY -> if (isArabic) "الصفحة 1: مصفوفة البطارية الحية" else "PAGE 1: LIVING BATTERY MATRIX"
+                        NavigationTab.BATTERY_SOH -> if (isArabic) "الصفحة 2: صحة الخلية ودورات الشحن" else "PAGE 2: BATTERY SOH & CYCLE PREDICTOR"
+                        NavigationTab.CABLE_DNA -> if (isArabic) "الصفحة 3: فحص الكابل والشاحن" else "PAGE 3: CABLE DNA & CHARGER ANALYZER"
+                        NavigationTab.MY_SPACE -> if (isArabic) "الصفحة 4: مساحة القياسات والسجل" else "PAGE 4: TELEMETRY SPACE & LOG"
                     },
                     isMenuOpen = isSettingsOpen,
                     onMenuToggle = { viewModel.toggleSettingsMenu(!isSettingsOpen) },
@@ -203,12 +205,13 @@ fun AmperePulseApp(viewModel: AmperePulseViewModel) {
                 val bottomBannerExclusionPx = with(density) { 44.dp.toPx() } + navBarsBottomPx
                 val swipeTriggerPx = with(density) { 30.dp.toPx() }
 
+                val isRtlLayout = themeConfig.appLanguage.isArabic
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
                         .padding(bottom = 74.dp)
-                        .pointerInput(isSettingsOpen, bottomBannerExclusionPx) {
+                        .pointerInput(isSettingsOpen, bottomBannerExclusionPx, isRtlLayout) {
                             if (isSettingsOpen) return@pointerInput
                             val touchSlop = viewConfiguration.touchSlop
                             coroutineScope {
@@ -218,10 +221,14 @@ fun AmperePulseApp(viewModel: AmperePulseViewModel) {
                                             requireUnconsumed = false,
                                             pass = PointerEventPass.Main
                                         )
-                                        // Only sense in the right half of the screen & avoid bottom banner buffer
-                                        val inRightHalf = down.position.x >= size.width * 0.5f
+                                        // Match Alignment.CenterEnd edge: Left half in RTL Arabic, Right half in LTR English
+                                        val inDrawerEdgeHalf = if (isRtlLayout) {
+                                            down.position.x <= size.width * 0.5f
+                                        } else {
+                                            down.position.x >= size.width * 0.5f
+                                        }
                                         val aboveBottomBanner = down.position.y <= (size.height - bottomBannerExclusionPx)
-                                        if (!inRightHalf || !aboveBottomBanner) {
+                                        if (!inDrawerEdgeHalf || !aboveBottomBanner) {
                                             return@awaitPointerEventScope
                                         }
 
@@ -241,8 +248,9 @@ fun AmperePulseApp(viewModel: AmperePulseViewModel) {
                                                 break
                                             }
 
-                                            // Open Settings drawer on deliberate right-to-left swipe
-                                            if (totalDx < -swipeTriggerPx && abs(totalDx) > abs(totalDy) * 1.35f) {
+                                            // Open Settings drawer on deliberate inward edge swipe
+                                            val swipeTriggered = if (isRtlLayout) totalDx > swipeTriggerPx else totalDx < -swipeTriggerPx
+                                            if (swipeTriggered && abs(totalDx) > abs(totalDy) * 1.35f) {
                                                 change.consume()
                                                 CyberHapticsEngine.triggerTactileTick(hostContext)
                                                 viewModel.toggleSettingsMenu(true)
@@ -262,8 +270,11 @@ fun AmperePulseApp(viewModel: AmperePulseViewModel) {
                                         fadeOut(androidx.compose.animation.core.tween(100))
                                 } else {
                                     val isMovingForward = targetState.ordinal > initialState.ordinal
+                                    val dirSign = if (isRtlLayout) -1 else 1
                                     (slideInHorizontally(
-                                        initialOffsetX = { if (isMovingForward) (it * 0.40f).toInt() else (-it * 0.40f).toInt() },
+                                        initialOffsetX = {
+                                            (if (isMovingForward) 1 else -1) * dirSign * (it * 0.40f).toInt()
+                                        },
                                         animationSpec = spring(
                                             dampingRatio = 0.82f,
                                             stiffness = Spring.StiffnessMedium
@@ -278,7 +289,9 @@ fun AmperePulseApp(viewModel: AmperePulseViewModel) {
                                         animationSpec = spring(stiffness = Spring.StiffnessMedium)
                                     )).togetherWith(
                                         slideOutHorizontally(
-                                            targetOffsetX = { if (isMovingForward) (-it * 0.25f).toInt() else (it * 0.25f).toInt() },
+                                            targetOffsetX = {
+                                                (if (isMovingForward) -1 else 1) * dirSign * (it * 0.25f).toInt()
+                                            },
                                             animationSpec = spring(
                                                 dampingRatio = 0.85f,
                                                 stiffness = Spring.StiffnessMedium

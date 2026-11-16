@@ -48,40 +48,68 @@ object BatteryScienceClassifier {
     const val TEMP_THERMAL_STRESS_C = 42.0f   // Acceleration of SEI decomposition & electrolyte oxidation (Arrhenius law)
     const val TEMP_CRITICAL_OVERHEAT_C = 45.0f // Hardware JEITA safety cutoff zone
 
-    fun assessThermalZone(temperatureC: Float, isCharging: Boolean): ThermalZoneAssessment {
+    fun assessThermalZone(
+        temperatureC: Float,
+        isCharging: Boolean,
+        isArabic: Boolean = true
+    ): ThermalZoneAssessment {
         return when {
             temperatureC >= TEMP_CRITICAL_OVERHEAT_C -> ThermalZoneAssessment(
-                zoneTitleAr = "خطر حراري حرج (≥45°C)",
-                scientificRange = "≥ 45.0°C (حد القطع JEITA)",
-                detailAr = "تسارع تحلل طبقة SEI وأكسدة الإلكتروليت — يجب إيقاف الشحن أو تبريد الجهاز فوراً.",
+                zoneTitleAr = if (isArabic) "خطر حراري حرج (≥45°C)" else "Critical Thermal Danger (≥45°C)",
+                scientificRange = if (isArabic) "≥ 45.0°C (حد القطع JEITA)" else "≥ 45.0°C (JEITA Cutoff)",
+                detailAr = if (isArabic) {
+                    "تسارع تحلل طبقة SEI وأكسدة الإلكتروليت — يجب إيقاف الشحن أو تبريد الجهاز فوراً."
+                } else {
+                    "Accelerated SEI breakdown & electrolyte oxidation — halt charging or cool device immediately."
+                },
                 severityLevel = 3
             )
             temperatureC >= TEMP_THERMAL_STRESS_C -> ThermalZoneAssessment(
-                zoneTitleAr = "إجهاد حراري زائد (42–44.9°C)",
-                scientificRange = "42.0–44.9°C (إجهاد IEEE 1625)",
-                detailAr = "فوق 42°C تتضاعف وتيرة فقدان السعة وفق معادلة أرهينيوس؛ يُنصح بتقليل الحمل الحراري.",
+                zoneTitleAr = if (isArabic) "إجهاد حراري زائد (42–44.9°C)" else "Thermal Stress Zone (42–44.9°C)",
+                scientificRange = if (isArabic) "42.0–44.9°C (إجهاد IEEE 1625)" else "42.0–44.9°C (IEEE 1625 Stress)",
+                detailAr = if (isArabic) {
+                    "فوق 42°C تتضاعف وتيرة فقدان السعة وفق معادلة أرهينيوس؛ يُنصح بتقليل الحمل الحراري."
+                } else {
+                    "Above 42°C capacity fade accelerates exponentially per Arrhenius kinetics; reduce thermal load."
+                },
                 severityLevel = 3
             )
             temperatureC > TEMP_OPTIMAL_MAX_C -> ThermalZoneAssessment(
-                zoneTitleAr = "دافئ نشط (35.1–41.9°C)",
-                scientificRange = "35.1–41.9°C (ضمن هامش الشحن السريع)",
-                detailAr = if (isCharging) {
-                    "حرارة متوقعة أثناء الشحن السريع PD/PPS ولا تُعد خطراً ما دامت دون 42°C."
+                zoneTitleAr = if (isArabic) "دافئ نشط (35.1–41.9°C)" else "Active Warm Window (35.1–41.9°C)",
+                scientificRange = if (isArabic) "35.1–41.9°C (ضمن هامش الشحن السريع)" else "35.1–41.9°C (Fast-Charge Margin)",
+                detailAr = if (isArabic) {
+                    if (isCharging) {
+                        "حرارة متوقعة أثناء الشحن السريع PD/PPS ولا تُعد خطراً ما دامت دون 42°C."
+                    } else {
+                        "حمل معالج متوسط أثناء التفريغ — لا يزال دون عتبة الإجهاد الحراري (42°C)."
+                    }
                 } else {
-                    "حمل معالج متوسط أثناء التفريغ — لا يزال دون عتبة الإجهاد الحراري (42°C)."
+                    if (isCharging) {
+                        "Expected thermal rise during PD/PPS fast charging; safe while remaining below 42°C."
+                    } else {
+                        "Moderate processor discharge load — still safely below the 42°C thermal stress threshold."
+                    }
                 },
                 severityLevel = 2
             )
             temperatureC < TEMP_COLD_LIMIT_C -> ThermalZoneAssessment(
-                zoneTitleAr = "برودة منخفضة (<15°C)",
-                scientificRange = "< 15.0°C (حماية الطلاء الليثيومي)",
-                detailAr = "الشحن السريع تحت 15°C يزيد خطر ترسّب الليثيوم المعدني (Li Plating) على الأنود.",
+                zoneTitleAr = if (isArabic) "برودة منخفضة (<15°C)" else "Cold Sub-Optimal (<15°C)",
+                scientificRange = if (isArabic) "< 15.0°C (حماية الطلاء الليثيومي)" else "< 15.0°C (Li-Plating Guard)",
+                detailAr = if (isArabic) {
+                    "الشحن السريع تحت 15°C يزيد خطر ترسّب الليثيوم المعدني (Li Plating) على الأنود."
+                } else {
+                    "Fast charging below 15°C increases metallic lithium plating risk on the graphite anode."
+                },
                 severityLevel = 0
             )
             else -> ThermalZoneAssessment(
-                zoneTitleAr = "النطاق الحراري المثالي (15–35°C)",
-                scientificRange = "20.0–35.0°C (المعيار الذهبي)",
-                detailAr = "أعلى موصلية أيونية مع أقل معدل تآكل كيميائي للخلية حسب دراسات BU-808.",
+                zoneTitleAr = if (isArabic) "النطاق الحراري المثالي (15–35°C)" else "Optimal Thermal Window (15–35°C)",
+                scientificRange = if (isArabic) "20.0–35.0°C (المعيار الذهبي)" else "20.0–35.0°C (Gold Standard)",
+                detailAr = if (isArabic) {
+                    "أعلى موصلية أيونية مع أقل معدل تآكل كيميائي للخلية حسب دراسات BU-808."
+                } else {
+                    "Peak ionic conductivity with minimal chemical cell degradation per BU-808 studies."
+                },
                 severityLevel = 1
             )
         }
@@ -147,10 +175,11 @@ object BatteryScienceClassifier {
      */
     fun buildScienceProfile(
         telemetry: BatteryTelemetry,
-        deviceProfile: DeviceHardwareProfile
+        deviceProfile: DeviceHardwareProfile,
+        isArabic: Boolean = true
     ): LivingStateScienceProfile {
         val isCharging = telemetry.status == BatteryStatus.CHARGING || telemetry.plugType != ChargePlug.NONE
-        val thermal = assessThermalZone(telemetry.temperatureC, isCharging)
+        val thermal = assessThermalZone(telemetry.temperatureC, isCharging, isArabic)
         val designMah = deviceProfile.nominalDesignCapacityMah.coerceAtLeast(3000)
         val cRate = (abs(telemetry.currentMa).toFloat() / designMah.toFloat())
         val isDualCell = telemetry.voltageMv > 6000 || deviceProfile.isDualCellSuspected
@@ -158,65 +187,121 @@ object BatteryScienceClassifier {
 
         val voltageMetric = ModeOrderedMetric(
             type = MetricType.VOLTAGE,
-            titleAr = "جهد الخلية (Voltage)",
+            titleAr = if (isArabic) "جهد الخلية" else "Cell Voltage",
             formattedValue = "${telemetry.voltageMv} mV",
-            standardRangeAr = "النطاق القياسي: $safeVoltageWindow",
+            standardRangeAr = if (isArabic) "النطاق القياسي: $safeVoltageWindow" else "Nominal Window: $safeVoltageWindow",
             isPriorityWarning = telemetry.voltageMv > (if (isDualCell) 9050 else 4520)
         )
         val currentMetric = ModeOrderedMetric(
             type = MetricType.CURRENT,
-            titleAr = if (isCharging) "التيار الداخل (C-Rate)" else "التيار المسحوب (Load)",
+            titleAr = if (isArabic) {
+                if (isCharging) "التيار الداخل (C-Rate)" else "التيار المسحوب"
+            } else {
+                if (isCharging) "Charge Current (C-Rate)" else "Discharge Current (Load)"
+            },
             formattedValue = "${if (telemetry.currentMa >= 0) "+" else ""}${telemetry.currentMa} mA (${String.format("%.2f", cRate)}C)",
-            standardRangeAr = if (isCharging) "الحد الآمن المستدام ≤ 1.20C" else "الخمول المثالي < 0.08C",
+            standardRangeAr = if (isArabic) {
+                if (isCharging) "الحد الآمن المستدام ≤ 1.20C" else "الخمول المثالي < 0.08C"
+            } else {
+                if (isCharging) "Sustained Safe ≤ 1.20C" else "Optimal Idle < 0.08C"
+            },
             isPriorityWarning = cRate > 1.35f
         )
         val tempMetric = ModeOrderedMetric(
             type = MetricType.TEMPERATURE,
-            titleAr = "حرارة القلب (Core Temp)",
+            titleAr = if (isArabic) "حرارة القلب" else "Core Temperature",
             formattedValue = "${telemetry.temperatureC} °C",
-            standardRangeAr = "مثالي 20–35°C • إجهاد ≥42°C",
+            standardRangeAr = if (isArabic) "مثالي 20–35°C • إجهاد ≥42°C" else "Optimal 20–35°C • Stress ≥42°C",
             isPriorityWarning = thermal.severityLevel >= 3
         )
         val wattageMetric = ModeOrderedMetric(
             type = MetricType.WATTAGE,
-            titleAr = "القدرة اللحظية (Power)",
+            titleAr = if (isArabic) "القدرة اللحظية" else "Instant Power",
             formattedValue = "${String.format("%.1f", telemetry.wattageW)} W",
-            standardRangeAr = "هدف ${deviceProfile.brand}: ${deviceProfile.recommendedPowerWatts}W",
+            standardRangeAr = if (isArabic) {
+                "هدف ${deviceProfile.brand}: ${deviceProfile.recommendedPowerWatts}W"
+            } else {
+                "${deviceProfile.brand} Target: ${deviceProfile.recommendedPowerWatts}W"
+            },
             isPriorityWarning = false
         )
 
         val (reasonAr, phaseAr, ordered, reference) = when (telemetry.livingState) {
             LivingBatteryState.OVERDRIVE_HEATING -> QuadData(
-                reason = "تجاوز الحرارة العتبة العلمية للإجهاد (${deviceProfile.safeThermalCeilingC}°C) أو حمل C-Rate حراري مرتفع.",
-                phase = "الإجهاد الحراري (JEITA Protection)",
-                ordered = listOf(tempMetric, currentMetric, wattageMetric, voltageMetric), // Temp #1
-                reference = "IEEE 1625 & JEITA: فوق 42°C يتسارع تحلل SEI ويلزم خفض التيار"
+                reason = if (isArabic) {
+                    "تجاوز الحرارة العتبة العلمية للإجهاد (${deviceProfile.safeThermalCeilingC}°C) أو حمل C-Rate حراري مرتفع."
+                } else {
+                    "Temperature exceeded the scientific stress threshold (${deviceProfile.safeThermalCeilingC}°C) or high thermal C-rate load."
+                },
+                phase = if (isArabic) "الإجهاد الحراري (حماية JEITA)" else "Thermal Stress (JEITA Guard)",
+                ordered = listOf(tempMetric, currentMetric, wattageMetric, voltageMetric),
+                reference = if (isArabic) {
+                    "IEEE 1625 & JEITA: فوق 42°C يتسارع تحلل SEI ويلزم خفض التيار"
+                } else {
+                    "IEEE 1625 & JEITA: Above 42°C SEI breakdown accelerates and current throttling applies"
+                }
             )
             LivingBatteryState.ENERGY_STORING -> QuadData(
-                reason = if (telemetry.percentage >= 80) {
-                    "مرحلة الجهد الثابت (CV Taper): تيار مضبوط آلياً لحماية الكاثود قرب الامتلاء."
+                reason = if (isArabic) {
+                    if (telemetry.percentage >= 80) {
+                        "مرحلة الجهد الثابت (CV Taper): تيار مضبوط آلياً لحماية الكاثود قرب الامتلاء."
+                    } else {
+                        "شحن نشط ضمن نافذة JEITA الآمنة (${telemetry.temperatureC}°C) بتدفق تيار مستقر."
+                    }
                 } else {
-                    "شحن نشط ضمن نافذة JEITA الآمنة (${telemetry.temperatureC}°C) بتدفق تيار مستقر."
+                    if (telemetry.percentage >= 80) {
+                        "Constant-Voltage Taper (CV): current is stepped down cleanly to protect the cathode near full charge."
+                    } else {
+                        "Active charging inside JEITA safe thermal window (${telemetry.temperatureC}°C) with steady current."
+                    }
                 },
-                phase = if (telemetry.percentage >= 80) "CV Saturation Taper (≥80%)" else "CC Fast Charge (<80%)",
-                ordered = listOf(currentMetric, wattageMetric, voltageMetric, tempMetric), // Current & Wattage #1
-                reference = "BU-409 CC/CV: الذروة 0.5C–1.0C عند 20–35°C ثم خفض تدريجي بعد 80%"
+                phase = if (isArabic) {
+                    if (telemetry.percentage >= 80) "مرحلة تشبّع الجهد الثابت (≥80%)" else "الشحن السريع بالتيار الثابت (<80%)"
+                } else {
+                    if (telemetry.percentage >= 80) "CV Saturation Taper (≥80%)" else "CC Fast Charge (<80%)"
+                },
+                ordered = listOf(currentMetric, wattageMetric, voltageMetric, tempMetric),
+                reference = if (isArabic) {
+                    "BU-409 CC/CV: الذروة 0.5C–1.0C عند 20–35°C ثم خفض تدريجي بعد 80%"
+                } else {
+                    "BU-409 CC/CV: Peak 0.5C–1.0C at 20–35°C followed by progressive taper above 80%"
+                }
             )
             LivingBatteryState.COOLING -> QuadData(
-                reason = if (telemetry.temperatureC < TEMP_COLD_LIMIT_C) {
-                    "حرارة منخفضة (<15°C): يُنصح بالشحن الهادئ لتجنب طلاء الليثيوم (Li Plating)."
+                reason = if (isArabic) {
+                    if (telemetry.temperatureC < TEMP_COLD_LIMIT_C) {
+                        "حرارة منخفضة (<15°C): يُنصح بالشحن الهادئ لتجنب طلاء الليثيوم (Li Plating)."
+                    } else {
+                        "انخفاض حراري نشط واستقرار في درجة حرارة الخلية نحو النطاق الذهبي (20–35°C)."
+                    }
                 } else {
-                    "انخفاض حراري نشط واستقرار في درجة حرارة الخلية نحو النطاق الذهبي (20–35°C)."
+                    if (telemetry.temperatureC < TEMP_COLD_LIMIT_C) {
+                        "Low temperature (<15°C): gentle charging is advised to prevent metallic Li plating."
+                    } else {
+                        "Active thermal recovery stabilizing cell temperature toward the 20–35°C golden window."
+                    }
                 },
-                phase = "استقرار حراري (Thermal Recovery)",
-                ordered = listOf(tempMetric, voltageMetric, currentMetric, wattageMetric), // Temp & Voltage stability #1
-                reference = "JEITA Thermal Window: التبريد نحو 25°C يضاعف كفاءة دورة الشحن"
+                phase = if (isArabic) "استقرار حراري (تبديد نشط)" else "Thermal Recovery (Stabilizing)",
+                ordered = listOf(tempMetric, voltageMetric, currentMetric, wattageMetric),
+                reference = if (isArabic) {
+                    "JEITA Thermal Window: التبريد نحو 25°C يضاعف كفاءة دورة الشحن"
+                } else {
+                    "JEITA Thermal Window: Cooling toward 25°C preserves optimal cycle longevity"
+                }
             )
             LivingBatteryState.DEEP_SLEEP -> QuadData(
-                reason = "سحب خامل منخفض جداً (${abs(telemetry.currentMa)}mA = ${String.format("%.2f", cRate)}C) وحرارة هادئة لإطالة العمر الافتراضي.",
-                phase = "سكون كهربائي (Quiescent Longevity)",
-                ordered = listOf(currentMetric, voltageMetric, tempMetric, wattageMetric), // Quiescent current & resting OCV #1
-                reference = "BU-808 Shelf Life: التيار الخامل <0.08C عند 18–30°C يقلل التآكل السنوي"
+                reason = if (isArabic) {
+                    "سحب خامل منخفض جداً (${abs(telemetry.currentMa)}mA = ${String.format("%.2f", cRate)}C) وحرارة هادئة لإطالة العمر الافتراضي."
+                } else {
+                    "Ultra-low quiescent draw (${abs(telemetry.currentMa)}mA = ${String.format("%.2f", cRate)}C) and calm temperature preserving cell longevity."
+                },
+                phase = if (isArabic) "سكون كهربائي (استقرار الجهد)" else "Quiescent Longevity (Resting OCV)",
+                ordered = listOf(currentMetric, voltageMetric, tempMetric, wattageMetric),
+                reference = if (isArabic) {
+                    "BU-808 Shelf Life: التيار الخامل <0.08C عند 18–30°C يقلل التآكل السنوي"
+                } else {
+                    "BU-808 Shelf Life: Quiescent draw <0.08C at 18–30°C minimizes annual fade"
+                }
             )
         }
 

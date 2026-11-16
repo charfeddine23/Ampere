@@ -112,6 +112,7 @@ fun InAppUpdateDialog(
 
     val context = LocalContext.current
     val isDark = themeConfig.isDarkMode
+    val isArabic = themeConfig.appLanguage.isArabic
 
     // Eye-friendly soft palette
     val textColor = if (isDark) Color(0xFFE9EFF8) else TextCharcoal
@@ -336,7 +337,7 @@ fun InAppUpdateDialog(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Close,
-                                contentDescription = "إغلاق",
+                                contentDescription = if (isArabic) "إغلاق" else "Close",
                                 tint = subTextColor,
                                 modifier = Modifier.size(19.dp)
                             )
@@ -680,11 +681,11 @@ fun InAppUpdateDialog(
 
                     // Primary Breathing Action CTA Pill
                     val buttonLabel = when {
-                        state.needsInstallPermission -> "منح إذن التثبيت والمتابعة"
-                        state.isDownloadedReadyToInstall -> "تثبيت الآن"
-                        state.isDownloading -> "جاري التنزيل داخل التطبيق..."
-                        state.isChecking -> "جاري الفحص..."
-                        else -> "تحديث"
+                        state.needsInstallPermission -> if (isArabic) "منح إذن التثبيت والمتابعة" else "Grant Install Permission"
+                        state.isDownloadedReadyToInstall -> if (isArabic) "تثبيت الآن" else "Install Now"
+                        state.isDownloading -> if (isArabic) "جاري التنزيل داخل التطبيق..." else "Downloading In-App..."
+                        state.isChecking -> if (isArabic) "جاري الفحص..." else "Checking..."
+                        else -> if (isArabic) "تحديث" else "Update Now"
                     }
 
                     val ctaScale = if (!state.isDownloading && !state.isChecking) {
@@ -761,7 +762,7 @@ fun InAppUpdateDialog(
                                 .testTag("update_dialog_cancel_button")
                         ) {
                             Text(
-                                text = "إلغاء التنزيل",
+                                text = if (isArabic) "إلغاء التنزيل" else "Cancel Download",
                                 fontFamily = OutfitFontFamily,
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 13.sp,

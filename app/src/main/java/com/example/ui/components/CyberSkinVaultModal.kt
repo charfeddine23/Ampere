@@ -87,6 +87,7 @@ fun CyberSkinVaultDialog(
     if (!isOpen) return
 
     val isDark = themeConfig.isDarkMode
+    val isArabic = themeConfig.appLanguage.isArabic
     val textColor = if (isDark) TextWhite else TextCharcoal
     val subTextColor = if (isDark) Color(0xFF94A3B8) else TextSlate
     val dialogBg = if (isDark) Color(0xF20F172A) else Color(0xF8E1E8F1)
@@ -151,10 +152,10 @@ fun CyberSkinVaultDialog(
                             Column {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
-                                        text = "CYBER SKIN VAULT",
+                                        text = if (isArabic) "خزينة الثيمات الزجاجية" else "CYBER SKIN VAULT",
                                         fontFamily = OutfitFontFamily,
                                         fontWeight = FontWeight.Bold,
-                                        fontSize = 17.sp,
+                                        fontSize = 16.sp,
                                         letterSpacing = (-0.2).sp,
                                         color = textColor
                                     )
@@ -162,7 +163,7 @@ fun CyberSkinVaultDialog(
                                     PulsingNeonDot(color = activeSkin.primaryColor, sizeDp = 6.dp)
                                 }
                                 Text(
-                                    text = "متجر الأقنعة والثيمات السيبرانية • Liquid Glass Vault",
+                                    text = if (isArabic) "مظاهر زجاجية وتدرجات نيون فورية" else "Holographic Liquid Glass Skins",
                                     fontFamily = PlusJakartaSansFontFamily,
                                     fontSize = 11.sp,
                                     color = activeSkin.primaryColor,
@@ -182,7 +183,7 @@ fun CyberSkinVaultDialog(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Close,
-                                contentDescription = "Close",
+                                contentDescription = if (isArabic) "إغلاق" else "Close",
                                 tint = textColor,
                                 modifier = Modifier.size(16.dp)
                             )
@@ -215,13 +216,13 @@ fun CyberSkinVaultDialog(
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Column {
                                     Text(
-                                        text = "القناع النشط حالياً:",
+                                        text = if (isArabic) "المظهر النشط حالياً:" else "Currently Equipped:",
                                         fontFamily = PlusJakartaSansFontFamily,
                                         fontSize = 10.sp,
                                         color = subTextColor
                                     )
                                     Text(
-                                        text = activeSkin.name,
+                                        text = activeSkin.localizedName(isArabic),
                                         fontFamily = OutfitFontFamily,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 13.sp,
@@ -238,7 +239,7 @@ fun CyberSkinVaultDialog(
                                     .padding(horizontal = 8.dp, vertical = 4.dp)
                             ) {
                                 Text(
-                                    text = "EQUIPPED // مفعل",
+                                    text = if (isArabic) "مفعل" else "EQUIPPED",
                                     fontFamily = OutfitFontFamily,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 10.sp,
@@ -263,6 +264,7 @@ fun CyberSkinVaultDialog(
                                 skin = skin,
                                 isEquipped = isEquipped,
                                 isDarkMode = isDark,
+                                isArabic = isArabic,
                                 onEquip = {
                                     onEquipSkin(skin)
                                 }
@@ -274,7 +276,11 @@ fun CyberSkinVaultDialog(
 
                     // Vault Bottom Tip
                     Text(
-                        text = "كل قناع يضبط لون الأورا المحيطي، شدة الإشعاع النيوني، ودرجة الزجاج الهلامي تلقائياً عند 90 FPS.",
+                        text = if (isArabic) {
+                            "كل مظهر يضبط لون الهالة المحيطة، شدة التوهج، وشفافية الزجاج تلقائياً."
+                        } else {
+                            "Each skin tunes ambient aura tint, glow intensity, and translucent glass response automatically."
+                        },
                         fontFamily = PlusJakartaSansFontFamily,
                         fontSize = 10.5.sp,
                         color = subTextColor,
@@ -291,6 +297,7 @@ private fun CyberSkinItemCard(
     skin: CyberSkin,
     isEquipped: Boolean,
     isDarkMode: Boolean,
+    isArabic: Boolean,
     onEquip: () -> Unit
 ) {
     val cardBg = if (isDarkMode) Color(0xFF1E293B) else Color(0xFFECF0F6)
@@ -373,7 +380,7 @@ private fun CyberSkinItemCard(
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = skin.name,
+                            text = skin.localizedName(isArabic),
                             fontFamily = OutfitFontFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp,
@@ -387,7 +394,7 @@ private fun CyberSkinItemCard(
                                 .padding(horizontal = 6.dp, vertical = 2.dp)
                         ) {
                             Text(
-                                text = skin.tag,
+                                text = skin.localizedTag(isArabic),
                                 fontFamily = OutfitFontFamily,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 8.sp,
@@ -399,7 +406,7 @@ private fun CyberSkinItemCard(
                     Spacer(modifier = Modifier.height(2.dp))
 
                     Text(
-                        text = skin.themeDescription,
+                        text = skin.localizedDescription(isArabic),
                         fontFamily = PlusJakartaSansFontFamily,
                         fontSize = 10.sp,
                         color = subTextColor,
@@ -429,7 +436,7 @@ private fun CyberSkinItemCard(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "مفعل",
+                            text = if (isArabic) "مفعل" else "Equipped",
                             fontFamily = OutfitFontFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 11.sp,
@@ -447,7 +454,7 @@ private fun CyberSkinItemCard(
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                 ) {
                     Text(
-                        text = "تفعيل",
+                        text = if (isArabic) "تفعيل" else "Equip",
                         fontFamily = OutfitFontFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 11.sp,

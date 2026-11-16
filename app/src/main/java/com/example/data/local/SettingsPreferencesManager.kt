@@ -3,6 +3,7 @@ package com.example.data.local
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.compose.ui.graphics.Color
+import com.example.data.AppLanguage
 import com.example.data.AppTier
 import com.example.data.GlassThemeConfig
 import com.example.data.GraphicsMode
@@ -56,6 +57,7 @@ class SettingsPreferencesManager(context: Context) {
         val showFpsOverlay = prefs.getBoolean(KEY_SHOW_FPS, true)
 
         val graphicsMode = GraphicsMode.fromKey(prefs.getString(KEY_GRAPHICS_MODE, GraphicsMode.STANDARD.key))
+        val appLanguage = AppLanguage.fromCode(prefs.getString(KEY_APP_LANGUAGE, AppLanguage.ARABIC.code))
         return GlassThemeConfig(
             isDarkMode = isDarkMode,
             glowIntensity = glowIntensity,
@@ -82,7 +84,8 @@ class SettingsPreferencesManager(context: Context) {
             currentZeroOffsetMa = prefs.getFloat(KEY_CURRENT_ZERO_OFFSET, 0.0f),
             activeThemeId = prefs.getString(KEY_ACTIVE_THEME_ID, null),
             graphicsMode = graphicsMode,
-            dropletDragNavigationEnabled = prefs.getBoolean(KEY_DROPLET_DRAG_NAV, false)
+            dropletDragNavigationEnabled = prefs.getBoolean(KEY_DROPLET_DRAG_NAV, false),
+            appLanguage = appLanguage
         )
     }
 
@@ -130,6 +133,7 @@ class SettingsPreferencesManager(context: Context) {
             putFloat(KEY_CURRENT_ZERO_OFFSET, config.currentZeroOffsetMa)
             putString(KEY_GRAPHICS_MODE, config.graphicsMode.key)
             putBoolean(KEY_DROPLET_DRAG_NAV, config.dropletDragNavigationEnabled)
+            putString(KEY_APP_LANGUAGE, config.appLanguage.code)
             if (config.activeThemeId != null) {
                 putString(KEY_ACTIVE_THEME_ID, config.activeThemeId)
             } else {
@@ -171,5 +175,6 @@ class SettingsPreferencesManager(context: Context) {
         private const val KEY_ACTIVE_THEME_ID = "active_theme_id"
         private const val KEY_GRAPHICS_MODE = "graphics_mode"
         private const val KEY_DROPLET_DRAG_NAV = "droplet_drag_nav"
+        private const val KEY_APP_LANGUAGE = "app_language"
     }
 }

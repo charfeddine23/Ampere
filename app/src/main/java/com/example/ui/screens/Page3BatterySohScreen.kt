@@ -61,6 +61,7 @@ import com.example.data.CellHealthStatus
 import com.example.data.GlassThemeConfig
 import com.example.ui.components.LiquidGlassCard
 import com.example.ui.components.PulsingNeonDot
+import com.example.ui.theme.LocalAmpereTheme
 import com.example.ui.theme.OutfitFontFamily
 import com.example.ui.theme.PlusJakartaSansFontFamily
 import com.example.ui.theme.TactileCoralRed
@@ -86,16 +87,22 @@ fun Page3BatterySohScreen(
 ) {
     val scrollState = rememberScrollState()
     val isDark = themeConfig.isDarkMode
-    val glow = themeConfig.glowIntensity
-    val textColor = if (isDark) TextWhite else TextCharcoal
-    val subTextColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+    val isArabic = themeConfig.appLanguage.isArabic
+    val resolvedTheme = LocalAmpereTheme.current
+    val glow = when {
+        resolvedTheme.isSimpleMode -> 0f
+        resolvedTheme.isProMode -> 0.35f
+        else -> themeConfig.glowIntensity
+    }
+    val textColor = if (resolvedTheme.themeId != null) resolvedTheme.textPrimary else if (isDark) TextWhite else TextCharcoal
+    val subTextColor = if (resolvedTheme.themeId != null) resolvedTheme.textSecondary else if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
 
     // Automatically recalibrate SOH against Room WAL & hardware registers on page entry
     LaunchedEffect(Unit) {
         onRecalibrateSoh(false)
     }
 
-    val statusColor = sohPrediction.cellStatus.color
+    val statusColor = if (resolvedTheme.isSimpleMode) resolvedTheme.accent else sohPrediction.cellStatus.color
     val animatedHealthFraction by animateFloatAsState(
         targetValue = (sohPrediction.healthPercentage / 100f).coerceIn(0f, 1f),
         animationSpec = spring(
@@ -160,7 +167,7 @@ fun Page3BatterySohScreen(
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
                                 Text(
-                                    text = "BATTERY SOH & CYCLE PREDICTOR",
+                                    text = if (isArabic) "صحة الخلية وتوقع الدورات (SOH)" else "BATTERY SOH & CYCLE PREDICTOR",
                                     fontFamily = OutfitFontFamily,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 14.sp,
@@ -168,10 +175,10 @@ fun Page3BatterySohScreen(
                                     color = textColor
                                 )
                                 Text(
-                                    text = "Medical-Grade Degradation Telemetry",
+                                    text = if (isArabic) "قياسات التآكل الكيميائي الدقيقة للبطارية" else "Medical-Grade Degradation Telemetry",
                                     fontFamily = PlusJakartaSansFontFamily,
                                     fontSize = 11.sp,
-                                    color = TextSlate
+                                    color = subTextColor
                                 )
                             }
                         }
@@ -202,12 +209,12 @@ fun Page3BatterySohScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "CELL STATE OF HEALTH (SOH)",
+                        text = if (isArabic) "الحالة الصحية للخلية (SOH)" else "CELL STATE OF HEALTH (SOH)",
                         fontFamily = OutfitFontFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 12.sp,
                         letterSpacing = 1.sp,
-                        color = TextSlate
+                        color = subTextColor
                     )
 
                     Spacer(modifier = Modifier.height(14.dp))
@@ -282,7 +289,11 @@ fun Page3BatterySohScreen(
                                 color = textColor
                             )
                             Text(
-                                text = "EST. ${sohPrediction.estimatedLifespanDays} DAYS REMAINING",
+                                text = if (isArabic) {
+                                    "العمر المتبقي المقدر: ${sohPrediction.estimatedLifespanDays} يوماً"
+                                } else {
+                                    "EST. ${sohPrediction.estimatedLifespanDays} DAYS REMAINING"
+                                },
                                 fontFamily = PlusJakartaSansFontFamily,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 11.sp,
@@ -316,7 +327,7 @@ fun Page3BatterySohScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = sohPrediction.cellStatus.label,
+                                    text = sohPrediction.cellStatus.localizedLabel(isArabic),
                                     fontFamily = OutfitFontFamily,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 13.sp,
@@ -324,7 +335,7 @@ fun Page3BatterySohScreen(
                                 )
                             }
                             Text(
-                                text = "NMC 811 LATTICE",
+                                text = if (isArabic) "بنية NMC 811" else "NMC 811 LATTICE",
                                 fontFamily = PlusJakartaSansFontFamily,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 10.sp,
@@ -336,7 +347,7 @@ fun Page3BatterySohScreen(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = sohPrediction.cellStatus.description,
+                        text = sohPrediction.cellStatus.localizedDescription(isArabic),
                         fontFamily = PlusJakartaSansFontFamily,
                         fontSize = 11.sp,
                         color = subTextColor,
@@ -362,9 +373,9 @@ fun Page3BatterySohScreen(
                 // Effective Capacity
                 SohMetricCard(
                     modifier = Modifier.weight(1f),
-                    title = "EFFECTIVE CAPACITY",
+                    title = if (isArabic) "السعة الفعلية" else "EFFECTIVE CAPACITY",
                     value = "${sohPrediction.estimatedCurrentCapacityMah} mAh",
-                    subtext = "Factory ${sohPrediction.originalCapacityMah} mAh",
+                    subtext = if (isArabic) "المصنعية ${sohPrediction.originalCapacityMah} mAh" else "Factory ${sohPrediction.originalCapacityMah} mAh",
                     accentColor = statusColor,
                     isDark = isDark
                 )
@@ -372,9 +383,9 @@ fun Page3BatterySohScreen(
                 // Total Cycles
                 SohMetricCard(
                     modifier = Modifier.weight(1f),
-                    title = "CHARGE CYCLES",
-                    value = "${sohPrediction.totalCyclesCompleted} Cycles",
-                    subtext = "${sohPrediction.estimatedRemainingCycles} cycles to 80%",
+                    title = if (isArabic) "دورات الشحن" else "CHARGE CYCLES",
+                    value = if (isArabic) "${sohPrediction.totalCyclesCompleted} دورة" else "${sohPrediction.totalCyclesCompleted} Cycles",
+                    subtext = if (isArabic) "متبقٍ ${sohPrediction.estimatedRemainingCycles} دورة إلى 80%" else "${sohPrediction.estimatedRemainingCycles} cycles to 80%",
                     accentColor = TactileRoyalBlue,
                     isDark = isDark
                 )
@@ -387,9 +398,9 @@ fun Page3BatterySohScreen(
                 // Internal Impedance ESR
                 SohMetricCard(
                     modifier = Modifier.weight(1f),
-                    title = "CELL IMPEDANCE (ESR)",
+                    title = if (isArabic) "المقاومة الداخلية (ESR)" else "CELL IMPEDANCE (ESR)",
                     value = "${sohPrediction.internalResistanceEstimateMilliOhms} mΩ",
-                    subtext = "Optimal Conductivity < 65mΩ",
+                    subtext = if (isArabic) "التوصيل المثالي < 65mΩ" else "Optimal Conductivity < 65mΩ",
                     accentColor = TactileCyan,
                     isDark = isDark
                 )
@@ -397,9 +408,9 @@ fun Page3BatterySohScreen(
                 // Coulombic Efficiency
                 SohMetricCard(
                     modifier = Modifier.weight(1f),
-                    title = "COULOMBIC RATIO",
+                    title = if (isArabic) "الكفاءة الكولومبية" else "COULOMBIC RATIO",
                     value = String.format(java.util.Locale.US, "%.2f%%", sohPrediction.coulombicEfficiencyPercent),
-                    subtext = "Electron Retention Rate",
+                    subtext = if (isArabic) "معدل الاحتفاظ بالشحنة" else "Electron Retention Rate",
                     accentColor = TactileGreen,
                     isDark = isDark
                 )
@@ -427,7 +438,7 @@ fun Page3BatterySohScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "LIFESPAN TRAJECTORY FORECAST",
+                            text = if (isArabic) "منحنى التوقع العمراني للخلية" else "LIFESPAN TRAJECTORY FORECAST",
                             fontFamily = OutfitFontFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 12.sp,
@@ -435,7 +446,7 @@ fun Page3BatterySohScreen(
                             color = textColor
                         )
                         Text(
-                            text = "PROJECTED: ${sohPrediction.projectedReplacementDate}",
+                            text = if (isArabic) "الاستبدال المتوقع: ${sohPrediction.projectedReplacementDate}" else "PROJECTED: ${sohPrediction.projectedReplacementDate}",
                             fontFamily = PlusJakartaSansFontFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 10.sp,
@@ -543,8 +554,16 @@ fun Page3BatterySohScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Cycle 0 (100% Health)", fontSize = 10.sp, color = TextSlate)
-                        Text("Cycle 1000 (80% Health EOL)", fontSize = 10.sp, color = TactileCoralRed)
+                        Text(
+                            text = if (isArabic) "الدورة 0 (صحة 100%)" else "Cycle 0 (100% Health)",
+                            fontSize = 10.sp,
+                            color = subTextColor
+                        )
+                        Text(
+                            text = if (isArabic) "الدورة 1000 (حد 80%)" else "Cycle 1000 (80% Health EOL)",
+                            fontSize = 10.sp,
+                            color = TactileCoralRed
+                        )
                     }
                 }
             }

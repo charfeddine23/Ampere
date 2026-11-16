@@ -50,7 +50,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.foundation.Canvas
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -58,6 +59,7 @@ import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Shield
@@ -65,14 +67,13 @@ import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Vibration
-import androidx.compose.foundation.Image
-import androidx.compose.ui.res.painterResource
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.DisplaySettings
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material.icons.filled.WorkspacePremium
+import com.example.data.AppLanguage
 import com.example.data.GraphicsMode
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -100,21 +101,30 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Fill
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.example.R
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.isActive
 import kotlin.math.abs
@@ -129,13 +139,133 @@ import com.example.ui.theme.TactileAmber
 import com.example.ui.theme.TactileCoralRed
 import com.example.ui.theme.TactileCyan
 import com.example.ui.theme.TactileGreen
-import com.example.ui.theme.TactileRoyalBlue
 import com.example.ui.theme.TactileViolet
 import com.example.ui.theme.TextCharcoal
 import com.example.ui.theme.TextSlate
 import com.example.ui.theme.TextWhite
 import com.example.ui.theme.ThemeEngineCatalog
 import java.util.Locale
+
+private val EMP_RING_SEGMENTS = listOf(
+    "M26.12,2.30 A21.80,21.80 0 0,1 32.91,4.10 Q33.39,4.32 33.16,4.80 L32.46,6.26 Q32.23,6.74 31.76,6.52 A19.13,19.13 0 0,0 25.93,4.97 Q25.40,4.92 25.44,4.40 L25.56,2.78 Q25.60,2.26 26.12,2.30 Z",
+    "M38.13,7.40 A21.80,21.80 0 0,1 41.21,10.61 Q41.52,11.03 41.10,11.35 L39.80,12.31 Q39.38,12.62 39.06,12.20 A19.13,19.13 0 0,0 36.44,9.47 Q36.04,9.13 36.37,8.73 L37.39,7.47 Q37.72,7.06 38.13,7.40 Z",
+    "M42.95,13.23 A21.80,21.80 0 0,1 45.70,21.88 Q45.74,22.40 45.22,22.44 L43.60,22.56 Q43.08,22.60 43.03,22.07 A19.13,19.13 0 0,0 40.66,14.60 Q40.40,14.15 40.85,13.88 L42.23,13.04 Q42.69,12.77 42.95,13.23 Z",
+    "M45.70,26.12 A21.80,21.80 0 0,1 26.12,45.70 Q25.60,45.74 25.56,45.22 L25.44,43.60 Q25.40,43.08 25.93,43.03 A19.13,19.13 0 0,0 43.03,25.93 Q43.08,25.40 43.60,25.44 L45.22,25.56 Q45.74,25.60 45.70,26.12 Z",
+    "M21.88,45.70 A21.80,21.80 0 0,1 15.09,43.90 Q14.61,43.68 14.84,43.20 L15.54,41.74 Q15.77,41.26 16.24,41.48 A19.13,19.13 0 0,0 22.07,43.03 Q22.60,43.08 22.56,43.60 L22.44,45.22 Q22.40,45.74 21.88,45.70 Z",
+    "M9.87,40.60 A21.80,21.80 0 0,1 6.56,37.08 Q6.25,36.66 6.68,36.35 L8.00,35.41 Q8.43,35.11 8.74,35.53 A19.13,19.13 0 0,0 11.56,38.53 Q11.96,38.87 11.63,39.27 L10.61,40.53 Q10.28,40.94 9.87,40.60 Z",
+    "M4.86,34.44 A21.80,21.80 0 0,1 2.30,26.12 Q2.26,25.60 2.78,25.56 L4.40,25.44 Q4.92,25.40 4.97,25.93 A19.13,19.13 0 0,0 7.18,33.10 Q7.43,33.56 6.98,33.83 L5.58,34.64 Q5.12,34.90 4.86,34.44 Z",
+    "M2.30,21.88 A21.80,21.80 0 0,1 21.88,2.30 Q22.40,2.26 22.44,2.78 L22.56,4.40 Q22.60,4.92 22.07,4.97 A19.13,19.13 0 0,0 4.97,22.07 Q4.92,22.60 4.40,22.56 L2.78,22.44 Q2.26,22.40 2.30,21.88 Z",
+    "M26.05,7.25 A16.88,16.88 0 0,1 29.13,7.92 Q29.63,8.09 29.46,8.59 L28.92,10.11 Q28.74,10.61 28.24,10.44 A14.21,14.21 0 0,0 25.81,9.91 Q25.29,9.85 25.34,9.33 L25.48,7.72 Q25.53,7.19 26.05,7.25 Z",
+    "M35.79,11.92 A16.88,16.88 0 0,1 40.75,21.95 Q40.81,22.47 40.28,22.52 L38.67,22.66 Q38.15,22.71 38.09,22.19 A14.21,14.21 0 0,0 33.98,13.89 Q33.60,13.53 33.95,13.14 L35.05,11.95 Q35.40,11.56 35.79,11.92 Z",
+    "M21.95,40.75 A16.88,16.88 0 0,1 18.59,39.99 Q18.09,39.81 18.27,39.31 L18.84,37.80 Q19.03,37.31 19.52,37.48 A14.21,14.21 0 0,0 22.19,38.09 Q22.71,38.15 22.66,38.67 L22.52,40.28 Q22.47,40.81 21.95,40.75 Z",
+    "M12.01,35.87 A16.88,16.88 0 0,1 10.66,34.34 Q10.35,33.92 10.77,33.61 L12.08,32.66 Q12.51,32.35 12.83,32.77 A14.21,14.21 0 0,0 13.85,33.93 Q14.22,34.30 13.86,34.69 L12.75,35.86 Q12.38,36.24 12.01,35.87 Z",
+    "M9.06,31.85 A16.88,16.88 0 0,1 7.25,26.05 Q7.19,25.53 7.72,25.48 L9.33,25.34 Q9.85,25.29 9.91,25.81 A14.21,14.21 0 0,0 11.39,30.53 Q11.64,30.99 11.18,31.25 L9.77,32.05 Q9.31,32.31 9.06,31.85 Z",
+    "M7.25,21.95 A16.88,16.88 0 0,1 21.95,7.25 Q22.47,7.19 22.52,7.72 L22.66,9.33 Q22.71,9.85 22.19,9.91 A14.21,14.21 0 0,0 9.91,22.19 Q9.85,22.71 9.33,22.66 L7.72,22.52 Q7.19,22.47 7.25,21.95 Z"
+)
+
+private const val EMP_ACCENT_ARC =
+    "M40.75,26.05 A16.88,16.88 0 0,1 26.05,40.75 Q25.53,40.81 25.48,40.28 L25.34,38.67 Q25.29,38.15 25.81,38.09 A14.21,14.21 0 0,0 38.09,25.81 Q38.15,25.29 38.67,25.34 L40.28,25.48 Q40.81,25.53 40.75,26.05 Z"
+
+private const val EMP_LIGHTNING_BOLT =
+    "M36.10,4.87 L11.48,25.55 L21.33,25.55 L11.90,43.13 L36.52,22.45 L26.67,22.45 Z"
+
+/**
+ * Precision-crafted, theme- & size-adaptive Ampere Pulse emblem.
+ * Scales smoothly to any Dp dimension and adapts colors seamlessly across Light, Dark,
+ * Simple, Pro, and all 60 Theme Engine studio presets.
+ */
+@Composable
+fun AmpereBrandEmblem(
+    size: Dp,
+    contentDescription: String? = null,
+    modifier: Modifier = Modifier
+) {
+    val resolvedTheme = LocalAmpereTheme.current
+    val isDark = resolvedTheme.isDark
+    val isSimple = resolvedTheme.isSimpleMode
+    val isPro = resolvedTheme.isProMode
+
+    val parsedPaths = remember {
+        val parser = PathParser()
+        Triple(
+            EMP_RING_SEGMENTS.map { parser.parsePathString(it).toPath() },
+            parser.parsePathString(EMP_ACCENT_ARC).toPath(),
+            parser.parsePathString(EMP_LIGHTNING_BOLT).toPath()
+        )
+    }
+
+    val ringFillColor = when {
+        isSimple -> if (isDark) Color(0xFFDDE3EC) else Color(0xFFF9FBFD)
+        isPro -> if (isDark) Color(0xFFEAF0F7) else Color(0xFFFAFCFF)
+        isDark -> lerp(Color(0xFFF3F8FF), resolvedTheme.surface, 0.14f)
+        else -> Color(0xFFFAFCFF)
+    }
+    val strokeTint = when {
+        isSimple -> resolvedTheme.accent.copy(alpha = 0.82f)
+        isPro -> resolvedTheme.accent
+        else -> lerp(resolvedTheme.accent, Color(0xFF005CFF), if (resolvedTheme.themeId != null) 0.25f else 0.72f)
+    }
+    val arcStartColor = when {
+        isSimple -> resolvedTheme.accent.copy(alpha = 0.38f)
+        isPro -> lerp(resolvedTheme.secondaryAccent, resolvedTheme.accent, 0.35f)
+        else -> lerp(TactileCyan, resolvedTheme.secondaryAccent, 0.35f)
+    }
+    val arcEndColor = when {
+        isSimple -> resolvedTheme.accent.copy(alpha = 0.55f)
+        isPro -> resolvedTheme.accent
+        else -> strokeTint
+    }
+    val boltTintEnd = when {
+        isSimple -> ringFillColor
+        isPro -> lerp(ringFillColor, resolvedTheme.accent, 0.14f)
+        else -> lerp(Color(0xFFD8EAFF), resolvedTheme.accent, 0.18f)
+    }
+
+    val semanticsMod = if (contentDescription != null) {
+        modifier.semantics { this.contentDescription = contentDescription }
+    } else {
+        modifier
+    }
+
+    Canvas(modifier = semanticsMod.size(size)) {
+        val scaleFactor = minOf(this.size.width, this.size.height) / 48f
+        val arcBrush = Brush.linearGradient(
+            colors = listOf(arcStartColor, lerp(arcStartColor, arcEndColor, 0.5f), arcEndColor),
+            start = Offset(41f, 25f),
+            end = Offset(25f, 41f)
+        )
+        val boltFillBrush = Brush.linearGradient(
+            colors = listOf(Color.White, lerp(Color.White, boltTintEnd, 0.55f), boltTintEnd),
+            start = Offset(13f, 10f),
+            end = Offset(35f, 38f)
+        )
+        val boltStrokeBrush = Brush.linearGradient(
+            colors = listOf(arcStartColor, strokeTint, arcEndColor),
+            start = Offset(34f, 6f),
+            end = Offset(14f, 42f)
+        )
+
+        withTransform({
+            scale(scaleFactor, scaleFactor, Offset.Zero)
+        }) {
+            val segStroke = Stroke(width = 0.74f, join = StrokeJoin.Round)
+            parsedPaths.first.forEach { segPath ->
+                drawPath(path = segPath, color = ringFillColor, style = Fill)
+                drawPath(path = segPath, color = strokeTint, style = segStroke)
+            }
+
+            drawPath(path = parsedPaths.second, brush = arcBrush, style = Fill)
+            drawPath(path = parsedPaths.second, color = strokeTint, style = segStroke)
+
+            drawPath(path = parsedPaths.third, brush = boltFillBrush, style = Fill)
+            drawPath(
+                path = parsedPaths.third,
+                brush = boltStrokeBrush,
+                style = Stroke(width = 0.92f, join = StrokeJoin.Miter)
+            )
+        }
+    }
+}
 
 /**
  * Top Header with Luxury 3-line frosted glass hamburger menu,
@@ -154,6 +284,7 @@ fun LuxuryTopBar(
     modifier: Modifier = Modifier
 ) {
     val isDark = themeConfig.isDarkMode
+    val isArabic = themeConfig.appLanguage.isArabic
     val accentColor = themeConfig.accentColor
     val resolvedTheme = LocalAmpereTheme.current
 
@@ -166,15 +297,13 @@ fun LuxuryTopBar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        // App Title, Transparent Minimalist Brand Emblem & Status Subtitle
-        Column {
+        // App Title, Theme-Adaptive Emblem & Status Subtitle
+        Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Image(
-                    painter = painterResource(id = R.drawable.ic_brand_emblem),
-                    contentDescription = "Ampere Pulse Emblem",
-                    modifier = Modifier
-                        .size(24.dp)
-                        .testTag("in_app_brand_icon")
+                AmpereBrandEmblem(
+                    size = 24.dp,
+                    contentDescription = if (isArabic) "شعار Ampere Pulse" else "Ampere Pulse Emblem",
+                    modifier = Modifier.testTag("in_app_brand_icon")
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
@@ -183,7 +312,9 @@ fun LuxuryTopBar(
                     fontWeight = FontWeight.Bold,
                     fontSize = 21.sp,
                     letterSpacing = (-0.3).sp,
-                    color = if (resolvedTheme.themeId != null) resolvedTheme.textPrimary else if (isDark) TextWhite else TextCharcoal
+                    color = if (resolvedTheme.themeId != null) resolvedTheme.textPrimary else if (isDark) TextWhite else TextCharcoal,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 PulsingNeonDot(color = accentColor, sizeDp = 5.5.dp)
@@ -239,11 +370,11 @@ fun LuxuryTopBar(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = tier.label,
+                            text = tier.localizedLabel(isArabic),
                             fontFamily = OutfitFontFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 10.5.sp,
-                            letterSpacing = 0.8.sp,
+                            letterSpacing = 0.4.sp,
                             color = tierColor
                         )
                     }
@@ -254,9 +385,13 @@ fun LuxuryTopBar(
                 fontFamily = PlusJakartaSansFontFamily,
                 fontWeight = FontWeight.Normal,
                 fontSize = 11.sp,
-                color = TextSlate
+                color = TextSlate,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
+
+        Spacer(modifier = Modifier.width(8.dp))
 
         // Actions: Quick Dark/Light Toggle + Luxury 3-Line Button
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -276,7 +411,7 @@ fun LuxuryTopBar(
             ) {
                 Icon(
                     imageVector = if (isDark) Icons.Default.LightMode else Icons.Default.DarkMode,
-                    contentDescription = "Toggle Dark Mode",
+                    contentDescription = if (isArabic) "تبديل المظهر" else "Toggle Dark Mode",
                     tint = accentColor,
                     modifier = Modifier.size(18.dp)
                 )
@@ -411,6 +546,8 @@ fun LuxurySettingsDrawer(
     val context = LocalContext.current
     val resolvedTheme = LocalAmpereTheme.current
     val isDark = themeConfig.isDarkMode
+    val isArabic = themeConfig.appLanguage.isArabic
+    val isRtl = themeConfig.appLanguage.isRtl
     val accentColor = themeConfig.accentColor
 
     // Respects Theme Engine preset if active, otherwise uses Soft Nordic twilight / Stone Mist palette
@@ -442,11 +579,11 @@ fun LuxurySettingsDrawer(
     AnimatedVisibility(
         visible = isOpen,
         enter = fadeIn(tween(220)) + slideInHorizontally(
-            initialOffsetX = { it },
+            initialOffsetX = { if (isRtl) -it else it },
             animationSpec = spring(dampingRatio = 0.84f, stiffness = Spring.StiffnessMediumLow)
         ),
         exit = fadeOut(tween(180)) + slideOutHorizontally(
-            targetOffsetX = { it },
+            targetOffsetX = { if (isRtl) -it else it },
             animationSpec = spring(stiffness = Spring.StiffnessMedium)
         )
     ) {
@@ -468,7 +605,7 @@ fun LuxurySettingsDrawer(
                     .fillMaxHeight()
                     .fillMaxWidth(0.86f)
                     .widthIn(max = 420.dp)
-                    .pointerInput(isOpen) {
+                    .pointerInput(isOpen, isRtl) {
                         val touchSlop = viewConfiguration.touchSlop
                         coroutineScope {
                             while (isActive) {
@@ -488,8 +625,9 @@ fun LuxurySettingsDrawer(
                                         val totalDy = change.position.y - startY
                                         if (abs(totalDy) > touchSlop && abs(totalDy) >= abs(totalDx)) break
 
-                                        // Swipe left-to-right to dismiss the right-side Settings Drawer
-                                        if (totalDx > closeSwipeTriggerPx && abs(totalDx) > abs(totalDy) * 1.35f) {
+                                        // Swipe toward edge edge-end to dismiss Settings Drawer cleanly in RTL or LTR
+                                        val closeSwiped = if (isRtl) totalDx < -closeSwipeTriggerPx else totalDx > closeSwipeTriggerPx
+                                        if (closeSwiped && abs(totalDx) > abs(totalDy) * 1.35f) {
                                             change.consume()
                                             CyberHapticsEngine.triggerTactileTick(context)
                                             onClose()
@@ -531,22 +669,25 @@ fun LuxurySettingsDrawer(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.weight(1f)
                         ) {
-                            Image(
-                                painter = painterResource(id = R.drawable.ic_brand_emblem),
-                                contentDescription = "Ampere Pulse Logo",
-                                modifier = Modifier.size(30.dp)
+                            AmpereBrandEmblem(
+                                size = 30.dp,
+                                contentDescription = if (isArabic) "شعار Ampere Pulse" else "Ampere Pulse Logo"
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "الإعدادات",
+                                    text = if (isArabic) "الإعدادات" else "Settings",
                                     fontFamily = OutfitFontFamily,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 21.sp,
                                     color = textColor
                                 )
                                 Text(
-                                    text = "تخصيص بسيط وسلس لتجربة Ampere Pulse",
+                                    text = if (isArabic) {
+                                        "تخصيص شامل لتجربة Ampere Pulse"
+                                    } else {
+                                        "Precision control for Ampere Pulse"
+                                    },
                                     fontFamily = PlusJakartaSansFontFamily,
                                     fontSize = 10.5.sp,
                                     color = subTextColor,
@@ -560,6 +701,30 @@ fun LuxurySettingsDrawer(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            // Quick Language Switch Pill (AR / EN)
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(CircleShape)
+                                    .background(surfaceCardColor)
+                                    .border(1.dp, subtleBorder, CircleShape)
+                                    .clickable {
+                                        CyberHapticsEngine.triggerTactileTick(context)
+                                        val nextLang = if (isArabic) AppLanguage.ENGLISH else AppLanguage.ARABIC
+                                        onConfigChange(themeConfig.copy(appLanguage = nextLang))
+                                    }
+                                    .testTag("drawer_quick_language_toggle"),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = if (isArabic) "EN" else "ع",
+                                    fontFamily = OutfitFontFamily,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
+                                    color = accentColor
+                                )
+                            }
+
                             // Quick Eye-Comfort Theme Switch Pill
                             Box(
                                 modifier = Modifier
@@ -575,7 +740,7 @@ fun LuxurySettingsDrawer(
                             ) {
                                 Icon(
                                     imageVector = if (isDark) Icons.Default.LightMode else Icons.Default.DarkMode,
-                                    contentDescription = "تبديل المظهر",
+                                    contentDescription = if (isArabic) "تبديل المظهر" else "Toggle Theme",
                                     tint = accentColor,
                                     modifier = Modifier.size(19.dp)
                                 )
@@ -596,7 +761,7 @@ fun LuxurySettingsDrawer(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Close,
-                                    contentDescription = "إغلاق الإعدادات",
+                                    contentDescription = if (isArabic) "إغلاق الإعدادات" else "Close Settings",
                                     tint = subTextColor,
                                     modifier = Modifier.size(18.dp)
                                 )
@@ -604,10 +769,10 @@ fun LuxurySettingsDrawer(
                         }
                     }
 
-                    // 2. TOP SECTION: Appearance (Theme Engine, Skin Vault, Colors & Identity)
+                    // 2. TOP SECTION: Appearance (Language, Theme Engine, Skin Vault, Colors & Identity)
                     SettingsAccordionCard(
-                        title = "المظهر • Appearance",
-                        summary = "${resolvedTheme.themeName} • ${if (isDark) "ليلي" else "نهاري"}",
+                        title = if (isArabic) "المظهر واللغة" else "Appearance & Language",
+                        summary = "${resolvedTheme.themeName} • ${if (isDark) (if (isArabic) "ليلي" else "Dark") else (if (isArabic) "نهاري" else "Light")} • ${themeConfig.appLanguage.nativeName}",
                         icon = Icons.Default.Palette,
                         expanded = expandAppearance,
                         onToggle = {
@@ -680,7 +845,7 @@ fun LuxurySettingsDrawer(
                                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                                             ) {
                                                 Text(
-                                                    text = "محرك الثيمات • Theme Engine",
+                                                    text = if (isArabic) "محرك الثيمات" else "Theme Engine",
                                                     fontFamily = OutfitFontFamily,
                                                     fontWeight = FontWeight.Bold,
                                                     fontSize = 12.5.sp,
@@ -704,7 +869,7 @@ fun LuxurySettingsDrawer(
                                                 }
                                             }
                                             Text(
-                                                text = "النشط: ${resolvedTheme.themeName}",
+                                                text = if (isArabic) "النشط: ${resolvedTheme.themeName}" else "Active: ${resolvedTheme.themeName}",
                                                 fontFamily = PlusJakartaSansFontFamily,
                                                 fontSize = 10.sp,
                                                 color = subTextColor,
@@ -714,7 +879,7 @@ fun LuxurySettingsDrawer(
                                         }
                                     }
                                     Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                                         contentDescription = null,
                                         tint = accentColor,
                                         modifier = Modifier.size(20.dp)
@@ -775,14 +940,14 @@ fun LuxurySettingsDrawer(
                                         Spacer(modifier = Modifier.width(10.dp))
                                         Column {
                                             Text(
-                                                text = "متجر الثيمات الزجاجية",
+                                                text = if (isArabic) "متجر الثيمات الزجاجية" else "Glass Skin Vault",
                                                 fontFamily = OutfitFontFamily,
                                                 fontWeight = FontWeight.Bold,
                                                 fontSize = 12.8.sp,
                                                 color = textColor
                                             )
                                             Text(
-                                                text = "أقنعة ومؤثرات بصرية مريحة للعين",
+                                                text = if (isArabic) "أقنعة ومؤثرات بصرية مريحة للعين" else "Eye-friendly liquid glass overlays",
                                                 fontFamily = PlusJakartaSansFontFamily,
                                                 fontSize = 10.sp,
                                                 color = subTextColor
@@ -790,7 +955,7 @@ fun LuxurySettingsDrawer(
                                         }
                                     }
                                     Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                                         contentDescription = null,
                                         tint = accentColor,
                                         modifier = Modifier.size(20.dp)
@@ -798,10 +963,92 @@ fun LuxurySettingsDrawer(
                                 }
                             }
 
-                            // 2c. Colors & Identity (moved inside Appearance)
+                            // 2c. Full App Language Selector (العربية / English)
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(softTileColor.copy(alpha = 0.62f))
+                                    .border(1.dp, subtleBorder, RoundedCornerShape(16.dp))
+                                    .padding(12.dp)
+                                    .testTag("settings_language_selector"),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Language,
+                                        contentDescription = null,
+                                        tint = accentColor,
+                                        modifier = Modifier.size(17.dp)
+                                    )
+                                    Text(
+                                        text = if (isArabic) "لغة التطبيق" else "App Language",
+                                        fontFamily = OutfitFontFamily,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.5.sp,
+                                        color = textColor
+                                    )
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    AppLanguage.entries.forEach { langOption ->
+                                        val selected = themeConfig.appLanguage == langOption
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .heightIn(min = 48.dp)
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .background(
+                                                    if (selected) accentColor.copy(alpha = if (isDark) 0.24f else 0.14f)
+                                                    else surfaceCardColor
+                                                )
+                                                .border(
+                                                    1.1.dp,
+                                                    if (selected) accentColor.copy(alpha = 0.75f) else subtleBorder,
+                                                    RoundedCornerShape(12.dp)
+                                                )
+                                                .clickable {
+                                                    CyberHapticsEngine.triggerTactileTick(context)
+                                                    onConfigChange(themeConfig.copy(appLanguage = langOption))
+                                                }
+                                                .testTag("language_option_${langOption.code}"),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.Center
+                                            ) {
+                                                if (selected) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Check,
+                                                        contentDescription = null,
+                                                        tint = accentColor,
+                                                        modifier = Modifier.size(14.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(5.dp))
+                                                }
+                                                Text(
+                                                    text = langOption.nativeName,
+                                                    fontFamily = OutfitFontFamily,
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 12.sp,
+                                                    color = if (selected) accentColor else subTextColor
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // 2d. Colors & Identity (moved inside Appearance)
                             SettingsAccordionCard(
-                                title = "الألوان والهوية",
-                                summary = "${if (isDark) "ليلي" else "نهاري"} • ${themeConfig.appTier.label} • ${if (themeConfig.temperatureUnit == TemperatureUnit.CELSIUS) "°C" else "°F"}",
+                                title = if (isArabic) "الألوان والهوية" else "Colors & Identity",
+                                summary = "${if (isDark) (if (isArabic) "ليلي" else "Dark") else (if (isArabic) "نهاري" else "Light")} • ${themeConfig.appTier.localizedLabel(isArabic)} • ${themeConfig.temperatureUnit.symbol}",
                                 icon = Icons.Default.Palette,
                                 expanded = expandColorsIdentity,
                                 onToggle = {
@@ -817,8 +1064,16 @@ fun LuxurySettingsDrawer(
                                 Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                                     // Day / Night Mode Row
                                     DrawerToggleRow(
-                                        title = if (isDark) "الوضع الليلي" else "الوضع النهاري",
-                                        subtitle = if (isDark) "تبديل إلى المظهر النهاري المريح" else "تبديل إلى المظهر الليلي الهادئ",
+                                        title = if (isArabic) {
+                                            if (isDark) "الوضع الليلي" else "الوضع النهاري"
+                                        } else {
+                                            if (isDark) "Dark Mode" else "Light Mode"
+                                        },
+                                        subtitle = if (isArabic) {
+                                            if (isDark) "تبديل إلى المظهر النهاري المريح" else "تبديل إلى المظهر الليلي الهادئ"
+                                        } else {
+                                            if (isDark) "Switch to soft daylight surface" else "Switch to quiet dark surface"
+                                        },
                                         checked = isDark,
                                         onCheckedChange = { onConfigChange(themeConfig.copy(isDarkMode = it)) },
                                         accentColor = accentColor,
@@ -829,7 +1084,7 @@ fun LuxurySettingsDrawer(
                                     // Soft Eye-Friendly Color Orbs
                                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                         Text(
-                                            text = "لون التمييز المريح للعين",
+                                            text = if (isArabic) "لون التمييز المريح للعين" else "Eye-Comfort Accent Color",
                                             fontFamily = PlusJakartaSansFontFamily,
                                             fontWeight = FontWeight.Medium,
                                             fontSize = 12.sp,
@@ -839,12 +1094,22 @@ fun LuxurySettingsDrawer(
                                             modifier = Modifier.fillMaxWidth(),
                                             horizontalArrangement = Arrangement.SpaceBetween
                                         ) {
-                                            listOf(
-                                                Triple("أزرق هادئ", Color(0xFF4F7DF3), 0),
-                                                Triple("زمردي", Color(0xFF1BBF75), 1),
-                                                Triple("مرجاني", Color(0xFFF06449), 2),
-                                                Triple("بنفسجي", Color(0xFF8B6EF3), 3)
-                                            ).forEach { (label, color, idx) ->
+                                            val orbItems = if (isArabic) {
+                                                listOf(
+                                                    Triple("أزرق هادئ", Color(0xFF4F7DF3), 0),
+                                                    Triple("زمردي", Color(0xFF1BBF75), 1),
+                                                    Triple("مرجاني", Color(0xFFF06449), 2),
+                                                    Triple("بنفسجي", Color(0xFF8B6EF3), 3)
+                                                )
+                                            } else {
+                                                listOf(
+                                                    Triple("Cobalt", Color(0xFF4F7DF3), 0),
+                                                    Triple("Emerald", Color(0xFF1BBF75), 1),
+                                                    Triple("Coral", Color(0xFFF06449), 2),
+                                                    Triple("Violet", Color(0xFF8B6EF3), 3)
+                                                )
+                                            }
+                                            orbItems.forEach { (label, color, idx) ->
                                                 val isSelected = themeConfig.accentColorIndex == idx && themeConfig.customAccentHex == null
                                                 Column(
                                                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -899,7 +1164,7 @@ fun LuxurySettingsDrawer(
                                     // Tier Pills
                                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                         Text(
-                                            text = "فئة الحساب والشارة",
+                                            text = if (isArabic) "فئة الحساب والشارة" else "Account Tier & Badge",
                                             fontFamily = PlusJakartaSansFontFamily,
                                             fontWeight = FontWeight.Medium,
                                             fontSize = 12.sp,
@@ -952,7 +1217,7 @@ fun LuxurySettingsDrawer(
                                                             Spacer(modifier = Modifier.width(4.dp))
                                                         }
                                                         Text(
-                                                            text = tierOption.label,
+                                                            text = tierOption.localizedLabel(isArabic),
                                                             fontFamily = OutfitFontFamily,
                                                             fontWeight = FontWeight.Bold,
                                                             fontSize = 11.5.sp,
@@ -965,7 +1230,7 @@ fun LuxurySettingsDrawer(
                                         if (themeConfig.isPremiumUnlocked) {
                                             val goldTint = com.example.data.AppTier.PREMIUM.displayColor(isDark)
                                             Text(
-                                                text = "وضع PREMIUM مفعّل بالكامل ✓",
+                                                text = if (isArabic) "وضع البريميوم مفعّل بالكامل ✓" else "PREMIUM Mode Unlocked ✓",
                                                 fontFamily = PlusJakartaSansFontFamily,
                                                 fontWeight = FontWeight.SemiBold,
                                                 fontSize = 10.5.sp,
@@ -981,7 +1246,7 @@ fun LuxurySettingsDrawer(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(
-                                            text = "وحدة الحرارة",
+                                            text = if (isArabic) "وحدة الحرارة" else "Temperature Unit",
                                             fontFamily = PlusJakartaSansFontFamily,
                                             fontWeight = FontWeight.Medium,
                                             fontSize = 12.5.sp,
@@ -1023,8 +1288,8 @@ fun LuxurySettingsDrawer(
 
                                     // Liquid Droplet Visibility Toggle
                                     DrawerToggleRow(
-                                        title = "قطرة الزجاج السائل",
-                                        subtitle = "إظهار المؤشر العائم في شريط التنقل السفلي",
+                                        title = if (isArabic) "قطرة الزجاج السائل" else "Liquid Glass Droplet",
+                                        subtitle = if (isArabic) "إظهار المؤشر العائم في شريط التنقل السفلي" else "Show floating indicator in bottom nav bar",
                                         checked = themeConfig.showLiquidDroplet,
                                         onCheckedChange = { onConfigChange(themeConfig.copy(showLiquidDroplet = it)) },
                                         accentColor = accentColor,
@@ -1032,13 +1297,21 @@ fun LuxurySettingsDrawer(
                                         subTextColor = subTextColor
                                     )
 
-                                    // Droplet Drag Navigation Behavior Toggle (Disabled by default so dragging droplet does not switch pages)
+                                    // Droplet Drag Navigation Behavior Toggle (Disabled by default)
                                     DrawerToggleRow(
-                                        title = "التنقل بسحب القطرة",
-                                        subtitle = if (themeConfig.dropletDragNavigationEnabled) {
-                                            "مفعّل: سحب القطرة يميناً ويساراً يبدّل الصفحات"
+                                        title = if (isArabic) "التنقل بسحب القطرة" else "Droplet Drag Navigation",
+                                        subtitle = if (isArabic) {
+                                            if (themeConfig.dropletDragNavigationEnabled) {
+                                                "مفعّل: سحب القطرة يميناً ويساراً يبدّل الصفحات"
+                                            } else {
+                                                "مقفول: سحب القطرة في البانر لا يبدّل الصفحات (النقر فقط)"
+                                            }
                                         } else {
-                                            "مقفول: سحب القطرة في البانر لا يبدّل الصفحات (النقر فقط)"
+                                            if (themeConfig.dropletDragNavigationEnabled) {
+                                                "Enabled: Dragging droplet left/right switches tabs"
+                                            } else {
+                                                "Locked: Dragging droplet stays in place (tap only)"
+                                            }
                                         },
                                         checked = themeConfig.dropletDragNavigationEnabled,
                                         onCheckedChange = {
@@ -1056,8 +1329,8 @@ fun LuxurySettingsDrawer(
 
                     // 3. GRAPHICS SECTION: Simple Mode, Pro Mode (1ms Sync + Classic Comfort), and 120Hz Refresh
                     SettingsAccordionCard(
-                        title = "الرسوميات والأداء • Graphics",
-                        summary = "${themeConfig.graphicsMode.titleAr} • ${if (themeConfig.target120FpsMode) "120Hz" else "قياسي"}",
+                        title = if (isArabic) "الرسوميات والأداء" else "Graphics & Engine",
+                        summary = "${themeConfig.graphicsMode.localizedTitle(isArabic)} • ${if (themeConfig.target120FpsMode) "120Hz" else (if (isArabic) "قياسي" else "Standard")}",
                         icon = Icons.Default.DisplaySettings,
                         expanded = expandGraphics,
                         onToggle = {
@@ -1105,14 +1378,18 @@ fun LuxurySettingsDrawer(
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = "Simple Mode • الوضع البسيط",
+                                        text = if (isArabic) "الوضع البسيط" else "Simple Mode",
                                         fontFamily = OutfitFontFamily,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 12.5.sp,
                                         color = textColor
                                     )
                                     Text(
-                                        text = "مظهر عادي وهادئ يميل إلى البساطة بدون ألوان زاهية أو حركات لامعة",
+                                        text = if (isArabic) {
+                                            "مظهر عادي وهادئ يميل إلى البساطة بدون ألوان زاهية أو حركات لامعة"
+                                        } else {
+                                            "Clean minimalist surface with muted tones and zero distracting animations"
+                                        },
                                         fontFamily = PlusJakartaSansFontFamily,
                                         fontSize = 10.sp,
                                         color = subTextColor,
@@ -1179,7 +1456,7 @@ fun LuxurySettingsDrawer(
                                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
                                         Text(
-                                            text = "Pro Mode • وضع المحترفين",
+                                            text = if (isArabic) "وضع المحترفين" else "Pro Mode",
                                             fontFamily = OutfitFontFamily,
                                             fontWeight = FontWeight.Bold,
                                             fontSize = 12.5.sp,
@@ -1193,7 +1470,7 @@ fun LuxurySettingsDrawer(
                                                     .padding(horizontal = 5.dp, vertical = 1.5.dp)
                                             ) {
                                                 Text(
-                                                    text = "1ms SYNC",
+                                                    text = if (isArabic) "تزامن 1ms" else "1ms SYNC",
                                                     fontFamily = OutfitFontFamily,
                                                     fontWeight = FontWeight.Bold,
                                                     fontSize = 9.sp,
@@ -1203,7 +1480,11 @@ fun LuxurySettingsDrawer(
                                         }
                                     }
                                     Text(
-                                        text = "مظهر كلاسيكي فخم ناعم ومريح للعين في كل الأوضاع + رفع تزامن القياسات إلى 1 جزء من الثانية",
+                                        text = if (isArabic) {
+                                            "مظهر كلاسيكي فخم ناعم ومريح للعين في كل الأوضاع + رفع تزامن القياسات إلى 1 جزء من الثانية"
+                                        } else {
+                                            "Classic executive eye-comfort finish + 1ms high-frequency sensor synchronization"
+                                        },
                                         fontFamily = PlusJakartaSansFontFamily,
                                         fontSize = 10.sp,
                                         color = subTextColor,
@@ -1233,10 +1514,14 @@ fun LuxurySettingsDrawer(
                                 )
                             }
 
-                            // 3c. سلاسة 120Hz moved underneath Simple & Pro inside Graphics
+                            // 3c. 120Hz Smoothness moved underneath Simple & Pro inside Graphics
                             DrawerToggleRow(
-                                title = "سلاسة 120Hz",
-                                subtitle = if (themeConfig.target120FpsMode) "مفعّل: سلاسة حركة فائقة 120 إطار" else "قياسي: استجابة موفرة للطاقة",
+                                title = if (isArabic) "سلاسة 120Hz" else "120Hz Smoothness",
+                                subtitle = if (isArabic) {
+                                    if (themeConfig.target120FpsMode) "مفعّل: سلاسة حركة فائقة 120 إطار" else "قياسي: استجابة موفرة للطاقة"
+                                } else {
+                                    if (themeConfig.target120FpsMode) "Enabled: Ultra-fluid 120 FPS motion" else "Standard: Power-saving frame rate"
+                                },
                                 checked = themeConfig.target120FpsMode,
                                 onCheckedChange = {
                                     CyberHapticsEngine.triggerTactileTick(context)
@@ -1250,7 +1535,7 @@ fun LuxurySettingsDrawer(
                         }
                     }
 
-                    // 4. NOTIFICATIONS SECTION: Moved Sounds, Vibration & Battery Protection Alerts
+                    // 4. NOTIFICATIONS SECTION: Sounds, Vibration & Battery Protection Alerts
                     val activeNotifCount = listOf(
                         themeConfig.soundEffectsEnabled,
                         themeConfig.hapticFeedbackEnabled,
@@ -1260,8 +1545,8 @@ fun LuxurySettingsDrawer(
                     ).count { it }
 
                     SettingsAccordionCard(
-                        title = "التنبيهات • Notifications",
-                        summary = "$activeNotifCount من 5 مفعّلة",
+                        title = if (isArabic) "التنبيهات" else "Notifications",
+                        summary = if (isArabic) "$activeNotifCount من 5 مفعّلة" else "$activeNotifCount of 5 active",
                         icon = Icons.Default.Notifications,
                         expanded = expandNotifications,
                         onToggle = {
@@ -1277,8 +1562,12 @@ fun LuxurySettingsDrawer(
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             DrawerToggleRow(
-                                title = "الاهتزاز",
-                                subtitle = if (themeConfig.hapticFeedbackEnabled) "استجابة لمسية تفاعلية مفعّلة" else "الاهتزاز معطّل",
+                                title = if (isArabic) "الاهتزاز" else "Haptic Vibration",
+                                subtitle = if (isArabic) {
+                                    if (themeConfig.hapticFeedbackEnabled) "استجابة لمسية تفاعلية مفعّلة" else "الاهتزاز معطّل"
+                                } else {
+                                    if (themeConfig.hapticFeedbackEnabled) "Tactile haptic feedback enabled" else "Vibration muted"
+                                },
                                 checked = themeConfig.hapticFeedbackEnabled,
                                 onCheckedChange = {
                                     onConfigChange(themeConfig.copy(hapticFeedbackEnabled = it))
@@ -1290,8 +1579,12 @@ fun LuxurySettingsDrawer(
                                 testTag = "notifications_vibration_switch"
                             )
                             DrawerToggleRow(
-                                title = "الأصوات",
-                                subtitle = if (themeConfig.soundEffectsEnabled) "مؤثرات صوتية تفاعلية مفعّلة" else "الوضع الصامت مفعّل",
+                                title = if (isArabic) "الأصوات" else "Sound Effects",
+                                subtitle = if (isArabic) {
+                                    if (themeConfig.soundEffectsEnabled) "مؤثرات صوتية تفاعلية مفعّلة" else "الوضع الصامت مفعّل"
+                                } else {
+                                    if (themeConfig.soundEffectsEnabled) "Interactive acoustic feedback enabled" else "Silent mode enabled"
+                                },
                                 checked = themeConfig.soundEffectsEnabled,
                                 onCheckedChange = {
                                     CyberHapticsEngine.triggerTactileTick(context)
@@ -1303,8 +1596,8 @@ fun LuxurySettingsDrawer(
                                 testTag = "notifications_sound_switch"
                             )
                             DrawerToggleRow(
-                                title = "خدمة القياس في الخلفية 24/7",
-                                subtitle = "رصد استقرار الشحن والبطارية باستمرار",
+                                title = if (isArabic) "خدمة القياس في الخلفية 24/7" else "24/7 Background Telemetry",
+                                subtitle = if (isArabic) "رصد استقرار الشحن والبطارية باستمرار" else "Continuous charge stability & battery tracking",
                                 checked = themeConfig.backgroundServiceEnabled,
                                 onCheckedChange = { onConfigChange(themeConfig.copy(backgroundServiceEnabled = it)) },
                                 accentColor = accentColor,
@@ -1312,8 +1605,8 @@ fun LuxurySettingsDrawer(
                                 subTextColor = subTextColor
                             )
                             DrawerToggleRow(
-                                title = "تنبيه حماية البطارية 80%",
-                                subtitle = "إشعار لطيف لإطالة عمر خلايا الليثيوم",
+                                title = if (isArabic) "تنبيه حماية البطارية 80%" else "80% Cell Protection Alert",
+                                subtitle = if (isArabic) "إشعار لطيف لإطالة عمر خلايا الليثيوم" else "Gentle chime to extend lithium cell longevity",
                                 checked = themeConfig.alertOn80Percent,
                                 onCheckedChange = { onConfigChange(themeConfig.copy(alertOn80Percent = it)) },
                                 accentColor = accentColor,
@@ -1321,8 +1614,8 @@ fun LuxurySettingsDrawer(
                                 subTextColor = subTextColor
                             )
                             DrawerToggleRow(
-                                title = "تحذير الحرارة المرتفعة (>42°C)",
-                                subtitle = "تنبيه فوري عند ارتفاع حرارة المستشعر",
+                                title = if (isArabic) "تحذير الحرارة المرتفعة (>42°C)" else "Thermal Stress Warning (>42°C)",
+                                subtitle = if (isArabic) "تنبيه فوري عند ارتفاع حرارة المستشعر" else "Immediate alert when cell exceeds JEITA ceiling",
                                 checked = themeConfig.alertOnHighTemp,
                                 onCheckedChange = { onConfigChange(themeConfig.copy(alertOnHighTemp = it)) },
                                 accentColor = accentColor,
@@ -1383,14 +1676,14 @@ fun LuxurySettingsDrawer(
                                     Spacer(modifier = Modifier.width(10.dp))
                                     Column {
                                         Text(
-                                            text = "تفعيل وضع PREMIUM برمز Redeem",
+                                            text = if (isArabic) "تفعيل وضع البريميوم برمز التفعيل" else "Unlock PREMIUM via Redeem Code",
                                             fontFamily = OutfitFontFamily,
                                             fontWeight = FontWeight.Bold,
                                             fontSize = 12.5.sp,
                                             color = textColor
                                         )
                                         Text(
-                                            text = "أدخل رمز التفعيل لفتح المزايا الذهبية",
+                                            text = if (isArabic) "أدخل رمز التفعيل لفتح المزايا الذهبية" else "Enter activation code to unlock gold features",
                                             fontFamily = PlusJakartaSansFontFamily,
                                             fontSize = 10.sp,
                                             color = goldColor
@@ -1398,7 +1691,7 @@ fun LuxurySettingsDrawer(
                                     }
                                 }
                                 Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                                     contentDescription = null,
                                     tint = goldColor,
                                     modifier = Modifier.size(18.dp)
@@ -1409,8 +1702,8 @@ fun LuxurySettingsDrawer(
 
                     // 6. Expandable Accordion: Auto-Update (collapsed by default)
                     SettingsAccordionCard(
-                        title = "التحديث التلقائي • Auto-Update",
-                        summary = "v${updateUiState.currentVersionName} • ${if (themeConfig.autoUpdateEnabled) "تلقائي" else "يدوي"}",
+                        title = if (isArabic) "التحديث التلقائي" else "Auto-Update",
+                        summary = "v${updateUiState.currentVersionName} • ${if (themeConfig.autoUpdateEnabled) (if (isArabic) "تلقائي" else "Auto") else (if (isArabic) "يدوي" else "Manual")}",
                         icon = Icons.Default.SystemUpdate,
                         expanded = expandAutoUpdate,
                         onToggle = {
@@ -1427,6 +1720,7 @@ fun LuxurySettingsDrawer(
                         LuxuriousAutoUpdateStatusCard(
                             updateUiState = updateUiState,
                             autoUpdateEnabled = themeConfig.autoUpdateEnabled,
+                            isArabic = isArabic,
                             onToggleAutoUpdate = { enabled ->
                                 CyberHapticsEngine.triggerTactileTick(context)
                                 onConfigChange(themeConfig.copy(autoUpdateEnabled = enabled))
@@ -1446,7 +1740,7 @@ fun LuxurySettingsDrawer(
 
                     // 7. Expandable Accordion: Sensor Calibration
                     SettingsAccordionCard(
-                        title = "معايرة مقياس التيار",
+                        title = if (isArabic) "معايرة مقياس التيار" else "Current Calibration",
                         summary = "${String.format(Locale.US, "%.2fx", themeConfig.currentMultiplier)} • ${themeConfig.currentZeroOffsetMa.toInt()} mA",
                         icon = Icons.Default.Tune,
                         expanded = expandCalibration,
@@ -1467,7 +1761,7 @@ fun LuxurySettingsDrawer(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "معامل الضبط (Gain)",
+                                    text = if (isArabic) "معامل الضبط (Gain)" else "Gain Multiplier",
                                     fontFamily = PlusJakartaSansFontFamily,
                                     fontWeight = FontWeight.Medium,
                                     fontSize = 12.sp,
@@ -1501,7 +1795,7 @@ fun LuxurySettingsDrawer(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "معايرة الصفر (Offset)",
+                                    text = if (isArabic) "معايرة الصفر (Offset)" else "Zero Offset",
                                     fontFamily = PlusJakartaSansFontFamily,
                                     fontWeight = FontWeight.Medium,
                                     fontSize = 12.sp,
@@ -1552,7 +1846,7 @@ fun LuxurySettingsDrawer(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        text = "إعادة ضبط المصنع",
+                                        text = if (isArabic) "إعادة ضبط المصنع" else "Factory Reset",
                                         fontFamily = OutfitFontFamily,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 11.sp,
@@ -1827,6 +2121,7 @@ private fun DrawerToggleRow(
 private fun LuxuriousAutoUpdateStatusCard(
     updateUiState: InAppUpdateUiState,
     autoUpdateEnabled: Boolean,
+    isArabic: Boolean,
     onToggleAutoUpdate: (Boolean) -> Unit,
     accentColor: Color,
     isDark: Boolean,
@@ -1917,7 +2212,6 @@ private fun LuxuriousAutoUpdateStatusCard(
             .clip(RoundedCornerShape(20.dp))
             .background(cardBaseBrush)
             .drawBehind {
-                // Soft breathing ambient orb glow inside top-right corner
                 drawCircle(
                     brush = Brush.radialGradient(
                         colors = listOf(
@@ -1931,7 +2225,6 @@ private fun LuxuriousAutoUpdateStatusCard(
                     center = Offset(size.width * 0.86f, size.height * 0.20f)
                 )
 
-                // Fluid diagonal specular sheen sweep
                 val sweepStart = Offset(size.width * sheenSweep - size.width * 0.3f, 0f)
                 val sweepEnd = Offset(size.width * sheenSweep + size.width * 0.25f, size.height)
                 drawRoundRect(
@@ -1961,7 +2254,6 @@ private fun LuxuriousAutoUpdateStatusCard(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.weight(1f)
                 ) {
-                    // Breathing multi-ring status icon container
                     Box(
                         modifier = Modifier.size(36.dp),
                         contentAlignment = Alignment.Center
@@ -2003,7 +2295,7 @@ private fun LuxuriousAutoUpdateStatusCard(
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "حالة التحديث التلقائي",
+                            text = if (isArabic) "حالة التحديث التلقائي" else "Auto-Update Status",
                             fontFamily = OutfitFontFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp,
@@ -2012,12 +2304,22 @@ private fun LuxuriousAutoUpdateStatusCard(
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = when {
-                                updateUiState.isDownloading -> "تنزيل مباشر داخل التطبيق"
-                                updateUiState.isDownloadedReadyToInstall -> "الحزمة جاهزة للتثبيت الفوري"
-                                updateUiState.isChecking -> "جاري الفحص السحابي..."
-                                updateUiState.updateAvailable -> "تحديث جديد متوفر للتحميل"
-                                else -> "تحديث سحابي آمن ومباشر"
+                            text = if (isArabic) {
+                                when {
+                                    updateUiState.isDownloading -> "تنزيل مباشر داخل التطبيق"
+                                    updateUiState.isDownloadedReadyToInstall -> "الحزمة جاهزة للتثبيت الفوري"
+                                    updateUiState.isChecking -> "جاري الفحص السحابي..."
+                                    updateUiState.updateAvailable -> "تحديث جديد متوفر للتحميل"
+                                    else -> "تحديث سحابي آمن ومباشر"
+                                }
+                            } else {
+                                when {
+                                    updateUiState.isDownloading -> "Direct in-app download"
+                                    updateUiState.isDownloadedReadyToInstall -> "Package ready to install"
+                                    updateUiState.isChecking -> "Checking cloud release..."
+                                    updateUiState.updateAvailable -> "New update ready to download"
+                                    else -> "Secure direct OTA engine"
+                                }
                             },
                             fontFamily = PlusJakartaSansFontFamily,
                             fontSize = 10.sp,
@@ -2055,7 +2357,7 @@ private fun LuxuriousAutoUpdateStatusCard(
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
                         Text(
-                            text = if (autoUpdateEnabled) "تلقائي" else "يدوي",
+                            text = if (autoUpdateEnabled) (if (isArabic) "تلقائي" else "Auto") else (if (isArabic) "يدوي" else "Manual"),
                             fontFamily = OutfitFontFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 10.sp,
@@ -2089,7 +2391,6 @@ private fun LuxuriousAutoUpdateStatusCard(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Fluidly animated summary text
             AnimatedContent(
                 targetState = updateUiState.lastCheckSummary,
                 transitionSpec = { fadeIn(tween(220)).togetherWith(fadeOut(tween(180))) },
@@ -2162,13 +2463,24 @@ private fun LuxuriousAutoUpdateStatusCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                val primaryLabel = when {
-                    updateUiState.needsInstallPermission -> "منح الإذن والتثبيت"
-                    updateUiState.isDownloadedReadyToInstall -> "تثبيت الآن"
-                    updateUiState.isDownloading -> "إلغاء التنزيل"
-                    updateUiState.isChecking -> "جاري الفحص..."
-                    updateUiState.updateAvailable -> "تحديث داخلي"
-                    else -> "فحص التحديثات"
+                val primaryLabel = if (isArabic) {
+                    when {
+                        updateUiState.needsInstallPermission -> "منح الإذن والتثبيت"
+                        updateUiState.isDownloadedReadyToInstall -> "تثبيت الآن"
+                        updateUiState.isDownloading -> "إلغاء التنزيل"
+                        updateUiState.isChecking -> "جاري الفحص..."
+                        updateUiState.updateAvailable -> "تحديث داخلي"
+                        else -> "فحص التحديثات"
+                    }
+                } else {
+                    when {
+                        updateUiState.needsInstallPermission -> "Allow & Install"
+                        updateUiState.isDownloadedReadyToInstall -> "Install Now"
+                        updateUiState.isDownloading -> "Cancel Download"
+                        updateUiState.isChecking -> "Checking..."
+                        updateUiState.updateAvailable -> "Update Now"
+                        else -> "Check Updates"
+                    }
                 }
 
                 val primaryBg = when {
@@ -2231,7 +2543,7 @@ private fun LuxuriousAutoUpdateStatusCard(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "نافذة التحديث",
+                        text = if (isArabic) "نافذة التحديث" else "Update Details",
                         fontFamily = OutfitFontFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 11.sp,
@@ -2261,6 +2573,7 @@ fun PremiumRedeemDialog(
 
     val context = LocalContext.current
     val isDark = themeConfig.isDarkMode
+    val isArabic = themeConfig.appLanguage.isArabic
     val goldAccent = com.example.data.AppTier.PREMIUM.displayColor(isDark)
     val textColor = if (isDark) Color(0xFFE9EFF8) else TextCharcoal
     val subTextColor = if (isDark) Color(0xFF9FB0C7) else TextSlate
@@ -2334,7 +2647,11 @@ fun PremiumRedeemDialog(
                 Spacer(modifier = Modifier.height(14.dp))
 
                 Text(
-                    text = if (isUnlockedJustNow) "تم تفعيل وضع PREMIUM!" else "تفعيل وضع PREMIUM",
+                    text = if (isArabic) {
+                        if (isUnlockedJustNow) "تم تفعيل وضع البريميوم!" else "تفعيل وضع البريميوم"
+                    } else {
+                        if (isUnlockedJustNow) "PREMIUM Unlocked!" else "Unlock PREMIUM"
+                    },
                     fontFamily = OutfitFontFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = 20.sp,
@@ -2345,10 +2662,18 @@ fun PremiumRedeemDialog(
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
-                    text = if (isUnlockedJustNow) {
-                        "أصبحت تتمتع الآن بشارة PREMIUM الذهبية ومحرك الطاقة الدقيق بشكل دائم."
+                    text = if (isArabic) {
+                        if (isUnlockedJustNow) {
+                            "أصبحت تتمتع الآن بشارة البريميوم الذهبية ومحرك الطاقة الدقيق بشكل دائم."
+                        } else {
+                            "أدخل رمز التفعيل الخاص بك لفتح وضع البريميوم الذهبي."
+                        }
                     } else {
-                        "أدخل رمز التفعيل الخاص بك (Redeem Code) لفتح وضع PREMIUM الذهبي."
+                        if (isUnlockedJustNow) {
+                            "You now have permanent access to the gold PREMIUM badge and precision engine."
+                        } else {
+                            "Enter your activation redeem code to unlock the gold PREMIUM tier."
+                        }
                     },
                     fontFamily = PlusJakartaSansFontFamily,
                     fontSize = 12.5.sp,
@@ -2372,7 +2697,7 @@ fun PremiumRedeemDialog(
                             .testTag("redeem_code_input"),
                         placeholder = {
                             Text(
-                                text = "أدخل رمز التفعيل هنا...",
+                                text = if (isArabic) "أدخل رمز التفعيل هنا..." else "Enter activation code...",
                                 fontFamily = PlusJakartaSansFontFamily,
                                 fontSize = 13.sp,
                                 color = subTextColor.copy(alpha = 0.75f)
@@ -2400,7 +2725,11 @@ fun PremiumRedeemDialog(
                     if (isError) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "الرمز غير صحيح، يرجى التحقق من الكتابة والمحاولة مجدداً.",
+                            text = if (isArabic) {
+                                "الرمز غير صحيح، يرجى التحقق من الكتابة والمحاولة مجدداً."
+                            } else {
+                                "Invalid redeem code. Please check spelling and try again."
+                            },
                             fontFamily = PlusJakartaSansFontFamily,
                             fontWeight = FontWeight.Medium,
                             fontSize = 11.5.sp,
@@ -2428,7 +2757,7 @@ fun PremiumRedeemDialog(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "إلغاء",
+                                text = if (isArabic) "إلغاء" else "Cancel",
                                 fontFamily = OutfitFontFamily,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp,
@@ -2458,7 +2787,7 @@ fun PremiumRedeemDialog(
                             )
                         ) {
                             Text(
-                                text = "تفعيل Premium",
+                                text = if (isArabic) "تفعيل البريميوم" else "Activate Premium",
                                 fontFamily = OutfitFontFamily,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp,
@@ -2483,7 +2812,7 @@ fun PremiumRedeemDialog(
                         )
                     ) {
                         Text(
-                            text = "رائع! متابعة",
+                            text = if (isArabic) "رائع! متابعة" else "Awesome! Continue",
                             fontFamily = OutfitFontFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp,
