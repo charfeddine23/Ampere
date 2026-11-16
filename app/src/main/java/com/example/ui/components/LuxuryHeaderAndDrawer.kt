@@ -1608,19 +1608,43 @@ private fun LauncherIconColorCard(
     subTextColor: Color
 ) {
     val context = LocalContext.current
+    var isExpanded by remember { mutableStateOf(false) }
     var pinFeedbackText by remember { mutableStateOf<String?>(null) }
+    val arrowRotation by animateFloatAsState(
+        targetValue = if (isExpanded) 180f else 0f,
+        animationSpec = spring(dampingRatio = 0.78f, stiffness = Spring.StiffnessMediumLow),
+        label = "launcherIconAccordionArrow"
+    )
+    val activeBorder by animateColorAsState(
+        targetValue = if (isExpanded) accentColor.copy(alpha = 0.45f) else borderColor,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "launcherIconAccordionBorder"
+    )
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .testTag("launcher_icon_selector_card")
+            .animateContentSize(
+                animationSpec = spring(
+                    dampingRatio = 0.82f,
+                    stiffness = Spring.StiffnessMediumLow
+                )
+            )
             .clip(RoundedCornerShape(20.dp))
             .background(surfaceColor)
-            .border(1.1.dp, borderColor, RoundedCornerShape(20.dp))
-            .padding(horizontal = 14.dp, vertical = 12.dp)
-            .testTag("launcher_icon_selector_card"),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+            .border(1.1.dp, activeBorder, RoundedCornerShape(20.dp))
+            .padding(horizontal = 14.dp, vertical = 10.dp)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .clickable {
+                    CyberHapticsEngine.triggerTactileTick(context)
+                    isExpanded = !isExpanded
+                }
+                .testTag("launcher_icon_accordion_header"),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -1647,18 +1671,22 @@ private fun LauncherIconColorCard(
                     )
                 }
                 Spacer(modifier = Modifier.width(10.dp))
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "لون أيقونة التطبيق الخارجية",
                         fontFamily = OutfitFontFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.sp,
-                        color = textColor
+                        color = textColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         text = "أيقونة الشاشة الرئيسية الحالية: ${selectedVariant.titleAr}",
                         fontFamily = PlusJakartaSansFontFamily,
                         fontSize = 10.5.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         color = when {
                             selectedVariant == LauncherIconVariant.WHITE -> if (isDark) Color(0xFFF1F5F9) else Color(0xFF475569)
                             selectedVariant == LauncherIconVariant.BLACK -> if (isDark) Color(0xFFCBD5E1) else Color(0xFF0F172A)
@@ -1668,243 +1696,265 @@ private fun LauncherIconColorCard(
                     )
                 }
             }
+            Spacer(modifier = Modifier.width(8.dp))
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowDown,
+                contentDescription = if (isExpanded) "طي قائمة لون الأيقونة" else "تمديد قائمة لون الأيقونة",
+                tint = subTextColor,
+                modifier = Modifier
+                    .size(20.dp)
+                    .graphicsLayer { rotationZ = arrowRotation }
+            )
         }
 
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+        AnimatedVisibility(
+            visible = isExpanded,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
         ) {
-            LauncherIconVariant.entries.chunked(4).forEach { rowVariants ->
-                Row(
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp, bottom = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    rowVariants.forEach { variant ->
-                        val isSelected = variant == selectedVariant
-                        val tileBg by animateColorAsState(
-                            targetValue = if (isSelected) {
-                                variant.primaryColor.copy(alpha = if (isDark) 0.24f else 0.14f)
-                            } else {
-                                softColor.copy(alpha = if (isDark) 0.55f else 0.65f)
-                            },
-                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                            label = "iconVariantBg_${variant.key}"
-                        )
-                        val tileBorder by animateColorAsState(
-                            targetValue = if (isSelected) {
-                                when {
-                                    variant == LauncherIconVariant.WHITE -> if (isDark) Color.White else Color(0xFF475569)
-                                    variant == LauncherIconVariant.BLACK -> if (isDark) Color(0xFFCBD5E1) else Color(0xFF0F172A)
-                                    isDark -> variant.secondaryColor
-                                    else -> variant.primaryColor
-                                }
-                            } else {
-                                borderColor
-                            },
-                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                            label = "iconVariantBorder_${variant.key}"
-                        )
-                        val previewHaloBrush = when (variant) {
-                            LauncherIconVariant.WHITE -> Brush.radialGradient(
-                                colors = listOf(Color(0xFF1E293B).copy(alpha = 0.24f), Color.Transparent)
-                            )
-                            LauncherIconVariant.BLACK -> Brush.radialGradient(
-                                colors = listOf(Color.White.copy(alpha = if (isDark) 0.28f else 0.20f), Color.Transparent)
-                            )
-                            else -> Brush.radialGradient(
-                                colors = listOf(
-                                    variant.primaryColor.copy(alpha = if (isDark) 0.28f else 0.18f),
-                                    Color.Transparent
-                                )
-                            )
-                        }
-
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier
-                                .weight(1f)
-                                .heightIn(min = 68.dp)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(tileBg)
-                                .border(if (isSelected) 1.5.dp else 0.9.dp, tileBorder, RoundedCornerShape(14.dp))
-                                .clickable { onSelectVariant(variant) }
-                                .padding(vertical = 8.dp, horizontal = 3.dp)
-                                .testTag("launcher_icon_${variant.key}")
+                    LauncherIconVariant.entries.chunked(4).forEach { rowVariants ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(34.dp)
-                                    .clip(CircleShape)
-                                    .background(previewHaloBrush),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Image(
-                                    painter = painterResource(id = variant.foregroundDrawableRes()),
-                                    contentDescription = "أيقونة ${variant.titleAr}",
-                                    modifier = Modifier
-                                        .size(32.dp)
-                                        .graphicsLayer {
-                                            scaleX = 1.52f
-                                            scaleY = 1.52f
-                                        }
+                            rowVariants.forEach { variant ->
+                                val isSelected = variant == selectedVariant
+                                val tileBg by animateColorAsState(
+                                    targetValue = if (isSelected) {
+                                        variant.primaryColor.copy(alpha = if (isDark) 0.24f else 0.14f)
+                                    } else {
+                                        softColor.copy(alpha = if (isDark) 0.55f else 0.65f)
+                                    },
+                                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                                    label = "iconVariantBg_${variant.key}"
                                 )
+                                val tileBorder by animateColorAsState(
+                                    targetValue = if (isSelected) {
+                                        when {
+                                            variant == LauncherIconVariant.WHITE -> if (isDark) Color.White else Color(0xFF475569)
+                                            variant == LauncherIconVariant.BLACK -> if (isDark) Color(0xFFCBD5E1) else Color(0xFF0F172A)
+                                            isDark -> variant.secondaryColor
+                                            else -> variant.primaryColor
+                                        }
+                                    } else {
+                                        borderColor
+                                    },
+                                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                                    label = "iconVariantBorder_${variant.key}"
+                                )
+                                val previewHaloBrush = when (variant) {
+                                    LauncherIconVariant.WHITE -> Brush.radialGradient(
+                                        colors = listOf(Color(0xFF1E293B).copy(alpha = 0.24f), Color.Transparent)
+                                    )
+                                    LauncherIconVariant.BLACK -> Brush.radialGradient(
+                                        colors = listOf(Color.White.copy(alpha = if (isDark) 0.28f else 0.20f), Color.Transparent)
+                                    )
+                                    else -> Brush.radialGradient(
+                                        colors = listOf(
+                                            variant.primaryColor.copy(alpha = if (isDark) 0.28f else 0.18f),
+                                            Color.Transparent
+                                        )
+                                    )
+                                }
+
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .heightIn(min = 68.dp)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(tileBg)
+                                        .border(if (isSelected) 1.5.dp else 0.9.dp, tileBorder, RoundedCornerShape(14.dp))
+                                        .clickable { onSelectVariant(variant) }
+                                        .padding(vertical = 8.dp, horizontal = 3.dp)
+                                        .testTag("launcher_icon_${variant.key}")
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(34.dp)
+                                            .clip(CircleShape)
+                                            .background(previewHaloBrush),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Image(
+                                            painter = painterResource(id = variant.foregroundDrawableRes()),
+                                            contentDescription = "أيقونة ${variant.titleAr}",
+                                            modifier = Modifier
+                                                .size(32.dp)
+                                                .graphicsLayer {
+                                                    scaleX = 1.52f
+                                                    scaleY = 1.52f
+                                                }
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = variant.titleAr,
+                                        fontFamily = PlusJakartaSansFontFamily,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        fontSize = 10.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        color = if (isSelected) textColor else subTextColor
+                                    )
+                                }
                             }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = variant.titleAr,
-                                fontFamily = PlusJakartaSansFontFamily,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                fontSize = 10.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                color = if (isSelected) textColor else subTextColor
-                            )
+                            repeat(4 - rowVariants.size) {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
                         }
-                    }
-                    repeat(4 - rowVariants.size) {
-                        Spacer(modifier = Modifier.weight(1f))
                     }
                 }
-            }
-        }
 
-        // Force Change (التغيير الإجباري) Control Box
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
-                .background(softColor.copy(alpha = if (isDark) 0.58f else 0.65f))
-                .border(1.dp, accentColor.copy(alpha = 0.28f), RoundedCornerShape(14.dp))
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
+                // Force Change (التغيير الإجباري) Control Box
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(softColor.copy(alpha = if (isDark) 0.58f else 0.65f))
+                        .border(1.dp, accentColor.copy(alpha = 0.28f), RoundedCornerShape(14.dp))
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "وضع التغيير الإجباري (Force Change)",
+                                fontFamily = OutfitFontFamily,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.8.sp,
+                                color = textColor
+                            )
+                            Text(
+                                text = "يعيد تدوير مكونات المشغّل ويفرّغ كاش الهاتف فوراً مهما كان نوع المشغّل",
+                                fontFamily = PlusJakartaSansFontFamily,
+                                fontSize = 9.5.sp,
+                                color = subTextColor,
+                                lineHeight = 12.5.sp
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Switch(
+                            checked = forceChangeEnabled,
+                            onCheckedChange = { onToggleForceChange(it) },
+                            modifier = Modifier.testTag("force_change_icon_switch"),
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = accentColor
+                            )
+                        )
+                    }
+
+                    // Immediate Force Apply Action Button (>= 48dp touch height)
+                    Button(
+                        onClick = {
+                            CyberHapticsEngine.triggerBenchmarkSuccess(context)
+                            onForceChangeNow(selectedVariant)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .testTag("force_change_icon_button"),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = accentColor
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Bolt,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "تغيير إجباري الآن (${selectedVariant.titleAr})",
+                            fontFamily = OutfitFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            color = Color.White
+                        )
+                    }
+
+                    // Direct Home Screen Shortcut Pinning Fallback (bypasses stubborn OEM caches like MIUI/HyperOS/ColorOS)
+                    if (iconDiagnostics.isPinShortcutSupported) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 48.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(surfaceColor.copy(alpha = 0.9f))
+                                .border(1.dp, borderColor, RoundedCornerShape(12.dp))
+                                .clickable {
+                                    CyberHapticsEngine.triggerTactileTick(context)
+                                    val ok = onPinShortcut(selectedVariant)
+                                    pinFeedbackText = if (ok) {
+                                        "تم إرسال اختصار الشاشة الرئيسية بالأيقونة (${selectedVariant.titleAr}) — وافق على الإضافة في الشاشة."
+                                    } else {
+                                        "المشغّل الحالي لا يدعم التثبيت المباشر التلقائي."
+                                    }
+                                }
+                                .padding(horizontal = 10.dp, vertical = 10.dp)
+                                .testTag("pin_forced_icon_button"),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.PushPin,
+                                    contentDescription = null,
+                                    tint = accentColor,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "تثبيت أيقونة مباشرة للشاشة (تجاوز كاش المشغّل)",
+                                    fontFamily = PlusJakartaSansFontFamily,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 10.8.sp,
+                                    color = textColor,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+
+                    if (!pinFeedbackText.isNullOrBlank()) {
+                        Text(
+                            text = pinFeedbackText!!,
+                            fontFamily = PlusJakartaSansFontFamily,
+                            fontSize = 9.5.sp,
+                            color = accentColor,
+                            lineHeight = 13.sp
+                        )
+                    }
+
                     Text(
-                        text = "وضع التغيير الإجباري (Force Change)",
-                        fontFamily = OutfitFontFamily,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 11.8.sp,
-                        color = textColor
-                    )
-                    Text(
-                        text = "يعيد تدوير مكونات المشغّل ويفرّغ كاش الهاتف فوراً مهما كان نوع المشغّل",
+                        text = "المشغّل: ${iconDiagnostics.launcherName} • سيتم العودة للرئيسية وتحديث الكاش عند التنفيذ الإجباري",
                         fontFamily = PlusJakartaSansFontFamily,
-                        fontSize = 9.5.sp,
+                        fontSize = 9.2.sp,
                         color = subTextColor,
                         lineHeight = 12.5.sp
                     )
                 }
-                Spacer(modifier = Modifier.width(8.dp))
-                Switch(
-                    checked = forceChangeEnabled,
-                    onCheckedChange = { onToggleForceChange(it) },
-                    modifier = Modifier.testTag("force_change_icon_switch"),
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color.White,
-                        checkedTrackColor = accentColor
-                    )
-                )
             }
-
-            // Immediate Force Apply Action Button (>= 48dp touch height)
-            Button(
-                onClick = {
-                    CyberHapticsEngine.triggerBenchmarkSuccess(context)
-                    onForceChangeNow(selectedVariant)
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 48.dp)
-                    .testTag("force_change_icon_button"),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = accentColor
-                )
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Bolt,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "تغيير إجباري الآن (${selectedVariant.titleAr})",
-                    fontFamily = OutfitFontFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp,
-                    color = Color.White
-                )
-            }
-
-            // Direct Home Screen Shortcut Pinning Fallback (bypasses stubborn OEM caches like MIUI/HyperOS/ColorOS)
-            if (iconDiagnostics.isPinShortcutSupported) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 48.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(surfaceColor.copy(alpha = 0.9f))
-                        .border(1.dp, borderColor, RoundedCornerShape(12.dp))
-                        .clickable {
-                            CyberHapticsEngine.triggerTactileTick(context)
-                            val ok = onPinShortcut(selectedVariant)
-                            pinFeedbackText = if (ok) {
-                                "تم إرسال اختصار الشاشة الرئيسية بالأيقونة (${selectedVariant.titleAr}) — وافق على الإضافة في الشاشة."
-                            } else {
-                                "المشغّل الحالي لا يدعم التثبيت المباشر التلقائي."
-                            }
-                        }
-                        .padding(horizontal = 10.dp, vertical = 10.dp)
-                        .testTag("pin_forced_icon_button"),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.PushPin,
-                            contentDescription = null,
-                            tint = accentColor,
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "تثبيت أيقونة مباشرة للشاشة (تجاوز كاش المشغّل)",
-                            fontFamily = PlusJakartaSansFontFamily,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 10.8.sp,
-                            color = textColor,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-            }
-
-            if (!pinFeedbackText.isNullOrBlank()) {
-                Text(
-                    text = pinFeedbackText!!,
-                    fontFamily = PlusJakartaSansFontFamily,
-                    fontSize = 9.5.sp,
-                    color = accentColor,
-                    lineHeight = 13.sp
-                )
-            }
-
-            Text(
-                text = "المشغّل: ${iconDiagnostics.launcherName} • سيتم العودة للرئيسية وتحديث الكاش عند التنفيذ الإجباري",
-                fontFamily = PlusJakartaSansFontFamily,
-                fontSize = 9.2.sp,
-                color = subTextColor,
-                lineHeight = 12.5.sp
-            )
         }
     }
 }
