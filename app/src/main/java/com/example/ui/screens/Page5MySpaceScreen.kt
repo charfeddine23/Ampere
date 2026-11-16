@@ -147,7 +147,7 @@ fun Page5MySpaceScreen(
     // - Low Trickle Flow (0 - 399 mA): Serene Royal Blue (#2962FF)
     // - High Load Drain (< -600 mA): Energetic Violet/Amber (#A855F7)
     // - Idle Drain (-600 - 0 mA): Cool Cyan/Slate (#00B0FF)
-    val isHighStress = activeCurrentMa > 2500 || telemetry.temperatureC >= 38.5f
+    val isHighStress = activeCurrentMa > 2500 || telemetry.temperatureC >= com.example.data.telemetry.BatteryScienceClassifier.TEMP_THERMAL_STRESS_C
     val isSafeFlow = activeCurrentMa in 400..2500 && !isHighStress
 
     val targetAmbientColor = when {
@@ -429,13 +429,14 @@ fun Page5MySpaceScreen(
                     } else {
                         telemetry.temperatureC
                     }
-                    val tempAccent = if (telemetry.temperatureC >= 40f) TactileCoralRed else baseAccent
+                    val isThermalStress = telemetry.temperatureC >= com.example.data.telemetry.BatteryScienceClassifier.TEMP_THERMAL_STRESS_C
+                    val tempAccent = if (isThermalStress) TactileCoralRed else baseAccent
                     MySpaceMetricCard(
                         modifier = Modifier.weight(1f),
                         title = "TEMPERATURE",
                         value = String.format(Locale.US, "%.1f", displayTemp),
                         unit = themeConfig.temperatureUnit.symbol,
-                        subtext = if (telemetry.temperatureC >= 40f) "Thermal Warning" else "Nominal Heat Zone",
+                        subtext = if (isThermalStress) "Thermal Stress (≥42°C)" else "JEITA Nominal Zone",
                         points = temperatureHistory,
                         accentColor = if (selectedMetric == MetricType.TEMPERATURE) animatedAmbientColor else tempAccent,
                         ambientGlowColor = animatedAmbientColor,

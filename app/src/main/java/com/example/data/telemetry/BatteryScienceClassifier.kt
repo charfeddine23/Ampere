@@ -95,48 +95,46 @@ object BatteryScienceClassifier {
         isCharging: Boolean,
         isScreenInteractive: Boolean,
         tempDropRatePerTick: Float,
-        isCryoSkillActive: Boolean,
-        deviceThermalCeilingC: Float = TEMP_THERMAL_STRESS_C
+        deviceThermalCeilingC: Float = TEMP_THERMAL_STRESS_C,
+        nominalCapacityMah: Int = 5000
     ): LivingBatteryState {
         val isDualCell = voltageMv > 6000
         val maxSafeCellMv = if (isDualCell) 9100 else 4550
         val minSafeCellMv = if (isDualCell) 6200 else 3100
+        val safeCap = nominalCapacityMah.coerceAtLeast(3000).toFloat()
+        val cRate = abs(currentMa).toFloat() / safeCap
 
-        // 1. OVERDRIVE & HEATING: True IEEE/JEITA thermal stress (>= 42°C or device ceiling),
-        // or abnormal cell voltage excursion, or rapid heating above 40.5°C under high Joule load.
+        // 1. THERMAL STRESS (IEEE 1625 / JEITA >= 42°C or cell ceiling, abnormal voltage excursion, or rapid heating under >= 0.60C Joule load)
         val effectiveStressCeiling = deviceThermalCeilingC.coerceIn(40.5f, 43.0f)
         val isThermalOverdrive = temperatureC >= effectiveStressCeiling ||
-            (temperatureC >= 40.5f && abs(currentMa) >= 2800 && tempDropRatePerTick < -0.04f)
+            (temperatureC >= 40.5f && cRate >= 0.60f && tempDropRatePerTick < -0.04f)
         val isAbnormalVoltageFault = voltageMv > maxSafeCellMv || (voltageMv in 1..minSafeCellMv)
         if (isThermalOverdrive || isAbnormalVoltageFault) {
             return LivingBatteryState.OVERDRIVE_HEATING
         }
 
-        // 2. COOLING: Active thermal dissipation recovery (temperature falling meaningfully toward optimal)
-        // OR explicit Cryo Coolant skill OR cold thermal protection (< 15°C).
+        // 2. THERMAL RECOVERY / COLD PROTECTION (JEITA <15°C Li-plating limit OR measurable physical cooling drop)
         val isRapidThermalDrop = tempDropRatePerTick >= 0.08f && temperatureC <= 39.0f
-        if (isCryoSkillActive || isRapidThermalDrop || temperatureC < TEMP_COLD_LIMIT_C) {
+        if (temperatureC < TEMP_COLD_LIMIT_C || isRapidThermalDrop) {
             return LivingBatteryState.COOLING
         }
 
-        // 3. ENERGY STORING: Active charging in JEITA safe window (including CC fast & CV taper)
-        // Only treat overnight final trickle hold (>= 90% and tiny current <= 180mA) as Deep Sleep longevity
-        val isFinalTrickleHold = isCharging && percentage >= 90 && abs(currentMa) <= 180
-        if ((isCharging || currentMa > 220) && !isFinalTrickleHold) {
+        // 3. ACTIVE CHARGING (CC/CV charging above final trickle termination threshold)
+        val isFinalTrickleHold = isCharging && percentage >= 92 && abs(currentMa) <= 150
+        if ((isCharging || currentMa > 200) && !isFinalTrickleHold) {
             return LivingBatteryState.ENERGY_STORING
         }
 
-        // 4. DEEP SLEEP: Screen off + quiescent draw, OR calm idle discharge (<= 380mA & < 36°C), OR final trickle hold
-        val isQuiescentIdle = (!isScreenInteractive && abs(currentMa) <= 400) ||
+        // 4. QUIESCENT STANDBY (Low C-rate <= 0.08C screen-off/idle, OR final CV trickle hold)
+        val isQuiescentIdle = (!isScreenInteractive && cRate <= 0.08f) ||
             (!isCharging && abs(currentMa) <= 380 && temperatureC < 36.0f) ||
             isFinalTrickleHold
         if (isQuiescentIdle) {
             return LivingBatteryState.DEEP_SLEEP
         }
 
-        // Fallback for active warm discharging screen-on usage:
-        // Moderate active discharge (<42°C) stays in ENERGY_STORING/COOLING balance without crying false overheat
-        return if (temperatureC <= 33.0f && abs(currentMa) <= 900) {
+        // 5. Active normal discharge below thermal stress ceiling
+        return if (temperatureC <= TEMP_OPTIMAL_MAX_C && cRate <= 0.30f) {
             LivingBatteryState.COOLING
         } else {
             LivingBatteryState.DEEP_SLEEP

@@ -1,13 +1,7 @@
 package com.example.ui.screens
 
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
+import android.graphics.Bitmap
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -19,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -27,50 +22,38 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AcUnit
+import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.LocalFireDepartment
-import androidx.compose.material.icons.filled.MilitaryTech
+import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import android.graphics.Bitmap
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.material.icons.filled.Apps
-import androidx.compose.material.icons.filled.LockOpen
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Thermostat
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import com.example.audio.CyberHapticsEngine
 import com.example.data.BatteryTelemetry
@@ -78,17 +61,14 @@ import com.example.data.DeviceHardwareProfile
 import com.example.data.GlassThemeConfig
 import com.example.data.LivingBatteryState
 import com.example.data.MetricType
-import com.example.data.PrizeRoadData
-import com.example.data.TelemetryPoint
+import com.example.data.TemperatureUnit
 import com.example.data.telemetry.AppBatteryConsumption
 import com.example.data.telemetry.AppBatteryUsageTracker
 import com.example.data.telemetry.AppUsageSnapshot
 import com.example.data.telemetry.BatteryScienceClassifier
-import com.example.data.telemetry.LivingStateScienceProfile
 import com.example.ui.components.LiquidBatteryRing
 import com.example.ui.components.LiquidGlassCard
 import com.example.ui.components.PulsingNeonDot
-import com.example.ui.components.thermalLiquidGlassBackground
 import com.example.ui.theme.LocalAmpereTheme
 import com.example.ui.theme.OutfitFontFamily
 import com.example.ui.theme.PlusJakartaSansFontFamily
@@ -96,38 +76,27 @@ import com.example.ui.theme.TactileAmber
 import com.example.ui.theme.TactileCoralRed
 import com.example.ui.theme.TactileCyan
 import com.example.ui.theme.TactileGreen
-import com.example.ui.theme.TactileRoyalBlue
-import com.example.ui.theme.TactileViolet
 import com.example.ui.theme.TextCharcoal
 import com.example.ui.theme.TextSlate
 import com.example.ui.theme.TextWhite
-import java.text.NumberFormat
 import java.util.Locale
-import kotlin.math.PI
-import kotlin.math.sin
 
 /**
- * PAGE 1: Living Dynamic Battery
- * Auto-triggered via real-time BatteryManager sensors data across 4 states:
- * 1. ENERGY STORING (Green #00C853): Charging (Current > 0) + Temp 20-37°C + stable V.
- * 2. OVERDRIVE / HEATING (Warning Red #FF3D00): Temp > 38°C OR high internal resistance/voltage drop.
- * 3. CRYOGENIC COOLING (Ice Blue #00B0FF): Rapid thermal drop (<35°C) OR Cryo skill deployed.
- * 4. DEEP SLEEP / HIBERNATION (Night Purple #7C4DFF): Screen OFF + Low idle draw (<=300mA) OR Overnight 80-85% trickling.
+ * PAGE 1: Scientific Real-Time Battery Monitor
+ * Structured around IEEE 1625 / JEITA / BU-808 electrochemistry:
+ * 1. Compact live hardware state banner & 100% Auto Sensors indicator
+ * 2. Live liquid ring gauge (SoC %, W, plug rail)
+ * 3. Conditional IEEE 1625 / JEITA Thermal Stress warning (>= device ceiling)
+ * 4. 2x2 Scientific Telemetry Matrix dynamically prioritized by active state
+ * 5. Per-App Battery Consumption ranking (sorted highest consumer first)
  */
 @Composable
 fun Page1LivingBatteryScreen(
     telemetry: BatteryTelemetry,
-    voltageHistory: List<TelemetryPoint>,
-    currentHistory: List<TelemetryPoint>,
     themeConfig: GlassThemeConfig,
-    prizeRoadData: PrizeRoadData,
     deviceProfile: DeviceHardwareProfile = DeviceHardwareProfile(),
-    isAutoSensorMode: Boolean = true,
     appUsageSnapshot: AppUsageSnapshot = AppUsageSnapshot(),
-    onRefreshAppUsage: () -> Unit = {},
-    onSelectLivingState: (LivingBatteryState?) -> Unit,
-    onNavigateToPrizeRoad: () -> Unit = {},
-    onToggleThermalTest: () -> Unit = {}
+    onRefreshAppUsage: () -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
     val isDark = themeConfig.isDarkMode
@@ -135,7 +104,7 @@ fun Page1LivingBatteryScreen(
     val resolvedTheme = LocalAmpereTheme.current
     val primaryColor = when {
         resolvedTheme.isSimpleMode -> resolvedTheme.accent
-        resolvedTheme.isProMode -> androidx.compose.ui.graphics.lerp(state.neonPrimary, resolvedTheme.accent, 0.55f)
+        resolvedTheme.isProMode -> lerp(state.neonPrimary, resolvedTheme.accent, 0.55f)
         else -> state.neonPrimary
     }
     val glow = when {
@@ -155,14 +124,21 @@ fun Page1LivingBatteryScreen(
         BatteryScienceClassifier.buildScienceProfile(telemetry, deviceProfile)
     }
 
+    val displayTemp = if (themeConfig.temperatureUnit == TemperatureUnit.FAHRENHEIT) {
+        (telemetry.temperatureC * 9f / 5f) + 32f
+    } else {
+        telemetry.temperatureC
+    }
+    val formattedTemp = "${String.format(Locale.US, "%.1f", displayTemp)}${themeConfig.temperatureUnit.symbol}"
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
-            .padding(bottom = 20.dp)
+            .padding(bottom = 24.dp)
             .graphicsLayer { clip = false }
     ) {
-        // 1. Compact & Sleek Living State Sensor Banner (Reduced container height, no XP text)
+        // 1. Compact Real-Time Sensor State Banner
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -178,18 +154,17 @@ fun Page1LivingBatteryScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                        .padding(horizontal = 12.dp, vertical = 9.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Left: Compact Icon & Real-Time Sensor State
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.weight(1f)
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(30.dp)
+                                .size(32.dp)
                                 .clip(CircleShape)
                                 .background(primaryColor.copy(alpha = if (isDark) 0.22f else 0.12f))
                                 .border(1.dp, primaryColor.copy(alpha = 0.5f), CircleShape),
@@ -202,9 +177,9 @@ fun Page1LivingBatteryScreen(
                                     LivingBatteryState.ENERGY_STORING -> Icons.Default.Bolt
                                     LivingBatteryState.DEEP_SLEEP -> Icons.Default.Bedtime
                                 },
-                                contentDescription = null,
+                                contentDescription = state.title,
                                 tint = primaryColor,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(17.dp)
                             )
                         }
 
@@ -225,7 +200,7 @@ fun Page1LivingBatteryScreen(
                             }
                             val syncTag = if (themeConfig.isProMode) " • 1ms PRO" else ""
                             Text(
-                                text = "${scienceProfile.phaseLabelAr} • ${telemetry.temperatureC}°C • ${String.format(Locale.US, "%.2f", scienceProfile.cRate)}C$syncTag",
+                                text = "${scienceProfile.phaseLabelAr} • $formattedTemp • ${String.format(Locale.US, "%.2f", scienceProfile.cRate)}C$syncTag",
                                 fontFamily = PlusJakartaSansFontFamily,
                                 fontSize = 10.sp,
                                 color = subTextColor,
@@ -237,7 +212,6 @@ fun Page1LivingBatteryScreen(
 
                     Spacer(modifier = Modifier.width(8.dp))
 
-                    // Right: 100% AUTO SENSORS Status Indicator
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(10.dp))
@@ -269,9 +243,9 @@ fun Page1LivingBatteryScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
-        // 2. Center Prominent Circular Liquid Progress Ring (Zero XP labels)
+        // 2. Center Liquid Battery Ring
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -291,11 +265,9 @@ fun Page1LivingBatteryScreen(
             )
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        Spacer(modifier = Modifier.height(10.dp))
-
-        // Overdrive Warning Card (calibrated against IEEE 1625 / JEITA >= 42°C ceiling)
+        // 3. Conditional JEITA / IEEE 1625 Thermal Stress Notice
         if (state == LivingBatteryState.OVERDRIVE_HEATING) {
             Box(
                 modifier = Modifier
@@ -306,13 +278,14 @@ fun Page1LivingBatteryScreen(
                     modifier = Modifier.fillMaxWidth(),
                     accentColor = TactileCoralRed,
                     isDarkMode = isDark,
-                    glowIntensity = glow
+                    glowIntensity = glow,
+                    testTag = "thermal_stress_warning_card"
                 ) {
                     Column(modifier = Modifier.padding(14.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 imageVector = Icons.Default.Warning,
-                                contentDescription = "Thermal Warning",
+                                contentDescription = "تحذير إجهاد حراري",
                                 tint = TactileCoralRed,
                                 modifier = Modifier.size(18.dp)
                             )
@@ -328,7 +301,7 @@ fun Page1LivingBatteryScreen(
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "${scienceProfile.thermalAssessment.detailAr} القراءة الحالية: ${telemetry.temperatureC}°C.",
+                            text = "${scienceProfile.thermalAssessment.detailAr} القراءة الحالية: $formattedTemp.",
                             fontFamily = PlusJakartaSansFontFamily,
                             fontSize = 11.sp,
                             color = subTextColor,
@@ -340,52 +313,68 @@ fun Page1LivingBatteryScreen(
             Spacer(modifier = Modifier.height(12.dp))
         }
 
-        // Scientifically Ordered Metrics Matrix per Active Mode (top-3 priority metrics arranged by IEEE/BU studies)
-        val topOrdered = scienceProfile.orderedMetrics.take(3)
-        Row(
+        // 4. Restructured 2x2 Scientific Telemetry Matrix (All 4 hardware sensors prioritized by IEEE/JEITA/BU-808)
+        val metrics = scienceProfile.orderedMetrics
+        val firstRow = metrics.take(2)
+        val secondRow = metrics.drop(2).take(2)
+
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                .padding(horizontal = 16.dp)
+                .testTag("scientific_telemetry_matrix"),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            topOrdered.forEachIndexed { idx, metric ->
-                val metricColor = when {
-                    metric.isPriorityWarning -> TactileCoralRed
-                    metric.type == MetricType.TEMPERATURE -> when (scienceProfile.thermalAssessment.severityLevel) {
-                        3 -> TactileCoralRed
-                        2 -> TactileAmber
-                        0 -> TactileCyan
-                        else -> TactileGreen
+            listOf(firstRow to 0, secondRow to 2).forEach { (rowMetrics, baseIndex) ->
+                if (rowMetrics.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        rowMetrics.forEachIndexed { localIdx, metric ->
+                            val priorityIdx = baseIndex + localIdx
+                            val metricColor = when {
+                                metric.isPriorityWarning -> TactileCoralRed
+                                metric.type == MetricType.TEMPERATURE -> when (scienceProfile.thermalAssessment.severityLevel) {
+                                    3 -> TactileCoralRed
+                                    2 -> TactileAmber
+                                    0 -> TactileCyan
+                                    else -> TactileGreen
+                                }
+                                priorityIdx == 0 -> primaryColor
+                                else -> primaryColor.copy(alpha = 0.90f)
+                            }
+                            val displayValue = if (metric.type == MetricType.TEMPERATURE) {
+                                formattedTemp
+                            } else {
+                                metric.formattedValue
+                            }
+                            val displaySubtext = if (metric.type == MetricType.TEMPERATURE) {
+                                scienceProfile.thermalAssessment.zoneTitleAr
+                            } else {
+                                metric.standardRangeAr
+                            }
+
+                            ScientificMetricTile(
+                                modifier = Modifier.weight(1f),
+                                label = "#${priorityIdx + 1} ${metric.titleAr}",
+                                value = displayValue,
+                                color = metricColor,
+                                isDarkMode = isDark,
+                                textColor = textColor,
+                                subTextColor = subTextColor,
+                                subtext = displaySubtext,
+                                testTag = "scientific_metric_${metric.type.name.lowercase(Locale.US)}"
+                            )
+                        }
                     }
-                    idx == 0 -> primaryColor
-                    else -> primaryColor.copy(alpha = 0.90f)
                 }
-                QuickMetricNeumorph(
-                    modifier = Modifier.weight(1f),
-                    label = "#${idx + 1} ${metric.titleAr.substringBefore(" (")}",
-                    value = metric.formattedValue.substringBefore(" ("),
-                    color = metricColor,
-                    isDarkMode = isDark,
-                    onClick = if (metric.type == MetricType.TEMPERATURE) onToggleThermalTest else null,
-                    subtext = metric.standardRangeAr
-                )
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Scientific Thermal Scale & Active Mode Reasoning Card
-        ScientificThermalAndModeCard(
-            scienceProfile = scienceProfile,
-            telemetry = telemetry,
-            accentColor = primaryColor,
-            isDarkMode = isDark,
-            glowIntensity = glow
-        )
-
         Spacer(modifier = Modifier.height(14.dp))
 
-        // App Battery Consumption Ranking Section (Sorted Highest Consumer First)
+        // 5. Per-App Battery Consumption Section (Directly below telemetry matrix)
         AppBatteryConsumptionSection(
             snapshot = appUsageSnapshot,
             accentColor = primaryColor,
@@ -393,6 +382,77 @@ fun Page1LivingBatteryScreen(
             glowIntensity = glow,
             onRefresh = onRefreshAppUsage
         )
+    }
+}
+
+@Composable
+private fun ScientificMetricTile(
+    modifier: Modifier = Modifier,
+    label: String,
+    value: String,
+    color: Color,
+    isDarkMode: Boolean,
+    textColor: Color,
+    subTextColor: Color,
+    subtext: String,
+    testTag: String
+) {
+    LiquidGlassCard(
+        modifier = modifier,
+        accentColor = color,
+        isDarkMode = isDarkMode,
+        shape = RoundedCornerShape(16.dp),
+        testTag = testTag
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 11.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = label,
+                    fontFamily = PlusJakartaSansFontFamily,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 10.sp,
+                    color = subTextColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(color)
+                )
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = value,
+                fontFamily = OutfitFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 15.5.sp,
+                color = textColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(3.dp))
+            Text(
+                text = subtext,
+                fontFamily = PlusJakartaSansFontFamily,
+                fontWeight = FontWeight.Medium,
+                fontSize = 9.sp,
+                color = color,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 
@@ -431,7 +491,6 @@ private fun AppBatteryConsumptionSection(
                     .padding(14.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // Header
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -480,7 +539,6 @@ private fun AppBatteryConsumptionSection(
                         }
                     }
 
-                    // Manual Refresh Action (>= 48dp touch target)
                     Box(
                         modifier = Modifier
                             .size(48.dp)
@@ -527,7 +585,6 @@ private fun AppBatteryConsumptionSection(
                     }
 
                     !snapshot.hasPermission -> {
-                        // Permission Request Card for PACKAGE_USAGE_STATS
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -711,7 +768,6 @@ private fun AppConsumptionRowItem(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.weight(1f)
             ) {
-                // Rank Pill (#1 Highest)
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
@@ -730,7 +786,6 @@ private fun AppConsumptionRowItem(
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                // Real App Icon
                 Box(
                     modifier = Modifier
                         .size(34.dp)
@@ -803,7 +858,6 @@ private fun AppConsumptionRowItem(
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            // Drain Percentage
             Text(
                 text = "${String.format(Locale.US, "%.1f", app.consumptionPercent)}%",
                 fontFamily = OutfitFontFamily,
@@ -813,7 +867,6 @@ private fun AppConsumptionRowItem(
             )
         }
 
-        // Consumption Bar
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -832,462 +885,6 @@ private fun AppConsumptionRowItem(
                         )
                     )
             )
-        }
-    }
-}
-
-/**
- * Harmonized Prize Road Level Card with Dynamic Fluid Fill Effects
- * Coordinates container proportions with font sizes and adds liquid fullness animation.
- */
-@Composable
-fun PrizeRoadLevelProgressCard(
-    prizeRoadData: PrizeRoadData,
-    accentColor: Color,
-    isDarkMode: Boolean,
-    glowIntensity: Float,
-    onClick: () -> Unit
-) {
-    val numberFormat = remember { NumberFormat.getNumberInstance(Locale.US) }
-
-    // Each level represents 10,000 mAh
-    val currentLevelMah = (prizeRoadData.cumulativeMah % 10_000L).toFloat()
-    val levelProgress = (currentLevelMah / 10_000f).coerceIn(0.04f, 1f)
-    val nextMilestone = ((prizeRoadData.currentLevel / 5) + 1) * 5
-    val levelsLeft = nextMilestone - prizeRoadData.currentLevel
-
-    val infiniteTransition = rememberInfiniteTransition(label = "fillWaves")
-    val wavePhase by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = (2 * PI).toFloat(),
-        animationSpec = infiniteRepeatable(
-            animation = tween(2200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "fillWavePhase"
-    )
-
-    val shimmerOffset by infiniteTransition.animateFloat(
-        initialValue = -0.2f,
-        targetValue = 1.2f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1800, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "fillShimmer"
-    )
-
-    val pulseGlow by infiniteTransition.animateFloat(
-        initialValue = 0.6f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(900, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulseGlow"
-    )
-
-    val textColor = if (isDarkMode) TextWhite else TextCharcoal
-
-    LiquidGlassCard(
-        modifier = Modifier.fillMaxWidth(),
-        accentColor = accentColor,
-        isDarkMode = isDarkMode,
-        shape = RoundedCornerShape(20.dp),
-        glowIntensity = glowIntensity,
-        onClick = onClick,
-        testTag = "prize_road_level_card"
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp)
-        ) {
-            // Header Row: Harmonized Title & Level Badge
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(accentColor.copy(alpha = if (isDarkMode) 0.22f else 0.12f))
-                            .border(1.2.dp, accentColor.copy(alpha = 0.5f), RoundedCornerShape(12.dp)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.MilitaryTech,
-                            contentDescription = null,
-                            tint = accentColor,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(10.dp))
-
-                    Column {
-                        Text(
-                            text = "PRIZE ROAD PROGRESSION",
-                            fontFamily = OutfitFontFamily,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp,
-                            letterSpacing = 0.5.sp,
-                            color = TextSlate
-                        )
-                        Text(
-                            text = "Rank: ${prizeRoadData.activeTitle}",
-                            fontFamily = OutfitFontFamily,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp,
-                            letterSpacing = (-0.2).sp,
-                            color = textColor
-                        )
-                    }
-                }
-
-                // Extruded Level Pill
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(if (isDarkMode) Color(0xFF0F172A) else Color(0xFFD2DBE6))
-                        .border(1.dp, accentColor.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
-                        .padding(horizontal = 10.dp, vertical = 5.dp)
-                ) {
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text(
-                            text = "LVL ${prizeRoadData.currentLevel}",
-                            fontFamily = OutfitFontFamily,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp,
-                            lineHeight = 15.sp,
-                            color = accentColor
-                        )
-                        Text(
-                            text = "OF 1,000",
-                            fontFamily = OutfitFontFamily,
-                            fontWeight = FontWeight.Medium,
-                            fontSize = 8.sp,
-                            lineHeight = 9.sp,
-                            color = TextSlate
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Dynamic Fill Level Fluid Progress Bar
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(16.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(if (isDarkMode) Color(0xFF28364B) else Color(0xFFCED8E5))
-            ) {
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    val w = size.width
-                    val h = size.height
-                    val fillWidth = w * levelProgress
-
-                    // 1. Fluid Underglow
-                    drawRoundRect(
-                        brush = Brush.horizontalGradient(
-                            colors = listOf(
-                                accentColor.copy(alpha = if (isDarkMode) 0.5f else 0.35f),
-                                accentColor.copy(alpha = 0.85f * pulseGlow)
-                            ),
-                            startX = 0f,
-                            endX = fillWidth
-                        ),
-                        topLeft = Offset(0f, 0f),
-                        size = Size(fillWidth, h),
-                        cornerRadius = CornerRadius(8.dp.toPx(), 8.dp.toPx())
-                    )
-
-                    // 2. Sinusoidal Fluid Wave Surface inside the filled portion
-                    val wavePath = Path()
-                    wavePath.moveTo(0f, h)
-                    val segments = 20
-                    for (i in 0..segments) {
-                        val x = (fillWidth * i) / segments
-                        val normalized = (i.toFloat() / segments) * 2 * PI
-                        val waveAmp = 2.5.dp.toPx()
-                        val y = (h * 0.45f) + (sin(normalized + wavePhase) * waveAmp).toFloat()
-                        wavePath.lineTo(x, y)
-                    }
-                    wavePath.lineTo(fillWidth, h)
-                    wavePath.close()
-
-                    drawPath(
-                        path = wavePath,
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                Color.White.copy(alpha = if (isDarkMode) 0.28f else 0.4f),
-                                Color.Transparent
-                            ),
-                            startY = 0f,
-                            endY = h
-                        )
-                    )
-
-                    // 3. Shimmer Traveling Light Streak across fullness
-                    val shimmerX = w * shimmerOffset
-                    if (shimmerX in 0f..fillWidth + 40.dp.toPx()) {
-                        drawRect(
-                            brush = Brush.horizontalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    Color.White.copy(alpha = 0.45f),
-                                    Color.Transparent
-                                ),
-                                startX = shimmerX - 30.dp.toPx(),
-                                endX = shimmerX + 30.dp.toPx()
-                            ),
-                            topLeft = Offset(0f, 0f),
-                            size = Size(fillWidth, h)
-                        )
-                    }
-
-                    // 4. Leading Edge Glow Pulse Dot
-                    if (fillWidth > 6.dp.toPx()) {
-                        drawCircle(
-                            color = accentColor.copy(alpha = 0.4f * pulseGlow),
-                            radius = 6.dp.toPx(),
-                            center = Offset(fillWidth, h / 2f)
-                        )
-                        drawCircle(
-                            color = Color.White,
-                            radius = 2.5.dp.toPx(),
-                            center = Offset(fillWidth, h / 2f)
-                        )
-                    }
-
-                    // Subtle inner border for tactile recessed slot
-                    drawRoundRect(
-                        color = if (isDarkMode) Color(0x33475569) else Color(0x99B4C2D3),
-                        size = size,
-                        cornerRadius = CornerRadius(8.dp.toPx(), 8.dp.toPx()),
-                        style = Stroke(width = 1.dp.toPx())
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Metrics and Next Milestone Row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Exact Level Fullness
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "${numberFormat.format(currentLevelMah.toLong())} / 10,000 mAh",
-                        fontFamily = OutfitFontFamily,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 11.sp,
-                        color = textColor
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(accentColor.copy(alpha = if (isDarkMode) 0.22f else 0.12f))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = "${(levelProgress * 100).toInt()}% FULL",
-                            fontFamily = OutfitFontFamily,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 9.sp,
-                            color = accentColor
-                        )
-                    }
-                }
-
-                // Next Milestone Navigation Teaser
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable { onClick() }
-                ) {
-                    Text(
-                        text = "Next: Tier #$nextMilestone ($levelsLeft lvls)",
-                        fontFamily = PlusJakartaSansFontFamily,
-                        fontWeight = FontWeight.Medium,
-                        fontSize = 11.sp,
-                        color = accentColor
-                    )
-                    Spacer(modifier = Modifier.width(3.dp))
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                        contentDescription = "Go to Prize Road",
-                        tint = accentColor,
-                        modifier = Modifier.size(12.dp)
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun QuickMetricNeumorph(
-    modifier: Modifier = Modifier,
-    label: String,
-    value: String,
-    color: Color,
-    isDarkMode: Boolean,
-    onClick: (() -> Unit)? = null,
-    subtext: String? = null
-) {
-    LiquidGlassCard(
-        modifier = modifier,
-        accentColor = color,
-        isDarkMode = isDarkMode,
-        shape = RoundedCornerShape(16.dp),
-        onClick = onClick
-    ) {
-        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp)) {
-            Text(
-                text = label,
-                fontFamily = PlusJakartaSansFontFamily,
-                fontWeight = FontWeight.Medium,
-                fontSize = 9.sp,
-                color = TextSlate
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = value,
-                fontFamily = OutfitFontFamily,
-                fontWeight = FontWeight.Bold,
-                fontSize = 15.sp,
-                color = if (isDarkMode) TextWhite else TextCharcoal
-            )
-            if (subtext != null) {
-                Spacer(modifier = Modifier.height(3.dp))
-                Text(
-                    text = subtext,
-                    fontFamily = PlusJakartaSansFontFamily,
-                    fontWeight = FontWeight.Medium,
-                    fontSize = 8.sp,
-                    color = color,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ScientificThermalAndModeCard(
-    scienceProfile: LivingStateScienceProfile,
-    telemetry: BatteryTelemetry,
-    accentColor: Color,
-    isDarkMode: Boolean,
-    glowIntensity: Float
-) {
-    val resolvedTheme = LocalAmpereTheme.current
-    val textColor = if (resolvedTheme.themeId != null) resolvedTheme.textPrimary else if (isDarkMode) TextWhite else TextCharcoal
-    val subTextColor = if (resolvedTheme.themeId != null) resolvedTheme.textSecondary else TextSlate
-    val sevColor = when (scienceProfile.thermalAssessment.severityLevel) {
-        3 -> TactileCoralRed
-        2 -> TactileAmber
-        0 -> TactileCyan
-        else -> TactileGreen
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-    ) {
-        LiquidGlassCard(
-            modifier = Modifier.fillMaxWidth(),
-            accentColor = accentColor,
-            isDarkMode = isDarkMode,
-            shape = RoundedCornerShape(20.dp),
-            glowIntensity = glowIntensity,
-            testTag = "scientific_mode_thermal_card"
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Thermostat,
-                        contentDescription = null,
-                        tint = sevColor,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = scienceProfile.thermalAssessment.zoneTitleAr,
-                        fontFamily = OutfitFontFamily,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.5.sp,
-                        color = sevColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                // 4-Band IEEE / JEITA Thermal Spectrum
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    val bands = listOf(
-                        Triple("<15°C بارد", TactileCyan, 0),
-                        Triple("15–35°C مثالي", TactileGreen, 1),
-                        Triple("35–41.9°C نشط", TactileAmber, 2),
-                        Triple("≥42°C إجهاد", TactileCoralRed, 3)
-                    )
-                    bands.forEach { (label, bandColor, level) ->
-                        val active = scienceProfile.thermalAssessment.severityLevel == level
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(if (active) 7.dp else 4.dp)
-                                    .clip(CircleShape)
-                                    .background(if (active) bandColor else bandColor.copy(alpha = 0.28f))
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = label,
-                                fontFamily = PlusJakartaSansFontFamily,
-                                fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
-                                fontSize = 8.5.sp,
-                                color = if (active) bandColor else subTextColor,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-                }
-
-                Text(
-                    text = "${scienceProfile.reasonAr}\n${scienceProfile.scienceReference}",
-                    fontFamily = PlusJakartaSansFontFamily,
-                    fontSize = 10.5.sp,
-                    color = textColor.copy(alpha = 0.88f),
-                    lineHeight = 15.sp
-                )
-            }
         }
     }
 }

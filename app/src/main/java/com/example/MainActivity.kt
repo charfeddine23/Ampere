@@ -24,10 +24,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        com.example.data.AppIconManager.syncLauncherIcon(
-            applicationContext,
-            SettingsPreferencesManager(applicationContext).loadThemeConfig().launcherIconVariant
-        )
         viewModel.attachUpdateLauncher(inAppUpdateLauncher)
 
         // Configure hardware display for 120Hz / highest available refresh rate

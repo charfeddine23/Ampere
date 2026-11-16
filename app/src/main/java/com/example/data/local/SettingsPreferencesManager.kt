@@ -6,7 +6,6 @@ import androidx.compose.ui.graphics.Color
 import com.example.data.AppTier
 import com.example.data.GlassThemeConfig
 import com.example.data.GraphicsMode
-import com.example.data.LauncherIconVariant
 import com.example.data.TemperatureUnit
 
 /**
@@ -81,9 +80,6 @@ class SettingsPreferencesManager(context: Context) {
             autoUpdateEnabled = prefs.getBoolean(KEY_AUTO_UPDATE_ENABLED, true),
             currentMultiplier = prefs.getFloat(KEY_CURRENT_MULTIPLIER, 1.0f),
             currentZeroOffsetMa = prefs.getFloat(KEY_CURRENT_ZERO_OFFSET, 0.0f),
-            launcherIconKey = prefs.getString(KEY_LAUNCHER_ICON_KEY, LauncherIconVariant.SAPPHIRE.key)
-                ?: LauncherIconVariant.SAPPHIRE.key,
-            forceChangeIconEnabled = prefs.getBoolean(KEY_FORCE_CHANGE_ICON, false),
             activeThemeId = prefs.getString(KEY_ACTIVE_THEME_ID, null),
             graphicsMode = graphicsMode,
             dropletDragNavigationEnabled = prefs.getBoolean(KEY_DROPLET_DRAG_NAV, false)
@@ -132,8 +128,6 @@ class SettingsPreferencesManager(context: Context) {
             putBoolean(KEY_AUTO_UPDATE_ENABLED, config.autoUpdateEnabled)
             putFloat(KEY_CURRENT_MULTIPLIER, config.currentMultiplier)
             putFloat(KEY_CURRENT_ZERO_OFFSET, config.currentZeroOffsetMa)
-            putString(KEY_LAUNCHER_ICON_KEY, config.launcherIconKey)
-            putBoolean(KEY_FORCE_CHANGE_ICON, config.forceChangeIconEnabled)
             putString(KEY_GRAPHICS_MODE, config.graphicsMode.key)
             putBoolean(KEY_DROPLET_DRAG_NAV, config.dropletDragNavigationEnabled)
             if (config.activeThemeId != null) {
@@ -174,8 +168,6 @@ class SettingsPreferencesManager(context: Context) {
         private const val KEY_AUTO_UPDATE_ENABLED = "auto_update_enabled"
         private const val KEY_CURRENT_MULTIPLIER = "current_multiplier"
         private const val KEY_CURRENT_ZERO_OFFSET = "current_zero_offset"
-        private const val KEY_LAUNCHER_ICON_KEY = "launcher_icon_key"
-        private const val KEY_FORCE_CHANGE_ICON = "force_change_icon"
         private const val KEY_ACTIVE_THEME_ID = "active_theme_id"
         private const val KEY_GRAPHICS_MODE = "graphics_mode"
         private const val KEY_DROPLET_DRAG_NAV = "droplet_drag_nav"

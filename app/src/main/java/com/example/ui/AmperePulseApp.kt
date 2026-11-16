@@ -67,24 +67,17 @@ fun AmperePulseApp(viewModel: AmperePulseViewModel) {
     val temperatureHistory by viewModel.temperatureHistory.collectAsState()
     val sessionLogs by viewModel.sessionLogs.collectAsState()
 
-    val streakData by viewModel.streakData.collectAsState()
-    val eggData by viewModel.eggData.collectAsState()
-    val prizeRoadData by viewModel.prizeRoadData.collectAsState()
-    val techCrew by viewModel.techCrew.collectAsState()
     val cableResult by viewModel.cableResult.collectAsState()
     val sohPrediction by viewModel.sohPrediction.collectAsState()
     val deviceProfile by viewModel.deviceProfile.collectAsState()
-    val hourlyStats by viewModel.hourlyStats.collectAsState()
 
     val selectedTab by viewModel.selectedTab.collectAsState()
     val themeConfig by viewModel.themeConfig.collectAsState()
-    val iconDiagnostics by viewModel.iconDiagnostics.collectAsState()
     val isSettingsOpen by viewModel.isSettingsMenuOpen.collectAsState()
     val isSkinVaultOpen by viewModel.isSkinVaultOpen.collectAsState()
     val isRedeemDialogOpen by viewModel.isRedeemDialogOpen.collectAsState()
     val isThemeEngineOpen by viewModel.isThemeEngineOpen.collectAsState()
     val appUsageSnapshot by viewModel.appUsageSnapshot.collectAsState()
-    val isAutoSensorMode by viewModel.isAutoSensorMode.collectAsState()
     val userAccount by viewModel.userAccount.collectAsState()
     val updateUiState by viewModel.updateUiState.collectAsState()
     val hostContext = LocalContext.current
@@ -302,17 +295,10 @@ fun AmperePulseApp(viewModel: AmperePulseViewModel) {
                             when (tab) {
                                 NavigationTab.BATTERY -> Page1LivingBatteryScreen(
                                     telemetry = telemetry,
-                                    voltageHistory = voltageHistory,
-                                    currentHistory = currentHistory,
                                     themeConfig = themeConfig,
-                                    prizeRoadData = prizeRoadData,
                                     deviceProfile = deviceProfile,
-                                    isAutoSensorMode = isAutoSensorMode,
                                     appUsageSnapshot = appUsageSnapshot,
-                                    onRefreshAppUsage = { viewModel.refreshAppBatteryUsage() },
-                                    onSelectLivingState = { viewModel.selectLivingState(it) },
-                                    onNavigateToPrizeRoad = { viewModel.selectTab(NavigationTab.BATTERY_SOH) },
-                                    onToggleThermalTest = { viewModel.toggleThermalSimulation() }
+                                    onRefreshAppUsage = { viewModel.refreshAppBatteryUsage() }
                                 )
                                 NavigationTab.BATTERY_SOH -> Page3BatterySohScreen(
                                     telemetry = telemetry,
@@ -364,11 +350,6 @@ fun AmperePulseApp(viewModel: AmperePulseViewModel) {
                 onClose = { viewModel.toggleSettingsMenu(false) },
                 themeConfig = themeConfig,
                 onConfigChange = { viewModel.updateThemeConfig(it) },
-                onSelectLauncherIcon = { viewModel.updateLauncherIcon(it) },
-                iconDiagnostics = iconDiagnostics,
-                onToggleForceChangeIcon = { viewModel.toggleForceChangeIcon(it) },
-                onForceChangeLauncherIcon = { viewModel.forceChangeLauncherIconNow(it) },
-                onPinLauncherShortcut = { viewModel.pinLauncherShortcut(it) },
                 onOpenThemeEngine = { viewModel.toggleThemeEngine(true) },
                 onOpenSkinVault = { viewModel.toggleSkinVault(true) },
                 onOpenRedeemDialog = { viewModel.toggleRedeemDialog(true) },

@@ -46,47 +46,37 @@ enum class MetricType(val title: String, val unit: String) {
 }
 
 /**
- * 4 Living States with Clean Neumorphic & Liquid Glass Color Palette
+ * 4 Scientific Operating States mapped to IEEE 1625 / JEITA / BU-808 electrochemistry
  */
 enum class LivingBatteryState(
     val title: String,
     val neonPrimary: Color,
     val neonSecondary: Color,
-    val auraDescription: String,
-    val xpRateLabel: String,
-    val isBleeding: Boolean
+    val auraDescription: String
 ) {
     OVERDRIVE_HEATING(
-        title = "Overdrive & Heating",
+        title = "Thermal Stress",
         neonPrimary = TactileCoralRed, // #FF3D00
         neonSecondary = Color(0xFFFF6E40),
-        auraDescription = "Thermal dissipation overload. High heat load active.",
-        xpRateLabel = "-1 XP / min (Thermal Bleed)",
-        isBleeding = true
+        auraDescription = "Cell temperature or voltage exceeded IEEE 1625 / JEITA safe ceiling."
     ),
     COOLING(
-        title = "Cryo Cooling",
+        title = "Thermal Recovery",
         neonPrimary = TactileCyan, // #00B0FF
         neonSecondary = Color(0xFF40C4FF),
-        auraDescription = "Vapor chamber active. Cell matrix normalizing.",
-        xpRateLabel = "+2 XP / min (Recovery)",
-        isBleeding = false
+        auraDescription = "Active heat dissipation or low-temperature protection window."
     ),
     ENERGY_STORING(
-        title = "Energy Storing",
+        title = "Active Charging",
         neonPrimary = TactileGreen, // #00C853
         neonSecondary = Color(0xFF69F0AE),
-        auraDescription = "Ultra-fast energy influx. Active lithium saturation.",
-        xpRateLabel = "+5 XP / min (Fast Pulse)",
-        isBleeding = false
+        auraDescription = "Controlled CC/CV lithium intercalation within JEITA safe temperature."
     ),
     DEEP_SLEEP(
-        title = "Deep Sleep",
+        title = "Quiescent Standby",
         neonPrimary = TactileViolet, // #7C4DFF
         neonSecondary = Color(0xFFB388FF),
-        auraDescription = "Sub-milliamp quiescent draw. Cell longevity mode.",
-        xpRateLabel = "+1 XP / min (Longevity)",
-        isBleeding = false
+        auraDescription = "Low quiescent C-rate draw preserving cathode structural stability."
     )
 }
 
@@ -96,85 +86,23 @@ data class TelemetryPoint(
 )
 
 data class BatteryTelemetry(
-    val percentage: Int = 84,
-    val status: BatteryStatus = BatteryStatus.CHARGING,
-    val plugType: ChargePlug = ChargePlug.AC,
+    val percentage: Int = 0,
+    val status: BatteryStatus = BatteryStatus.UNKNOWN,
+    val plugType: ChargePlug = ChargePlug.NONE,
     val health: BatteryHealth = BatteryHealth.GOOD,
-    val voltageMv: Int = 4182,
-    val currentMa: Int = 2340,
-    val wattageW: Float = 9.78f,
-    val temperatureC: Float = 28.5f,
-    val technology: String = "Li-poly (Solid Matrix)",
+    val voltageMv: Int = 0,
+    val currentMa: Int = 0,
+    val wattageW: Float = 0.0f,
+    val temperatureC: Float = 25.0f,
+    val technology: String = "Li-Ion / Li-Poly",
     val capacityMah: Int = 5000,
-    val chargeCounterUah: Long = 4200000L,
-    val cycleCount: Int = 142,
-    val estimatedMinutesRemaining: Int = 38,
-    val isFastCharging: Boolean = true,
-    val dischargeRatePerHour: Float = 4.2f,
-    val livingState: LivingBatteryState = LivingBatteryState.ENERGY_STORING,
+    val chargeCounterUah: Long = 0L,
+    val cycleCount: Int = 0,
+    val estimatedMinutesRemaining: Int = 0,
+    val isFastCharging: Boolean = false,
+    val dischargeRatePerHour: Float = 0.0f,
+    val livingState: LivingBatteryState = LivingBatteryState.DEEP_SLEEP,
     val lastUpdated: Long = System.currentTimeMillis()
-)
-
-data class StreakData(
-    val currentStreakDays: Int = 0,
-    val bestStreakDays: Int = 0,
-    val shieldsAvailable: Int = 0,
-    val maxShields: Int = 0, // Starts at 0 shields! Unlocked as you level up (Level 5, 10, 25, 50)
-    val todayComplianceRate: Float = 0.0f,
-    val healthyChargeMinutesToday: Int = 0,
-    val optimalTempScore: Int = 100,
-    val lastShieldUsedDate: String? = null
-)
-
-data class HatchedCompanion(
-    val id: String,
-    val name: String,
-    val rarity: String,
-    val perk: String,
-    val color: Color
-)
-
-data class CyberEggData(
-    val eggName: String = "Organic Neo Core Egg",
-    val incubationProgress: Float = 0.0f,
-    val isIncubating: Boolean = true,
-    val currentXP: Int = 0,
-    val xpToHatch: Int = 1000,
-    val hatchedList: List<HatchedCompanion> = emptyList() // Clean zero companions; hatched via gameplay!
-)
-
-data class PrizeNode(
-    val level: Int,
-    val requiredCumulativeMah: Long,
-    val title: String,
-    val rewardName: String,
-    val rewardType: String,
-    val isMilestone: Boolean,
-    val iconKey: String
-)
-
-data class PrizeRoadData(
-    val cumulativeMah: Long = 0L,
-    val currentLevel: Int = 1,
-    val maxLevel: Int = 1000,
-    val claimedMilestones: Set<Int> = emptySet(), // Starts at zero claimed milestones!
-    val activeTitle: String = "Cadet Recruit"
-)
-
-data class TechCrewMember(
-    val id: String,
-    val name: String,
-    val title: String,
-    val avatarLetter: String,
-    val primaryColor: Color,
-    val abilityName: String,
-    val abilityDescription: String,
-    val cooldownTotalSec: Int = 60,
-    val cooldownRemainingSec: Int = 0,
-    val isActiveAbilityRunning: Boolean = false,
-    val activeSecondsRemaining: Int = 0,
-    val unlockLevel: Int = 1,
-    val isUnlocked: Boolean = false
 )
 
 enum class AppTier(
@@ -196,69 +124,6 @@ enum class AppTier(
     }
 }
 
-enum class LauncherIconVariant(
-    val key: String,
-    val titleAr: String,
-    val aliasClassName: String,
-    val primaryColor: Color,
-    val secondaryColor: Color
-) {
-    SAPPHIRE(
-        key = "sapphire",
-        titleAr = "ياقوتي",
-        aliasClassName = "com.example.LauncherSapphire",
-        primaryColor = Color(0xFF2962FF),
-        secondaryColor = Color(0xFF00E5FF)
-    ),
-    EMERALD(
-        key = "emerald",
-        titleAr = "زمردي",
-        aliasClassName = "com.example.LauncherEmerald",
-        primaryColor = Color(0xFF00C853),
-        secondaryColor = Color(0xFF69F0AE)
-    ),
-    CRIMSON(
-        key = "crimson",
-        titleAr = "قرمزي",
-        aliasClassName = "com.example.LauncherCrimson",
-        primaryColor = Color(0xFFFF3D00),
-        secondaryColor = Color(0xFFFF9100)
-    ),
-    VIOLET(
-        key = "violet",
-        titleAr = "بنفسجي",
-        aliasClassName = "com.example.LauncherViolet",
-        primaryColor = Color(0xFF7C4DFF),
-        secondaryColor = Color(0xFFE040FB)
-    ),
-    AURIC(
-        key = "auric",
-        titleAr = "ذهبي",
-        aliasClassName = "com.example.LauncherAuric",
-        primaryColor = Color(0xFFFFB300),
-        secondaryColor = Color(0xFFFFE082)
-    ),
-    WHITE(
-        key = "white",
-        titleAr = "أبيض",
-        aliasClassName = "com.example.LauncherWhite",
-        primaryColor = Color(0xFF94A3B8),
-        secondaryColor = Color(0xFFF8FAFC)
-    ),
-    BLACK(
-        key = "black",
-        titleAr = "أسود",
-        aliasClassName = "com.example.LauncherBlack",
-        primaryColor = Color(0xFF0F172A),
-        secondaryColor = Color(0xFF94A3B8)
-    );
-
-    companion object {
-        fun fromKey(key: String?): LauncherIconVariant {
-            return entries.find { it.key == key } ?: SAPPHIRE
-        }
-    }
-}
 
 enum class GraphicsMode(val key: String, val titleAr: String) {
     STANDARD("standard", "الوضع القياسي"),
@@ -296,15 +161,10 @@ data class GlassThemeConfig(
     val autoUpdateEnabled: Boolean = true,
     val currentMultiplier: Float = 1.0f,
     val currentZeroOffsetMa: Float = 0.0f,
-    val launcherIconKey: String = LauncherIconVariant.SAPPHIRE.key,
-    val forceChangeIconEnabled: Boolean = false,
     val activeThemeId: String? = null,
     val graphicsMode: GraphicsMode = GraphicsMode.STANDARD,
     val dropletDragNavigationEnabled: Boolean = false
 ) {
-    val launcherIconVariant: LauncherIconVariant
-        get() = LauncherIconVariant.fromKey(launcherIconKey)
-
     val isUsingThemeEngine: Boolean
         get() = !activeThemeId.isNullOrBlank()
 
@@ -362,40 +222,35 @@ enum class CableDnaTier(
     val title: String,
     val grade: String,
     val badgeColor: Color,
-    val xpMultiplier: Float,
     val description: String,
     val isDangerous: Boolean
 ) {
     LEGENDARY_ORIGINAL(
-        title = "Legendary OEM Original",
+        title = "OEM High-Conductivity",
         grade = "TIER S+",
         badgeColor = TactileGreen,
-        xpMultiplier = 2.0f,
-        description = "Ultra-low resistance path (<140mΩ). 99.8% copper purity with minimal voltage sag. Maximum fast charge throughput.",
+        description = "Ultra-low loop resistance (<125mΩ). Minimal I²R drop compliant with IEC 62680 & USB-IF 5A PD.",
         isDangerous = false
     ),
     CERTIFIED_FAST(
-        title = "Certified Fast High-Flow",
+        title = "Certified Fast PD/PPS",
         grade = "TIER A",
         badgeColor = TactileCyan,
-        xpMultiplier = 1.5f,
-        description = "Nominal cable resistance (140-260mΩ). High electron mobility with stable power delivery under sustained load.",
+        description = "Nominal cable resistance (126–230mΩ). Stable power delivery under sustained charging load.",
         isDangerous = false
     ),
     DEGRADED_STANDARD(
         title = "Degraded Standard Line",
         grade = "TIER C",
         badgeColor = TactileAmber,
-        xpMultiplier = 1.0f,
-        description = "Elevated resistance (260-450mΩ). Moderate voltage sag detected. Charging speeds may throttle during peak draw.",
+        description = "Elevated loop resistance (231–390mΩ). Moderate voltage sag limits maximum charging wattage.",
         isDangerous = false
     ),
     DANGEROUS_COUNTERFEIT(
-        title = "Dangerous Counterfeit Alert",
+        title = "High-Loss / Non-Compliant",
         grade = "CRITICAL",
         badgeColor = TactileCoralRed,
-        xpMultiplier = 0.5f,
-        description = "Excessive resistance (>450mΩ) with high heat dissipation! Severe voltage drop poses thermal hazard to battery matrix.",
+        description = "Excessive loop resistance (>390mΩ) or voltage drop >750mV. Significant conductor Joule heating.",
         isDangerous = true
     )
 }
@@ -460,18 +315,18 @@ enum class CellHealthStatus(
 }
 
 data class BatterySohPrediction(
-    val healthPercentage: Float = 98.4f,
+    val healthPercentage: Float = 100.0f,
     val originalCapacityMah: Int = 5000,
-    val estimatedCurrentCapacityMah: Int = 4920,
-    val totalCyclesCompleted: Int = 142,
-    val estimatedRemainingCycles: Int = 858,
-    val estimatedLifespanDays: Int = 842,
-    val degradationRatePer100Cycles: Float = 1.15f,
-    val coulombicEfficiencyPercent: Float = 99.4f,
-    val internalResistanceEstimateMilliOhms: Int = 48,
+    val estimatedCurrentCapacityMah: Int = 5000,
+    val totalCyclesCompleted: Int = 0,
+    val estimatedRemainingCycles: Int = 1000,
+    val estimatedLifespanDays: Int = 1000,
+    val degradationRatePer100Cycles: Float = 2.0f,
+    val coulombicEfficiencyPercent: Float = 99.5f,
+    val internalResistanceEstimateMilliOhms: Int = 45,
     val cellStatus: CellHealthStatus = CellHealthStatus.PRISTINE,
-    val projectedReplacementDate: String = "September 2028",
-    val chemistryType: String = "Li-Poly Solid Matrix (NMC 811)"
+    val projectedReplacementDate: String = "--",
+    val chemistryType: String = "Li-Ion / Li-Poly (NMC)"
 )
 
 /**

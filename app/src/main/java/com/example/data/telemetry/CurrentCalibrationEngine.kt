@@ -2,11 +2,8 @@ package com.example.data.telemetry
 
 import android.content.Context
 import android.os.BatteryManager
-import android.os.Build
-import android.os.PowerManager
 import android.util.Log
 import kotlin.math.abs
-import kotlin.math.sin
 
 /**
  * High-Precision, Noise-Filtered Current Calibration & Telemetry Engine for "Ampere Pulse".
@@ -45,16 +42,9 @@ class CurrentCalibrationEngine(
     var zeroOffsetMa: Float = initialOffsetMa
         private set
 
-    // Auto-calibration state
-    private var idleSampleCount = 0
-    private var idleAccumulator = 0.0
-    var isAutoCalibrating: Boolean = false
-        private set
-
     // Filter state
     private var filteredCurrentMa: Float? = null
     private var rawLastCurrentMa: Float = 0f
-    private var simTick: Long = 0L
 
     /**
      * Updates calibration multiplier and offset (e.g. from user settings or saved profile).
@@ -73,38 +63,28 @@ class CurrentCalibrationEngine(
     fun resetCalibration() {
         multiplier = 1.0f
         zeroOffsetMa = 0.0f
-        idleSampleCount = 0
-        idleAccumulator = 0.0
     }
 
     /**
-     * Safely queries [BatteryManager] current and returns ultra-accurate, noise-filtered mA.
-     *
-     * @param batteryManager Android system [BatteryManager]
-     * @param isCharging true if battery status is charging or full
-     * @param voltageMv Current battery cell voltage in mV
-     * @return Filtered, calibrated current in milliamperes (mA). Positive = charge, Negative = discharge.
+     * Safely queries [BatteryManager] current and returns calibrated, EMA-filtered mA.
+     * Returns 0 when hardware current reporting is unsupported or unavailable.
      */
     fun sampleCurrentMa(
         batteryManager: BatteryManager?,
         isCharging: Boolean,
         voltageMv: Int = 4180
     ): Int {
-        simTick++
-
-        // Step 1: Robust Hardware Query & OEM Discrepancy Resolution
         val rawMa = queryRawHardwareCurrentMa(batteryManager, isCharging)
         rawLastCurrentMa = rawMa
 
-        // Step 2: Auto-Calibration Routine during idle states
-        checkAndPerformAutoCalibration(rawMa, isCharging)
+        // If hardware returned 0 / unsupported, preserve genuine 0 reading without inventing current
+        if (rawMa == 0f) {
+            filteredCurrentMa = 0f
+            return 0
+        }
 
-        // Step 3: Apply Calibration (Multiplier & Zero-Offset)
         val calibratedMa = (rawMa - zeroOffsetMa) * multiplier
-
-        // Step 4: Real-time Exponential Moving Average (EMA) with Adaptive Alpha
         val smoothed = applyAdaptiveEma(calibratedMa)
-
         return smoothed.toInt()
     }
 
@@ -114,7 +94,7 @@ class CurrentCalibrationEngine(
      */
     private fun queryRawHardwareCurrentMa(batteryManager: BatteryManager?, isCharging: Boolean): Float {
         if (batteryManager == null) {
-            return generatePhysicalFallbackCurrent(isCharging)
+            return 0f
         }
 
         val rawProperty = try {
@@ -124,9 +104,7 @@ class CurrentCalibrationEngine(
             Int.MIN_VALUE
         }
 
-        // Check for unsupported or error values (Int.MIN_VALUE, or 0 when current is not supported)
         if (rawProperty == Int.MIN_VALUE || rawProperty == 0) {
-            // Some devices populate BATTERY_PROPERTY_CURRENT_AVERAGE instead
             val avgProperty = try {
                 batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_AVERAGE)
             } catch (_: Exception) {
@@ -137,67 +115,39 @@ class CurrentCalibrationEngine(
                 return normalizeCurrentValue(avgProperty, isCharging)
             }
 
-            return generatePhysicalFallbackCurrent(isCharging)
+            return 0f
         }
 
         return normalizeCurrentValue(rawProperty, isCharging)
     }
 
     /**
-     * Normalizes the integer property value into milliamperes (mA):
-     * - Microampere vs. Milliampere detection: standard Android devices report in microamperes (uA).
-     *   Values > 20,000 or < -20,000 are in uA and must be divided by 1000.
-     *   Some OEMs (e.g. certain Huawei, older Sony/Samsung) report directly in mA.
-     * - Sign polarity check:
-     *   On standard Android, negative denotes discharge, positive denotes charging.
-     *   Certain OEMs invert this; we correlate with the known charging state.
+     * Normalizes the integer property value into milliamperes (mA), resolving uA vs mA scaling
+     * and OEM polarity conventions relative to [isCharging].
      */
     private fun normalizeCurrentValue(rawVal: Int, isCharging: Boolean): Float {
         val absVal = abs(rawVal)
 
-        // Determine if raw value is in microamperes (uA) or milliamperes (mA)
         var ma = if (absVal >= 10000) {
             rawVal / 1000.0f
         } else {
             rawVal.toFloat()
         }
 
-        // Unlikely extreme sensor glitch protection (> 15,000 mA or < -15,000 mA is invalid for a phone battery)
         if (abs(ma) > 15000f) {
             ma = if (rawVal < 0) -rawVal / 1000f else rawVal / 1000f
             if (abs(ma) > 15000f) {
-                return generatePhysicalFallbackCurrent(isCharging)
+                return 0f
             }
         }
 
-        // OEM Sign inversion correction
         if (isCharging) {
-            // When charging, current flowing into the battery must be positive (> 0)
-            if (ma < 0) {
-                ma = -ma
-            }
+            if (ma < 0) ma = -ma
         } else {
-            // When discharging, current drawn from the battery must be negative (< 0)
-            if (ma > 0) {
-                ma = -ma
-            }
-        }
-
-        // If sensor reports near-zero noise while active (< 8 mA), provide realistic physical current
-        if (abs(ma) < 8f) {
-            return generatePhysicalFallbackCurrent(isCharging)
+            if (ma > 0) ma = -ma
         }
 
         return ma
-    }
-
-    /**
-     * Generates a realistic physical current baseline when hardware does not provide current readings.
-     */
-    private fun generatePhysicalFallbackCurrent(isCharging: Boolean): Float {
-        val base = if (isCharging) 2250f else -420f
-        val oscillation = (sin(simTick * 0.10) * 85).toFloat()
-        return base + oscillation
     }
 
     /**
@@ -228,53 +178,7 @@ class CurrentCalibrationEngine(
     }
 
     /**
-     * Auto-Calibration Routine:
-     * During idle/sleep states (or when device is in steady trickle charge without active user load),
-     * samples the minimal quiescent baseline over 30 consecutive samples to neutralize sensor DC bias.
-     */
-    private fun checkAndPerformAutoCalibration(rawMa: Float, isCharging: Boolean) {
-        val powerManager = context?.getSystemService(Context.POWER_SERVICE) as? PowerManager
-        val isScreenOff = if (powerManager != null) !(powerManager.isInteractive) else false
-
-        // Idle state: screen is off or phone is stationary in trickle charge
-        val isCandidateForCalibration = isScreenOff || (!isCharging && abs(rawMa) in 50f..250f)
-
-        if (isCandidateForCalibration) {
-            isAutoCalibrating = true
-            idleSampleCount++
-            idleAccumulator += rawMa
-
-            // After 30 steady idle samples (~3 seconds at 100ms interval), compute new offset correction
-            if (idleSampleCount >= 30) {
-                val averageIdle = (idleAccumulator / idleSampleCount).toFloat()
-                // Typical phone idle baseline with screen off is around -120 mA
-                val expectedBaseline = -120f
-                val measuredDrift = averageIdle - expectedBaseline
-
-                // Gentle drift correction (adjust offset up to ±35 mA per calibration cycle)
-                if (abs(measuredDrift) in 5f..80f) {
-                    val adjustment = (measuredDrift * 0.25f).coerceIn(-35f, 35f)
-                    zeroOffsetMa = (zeroOffsetMa + adjustment).coerceIn(-300f, 300f)
-                    try {
-                        Log.i(TAG, "Auto-calibration completed: Neutralized drift of $adjustment mA, new offset: $zeroOffsetMa mA")
-                    } catch (_: Exception) {}
-                }
-
-                idleSampleCount = 0
-                idleAccumulator = 0.0
-                isAutoCalibrating = false
-            }
-        } else {
-            if (idleSampleCount > 0) {
-                idleSampleCount = 0
-                idleAccumulator = 0.0
-            }
-            isAutoCalibrating = false
-        }
-    }
-
-    /**
-     * Force-triggers an immediate manual zero-point calibration.
+     * Force-triggers an immediate manual zero-point calibration against a known reference load.
      */
     fun performManualZeroCalibration(currentReadingMa: Float, expectedNominalMa: Float) {
         val drift = currentReadingMa - expectedNominalMa
@@ -293,7 +197,7 @@ class CurrentCalibrationEngine(
             filteredMa = filteredCurrentMa ?: 0f,
             multiplier = multiplier,
             zeroOffsetMa = zeroOffsetMa,
-            isAutoCalibrating = isAutoCalibrating
+            isAutoCalibrating = false
         )
     }
 }

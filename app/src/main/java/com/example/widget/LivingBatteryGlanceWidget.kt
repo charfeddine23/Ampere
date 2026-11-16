@@ -48,10 +48,10 @@ class LivingBatteryGlanceWidget : GlanceAppWidget() {
         val stateName = prefs.getString("battery_state", "ENERGY_STORING") ?: "ENERGY_STORING"
 
         val (accentColor, stateTitle, stateSubtitle) = when (stateName) {
-            "OVERDRIVE_HEATING" -> Triple(Color(0xFFFF3D00), "OVERDRIVE / HEATING", "Thermal Stress > 38°C")
-            "COOLING" -> Triple(Color(0xFF00B0FF), "CRYOGENIC COOLING", "Core Dissipation Active")
-            "ENERGY_STORING" -> Triple(Color(0xFF00C853), "ENERGY STORING", "Active Fast Pulse")
-            else -> Triple(Color(0xFF7C4DFF), "DEEP SLEEP", "Sub-milliamp Longevity")
+            "OVERDRIVE_HEATING" -> Triple(Color(0xFFFF3D00), "THERMAL STRESS", "JEITA Ceiling ≥ 42°C")
+            "COOLING" -> Triple(Color(0xFF00B0FF), "THERMAL RECOVERY", "Active Dissipation")
+            "ENERGY_STORING" -> Triple(Color(0xFF00C853), "ACTIVE CHARGING", "Safe CC/CV Window")
+            else -> Triple(Color(0xFF7C4DFF), "QUIESCENT STANDBY", "Low C-Rate Preservation")
         }
 
         provideContent {

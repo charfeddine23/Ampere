@@ -5,14 +5,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.BatteryMonitorRepository
 import com.example.data.BatteryTelemetry
-import com.example.data.CyberEggData
 import com.example.data.GlassThemeConfig
-import com.example.data.HatchedCompanion
-import com.example.data.LivingBatteryState
-import com.example.data.PrizeRoadData
 import com.example.data.SessionLog
-import com.example.data.StreakData
-import com.example.data.TechCrewMember
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.IntentSenderRequest
 import android.content.Context
@@ -43,12 +37,6 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
     val temperatureHistory: StateFlow<List<TelemetryPoint>> = repository.temperatureHistory
     val sessionLogs: StateFlow<List<SessionLog>> = repository.sessionLogs
 
-    // 5-Page Architecture Flows
-    val streakData: StateFlow<StreakData> = repository.streakData
-    val eggData: StateFlow<CyberEggData> = repository.eggData
-    val prizeRoadData: StateFlow<PrizeRoadData> = repository.prizeRoadData
-    val techCrew: StateFlow<List<TechCrewMember>> = repository.techCrew
-    val isAutoSensorMode: StateFlow<Boolean> = repository.isAutoSensorMode
     val userAccount: StateFlow<com.example.data.UserAccount> = repository.userAccount
     val cableResult: StateFlow<com.example.data.CableDiagnosticResult> = repository.cableResult
     val sohPrediction: StateFlow<com.example.data.BatterySohPrediction> = repository.sohPrediction
@@ -62,11 +50,6 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
 
     private val _themeConfig = MutableStateFlow(prefsManager.loadThemeConfig())
     val themeConfig: StateFlow<GlassThemeConfig> = _themeConfig.asStateFlow()
-
-    private val _iconDiagnostics = MutableStateFlow(
-        com.example.data.AppIconManager.getDiagnostics(application.applicationContext)
-    )
-    val iconDiagnostics: StateFlow<com.example.data.IconSwitchDiagnostics> = _iconDiagnostics.asStateFlow()
 
     private val _isSettingsMenuOpen = MutableStateFlow(false)
     val isSettingsMenuOpen: StateFlow<Boolean> = _isSettingsMenuOpen.asStateFlow()
@@ -253,69 +236,6 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
         )
     }
 
-    fun updateLauncherIcon(variant: com.example.data.LauncherIconVariant) {
-        val current = _themeConfig.value
-        val updated = current.copy(launcherIconKey = variant.key)
-        _themeConfig.value = updated
-        prefsManager.saveThemeConfigSync(updated)
-
-        val diag = if (updated.forceChangeIconEnabled) {
-            com.example.data.AppIconManager.forceApplyLauncherIcon(getApplication(), variant, launchHomeScreen = true)
-        } else {
-            com.example.data.AppIconManager.applyLauncherIcon(getApplication(), variant)
-        }
-        _iconDiagnostics.value = diag
-
-        com.example.audio.CyberHapticsEngine.triggerTactileTick(getApplication())
-        com.example.audio.CyberSoundscapeEngine.playCryoChime()
-        repository.addManualSessionLog(
-            title = if (updated.forceChangeIconEnabled) {
-                "Force Icon Switch: ${variant.titleAr}"
-            } else {
-                "Launcher Icon Updated: ${variant.titleAr}"
-            },
-            desc = "External home launcher icon switched to ${variant.titleAr} (${variant.key}).",
-            statTag = "ICON",
-            type = "check"
-        )
-    }
-
-    fun toggleForceChangeIcon(enabled: Boolean) {
-        val updated = _themeConfig.value.copy(forceChangeIconEnabled = enabled)
-        _themeConfig.value = updated
-        prefsManager.saveThemeConfigSync(updated)
-        com.example.audio.CyberHapticsEngine.triggerTactileTick(getApplication())
-    }
-
-    fun forceChangeLauncherIconNow(variant: com.example.data.LauncherIconVariant = _themeConfig.value.launcherIconVariant) {
-        val updated = _themeConfig.value.copy(launcherIconKey = variant.key)
-        _themeConfig.value = updated
-        prefsManager.saveThemeConfigSync(updated)
-        com.example.audio.CyberHapticsEngine.triggerBenchmarkSuccess(getApplication())
-        com.example.audio.CyberSoundscapeEngine.playCryoChime()
-        repository.addManualSessionLog(
-            title = "Force Change Icon Executed: ${variant.titleAr}",
-            desc = "Executed multi-layer PackageManager cycle + Home flush + flags=0 for ${variant.aliasClassName}.",
-            statTag = "FORCE",
-            type = "check"
-        )
-        _iconDiagnostics.value = com.example.data.AppIconManager.forceApplyLauncherIcon(
-            context = getApplication(),
-            variant = variant,
-            launchHomeScreen = true
-        )
-    }
-
-    fun pinLauncherShortcut(variant: com.example.data.LauncherIconVariant): Boolean {
-        val pinned = com.example.data.AppIconManager.pinForcedHomeShortcut(getApplication(), variant)
-        if (pinned) {
-            com.example.audio.CyberHapticsEngine.triggerBenchmarkSuccess(getApplication())
-            _iconDiagnostics.value = _iconDiagnostics.value.copy(
-                statusMessage = "تم إرسال اختصار أيقونة (${variant.titleAr}) للشاشة الرئيسية"
-            )
-        }
-        return pinned
-    }
 
     fun toggleSettingsMenu(open: Boolean) {
         _isSettingsMenuOpen.value = open
@@ -371,38 +291,6 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
         )
     }
 
-    fun seedOrResetHourlyStats() {
-        repository.seedOrResetHourlyStats()
-    }
-
-    fun selectLivingState(state: LivingBatteryState?) {
-        repository.setLivingBatteryState(state)
-    }
-
-    fun setAutoSensorMode(auto: Boolean) {
-        repository.setAutoSensorMode(auto)
-    }
-
-    fun triggerCrewAbility(crewId: String) {
-        repository.triggerCrewAbility(crewId)
-    }
-
-    fun hatchEgg(): HatchedCompanion {
-        return repository.hatchEgg()
-    }
-
-    fun addCumulativeMah(addedMah: Long) {
-        repository.addCumulativeMah(addedMah)
-    }
-
-    fun claimMilestone(level: Int) {
-        repository.claimMilestone(level)
-    }
-
-    fun repairShield() {
-        repository.repairShield()
-    }
-
     fun addManualLog(title: String, desc: String, statTag: String, type: String) {
         repository.addManualSessionLog(title, desc, statTag, type)
     }
@@ -421,10 +309,6 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
 
     fun recalibrateSohPrediction(addLog: Boolean = true) {
         repository.recalibrateSohPrediction(addLog = addLog)
-    }
-
-    fun toggleThermalSimulation(forceOverheat: Boolean? = null) {
-        repository.toggleThermalSimulation(forceOverheat)
     }
 
     companion object {
