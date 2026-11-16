@@ -359,4 +359,41 @@ class ExampleUnitTest {
         assertEquals(GraphicsMode.PRO, GraphicsMode.fromKey("pro"))
         assertEquals(GraphicsMode.STANDARD, GraphicsMode.fromKey("invalid"))
     }
+
+    @Test
+    fun testFluidCurveMathSuppressesMicroOscillations() {
+        // Tiny +-1 mV chatter over 24 samples must NOT stretch full height (80mV minVisualSpan keeps it calm near center)
+        val tinyJitter = (0 until 24).map { idx ->
+            com.example.data.TelemetryPoint(
+                timestamp = idx * 1000L,
+                value = if (idx % 2 == 0) 4180f else 4181f
+            )
+        }
+        val calmKnots = com.example.ui.components.FluidCurveMath.computeNormalizedKnots(
+            points = tinyJitter,
+            minVisualSpan = 80f,
+            knotCount = 12
+        )
+        assertEquals(12, calmKnots.size)
+        val calmSpread = calmKnots.max() - calmKnots.min()
+        assertTrue("Tiny 1mV jitter should compress to < 0.03 visual amplitude, got $calmSpread", calmSpread < 0.03f)
+
+        // Genuine rising charging trend over 24 samples should progress smoothly upward
+        val risingTrend = (0 until 24).map { idx ->
+            com.example.data.TelemetryPoint(
+                timestamp = idx * 1000L,
+                value = 3800f + idx * 15f
+            )
+        }
+        val trendKnots = com.example.ui.components.FluidCurveMath.computeNormalizedKnots(
+            points = risingTrend,
+            minVisualSpan = 80f,
+            knotCount = 12
+        )
+        assertEquals(12, trendKnots.size)
+        assertTrue(trendKnots.last() > trendKnots.first() + 0.45f)
+        for (i in 1 until trendKnots.size) {
+            assertTrue(trendKnots[i] >= trendKnots[i - 1])
+        }
+    }
 }

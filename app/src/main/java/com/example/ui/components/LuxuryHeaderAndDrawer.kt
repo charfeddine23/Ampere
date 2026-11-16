@@ -432,10 +432,11 @@ fun LuxurySettingsDrawer(
     val textColor = if (resolvedTheme.themeId != null) resolvedTheme.textPrimary else if (isDark) Color(0xFFE9EFF8) else TextCharcoal
     val subTextColor = if (resolvedTheme.themeId != null) resolvedTheme.textSecondary else if (isDark) Color(0xFF93A5BF) else TextSlate
 
-    var expandAppearance by remember { mutableStateOf(true) }
+    var expandAppearance by remember { mutableStateOf(false) }
     var expandColorsIdentity by remember { mutableStateOf(false) }
-    var expandGraphics by remember { mutableStateOf(true) }
-    var expandNotifications by remember { mutableStateOf(true) }
+    var expandGraphics by remember { mutableStateOf(false) }
+    var expandNotifications by remember { mutableStateOf(false) }
+    var expandAutoUpdate by remember { mutableStateOf(false) }
     var expandCalibration by remember { mutableStateOf(false) }
 
     AnimatedVisibility(
@@ -1406,25 +1407,42 @@ fun LuxurySettingsDrawer(
                         }
                     }
 
-                    // 6. Luxurious, Breathing & Dynamic Auto-Update Card
-                    LuxuriousAutoUpdateStatusCard(
-                        updateUiState = updateUiState,
-                        autoUpdateEnabled = themeConfig.autoUpdateEnabled,
-                        onToggleAutoUpdate = { enabled ->
+                    // 6. Expandable Accordion: Auto-Update (collapsed by default)
+                    SettingsAccordionCard(
+                        title = "التحديث التلقائي • Auto-Update",
+                        summary = "v${updateUiState.currentVersionName} • ${if (themeConfig.autoUpdateEnabled) "تلقائي" else "يدوي"}",
+                        icon = Icons.Default.SystemUpdate,
+                        expanded = expandAutoUpdate,
+                        onToggle = {
                             CyberHapticsEngine.triggerTactileTick(context)
-                            onConfigChange(themeConfig.copy(autoUpdateEnabled = enabled))
+                            expandAutoUpdate = !expandAutoUpdate
                         },
                         accentColor = accentColor,
-                        isDark = isDark,
+                        surfaceColor = surfaceCardColor,
+                        borderColor = subtleBorder,
                         textColor = textColor,
-                        onCheckUpdates = onCheckUpdates,
-                        onTriggerUpdate = onTriggerUpdate,
-                        onCancelDownload = onCancelDownload,
-                        onOpenUpdateDialog = {
-                            onClose()
-                            onOpenUpdateDialog()
-                        }
-                    )
+                        subTextColor = subTextColor,
+                        testTag = "settings_auto_update_section"
+                    ) {
+                        LuxuriousAutoUpdateStatusCard(
+                            updateUiState = updateUiState,
+                            autoUpdateEnabled = themeConfig.autoUpdateEnabled,
+                            onToggleAutoUpdate = { enabled ->
+                                CyberHapticsEngine.triggerTactileTick(context)
+                                onConfigChange(themeConfig.copy(autoUpdateEnabled = enabled))
+                            },
+                            accentColor = accentColor,
+                            isDark = isDark,
+                            textColor = textColor,
+                            onCheckUpdates = onCheckUpdates,
+                            onTriggerUpdate = onTriggerUpdate,
+                            onCancelDownload = onCancelDownload,
+                            onOpenUpdateDialog = {
+                                onClose()
+                                onOpenUpdateDialog()
+                            }
+                        )
+                    }
 
                     // 7. Expandable Accordion: Sensor Calibration
                     SettingsAccordionCard(

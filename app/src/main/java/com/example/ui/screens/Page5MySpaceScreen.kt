@@ -131,31 +131,31 @@ fun Page5MySpaceScreen(
 ) {
     val scrollState = rememberScrollState()
     val isDark = themeConfig.isDarkMode
-    val baseAccent = themeConfig.accentColor
-    val glow = themeConfig.glowIntensity
+    val resolvedTheme = com.example.ui.theme.LocalAmpereTheme.current
+    val baseAccent = if (resolvedTheme.themeId != null || resolvedTheme.isSimpleMode || resolvedTheme.isProMode) resolvedTheme.accent else themeConfig.accentColor
+    val glow = when {
+        resolvedTheme.isSimpleMode -> 0f
+        resolvedTheme.isProMode -> 0.35f
+        else -> themeConfig.glowIntensity
+    }
     val numberFormat = remember { NumberFormat.getNumberInstance(Locale.US) }
-    val textColor = if (isDark) TextWhite else TextCharcoal
+    val textColor = if (resolvedTheme.themeId != null || resolvedTheme.isSimpleMode || resolvedTheme.isProMode) resolvedTheme.textPrimary else if (isDark) TextWhite else TextCharcoal
 
     var selectedMetric by remember { mutableStateOf(MetricType.VOLTAGE) }
     var showProfileEditDialog by remember { mutableStateOf(false) }
     val activeCurrentMa = telemetry.currentMa
 
     // DYNAMIC CURRENT-DRIVEN AMBIENT GLOW (VFX)
-    // Bind the background ambient glow layer to live Current (mA) state:
-    // - High Inflow / Stress (> 2500 mA or high thermals): Reactive Red Ambient Glow (#FF3D00)
-    // - Stable / Safe Flow (400 - 2500 mA): Serene Emerald Green (#00C853)
-    // - Low Trickle Flow (0 - 399 mA): Serene Royal Blue (#2962FF)
-    // - High Load Drain (< -600 mA): Energetic Violet/Amber (#A855F7)
-    // - Idle Drain (-600 - 0 mA): Cool Cyan/Slate (#00B0FF)
     val isHighStress = activeCurrentMa > 2500 || telemetry.temperatureC >= com.example.data.telemetry.BatteryScienceClassifier.TEMP_THERMAL_STRESS_C
     val isSafeFlow = activeCurrentMa in 400..2500 && !isHighStress
 
     val targetAmbientColor = when {
-        isHighStress -> TactileCoralRed // High Inflow Stress
-        isSafeFlow -> TactileGreen // Stable / Safe Flow
-        activeCurrentMa in 0..399 -> TactileRoyalBlue // Serene Trickle
-        activeCurrentMa < -600 -> Color(0xFFA855F7) // High Load Drain
-        else -> Color(0xFF00B0FF) // Cool Idle Drain
+        resolvedTheme.isSimpleMode -> resolvedTheme.accent
+        isHighStress -> TactileCoralRed
+        isSafeFlow -> TactileGreen
+        activeCurrentMa in 0..399 -> TactileRoyalBlue
+        activeCurrentMa < -600 -> Color(0xFFA855F7)
+        else -> Color(0xFF00B0FF)
     }
 
     val animatedAmbientColor by animateColorAsState(
@@ -167,7 +167,6 @@ fun Page5MySpaceScreen(
         label = "ambientGlowColor"
     )
 
-    // 90 FPS Breathing Ambient Aura & Particle Shift
     val infiniteTransition = rememberInfiniteTransition(label = "ambientPulse90Fps")
     val ambientAuraBreath by infiniteTransition.animateFloat(
         initialValue = if (isHighStress) 0.80f else 0.65f,
@@ -184,14 +183,15 @@ fun Page5MySpaceScreen(
             .fillMaxSize()
             .graphicsLayer { clip = false }
     ) {
-        // Dynamic Current-Driven Background Ambient Glow Layer
-        CurrentDrivenAmbientGlowBackdrop(
-            ambientColor = animatedAmbientColor,
-            breatheScale = ambientAuraBreath,
-            isDarkMode = isDark,
-            isStress = isHighStress,
-            glowIntensity = glow
-        )
+        if (!resolvedTheme.isSimpleMode && glow > 0f) {
+            CurrentDrivenAmbientGlowBackdrop(
+                ambientColor = animatedAmbientColor,
+                breatheScale = ambientAuraBreath,
+                isDarkMode = isDark,
+                isStress = isHighStress,
+                glowIntensity = glow
+            )
+        }
 
         Column(
             modifier = Modifier
@@ -378,6 +378,7 @@ fun Page5MySpaceScreen(
                         unit = "mV",
                         subtext = "Nominal 3.7V - 4.4V",
                         points = voltageHistory,
+                        minVisualSpan = 80f,
                         accentColor = if (selectedMetric == MetricType.VOLTAGE) animatedAmbientColor else baseAccent,
                         ambientGlowColor = animatedAmbientColor,
                         isDarkMode = isDark,
@@ -394,6 +395,7 @@ fun Page5MySpaceScreen(
                         unit = "mA",
                         subtext = if (activeCurrentMa >= 0) "Inflow charge" else "Discharge draw",
                         points = currentHistory,
+                        minVisualSpan = 180f,
                         accentColor = animatedAmbientColor,
                         ambientGlowColor = animatedAmbientColor,
                         isDarkMode = isDark,
@@ -416,6 +418,7 @@ fun Page5MySpaceScreen(
                         unit = "W",
                         subtext = "P = V × I Real-time",
                         points = wattageHistory,
+                        minVisualSpan = 1.2f,
                         accentColor = if (selectedMetric == MetricType.WATTAGE) animatedAmbientColor else baseAccent,
                         ambientGlowColor = animatedAmbientColor,
                         isDarkMode = isDark,
@@ -438,6 +441,7 @@ fun Page5MySpaceScreen(
                         unit = themeConfig.temperatureUnit.symbol,
                         subtext = if (isThermalStress) "Thermal Stress (≥42°C)" else "JEITA Nominal Zone",
                         points = temperatureHistory,
+                        minVisualSpan = 2.0f,
                         accentColor = if (selectedMetric == MetricType.TEMPERATURE) animatedAmbientColor else tempAccent,
                         ambientGlowColor = animatedAmbientColor,
                         isDarkMode = isDark,
@@ -448,9 +452,7 @@ fun Page5MySpaceScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
-
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             // Vital Pulse Log Header & Benchmark Action
             Row(
@@ -720,6 +722,7 @@ fun MySpaceMetricCard(
     subtext: String,
     points: List<TelemetryPoint>,
     modifier: Modifier = Modifier,
+    minVisualSpan: Float = 1.0f,
     accentColor: Color,
     ambientGlowColor: Color = accentColor,
     isDarkMode: Boolean,
@@ -805,7 +808,8 @@ fun MySpaceMetricCard(
                     lineColor = accentColor,
                     isDarkMode = isDarkMode,
                     glowIntensity = glowIntensity,
-                    heightDp = 30.dp
+                    heightDp = 44.dp,
+                    minVisualSpan = minVisualSpan
                 )
             }
         }
