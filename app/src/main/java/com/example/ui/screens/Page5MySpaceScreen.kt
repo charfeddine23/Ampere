@@ -88,6 +88,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.BatteryTelemetry
+import com.example.data.DeviceHardwareProfile
 import com.example.data.GlassThemeConfig
 import com.example.data.MetricType
 import com.example.data.SessionLog
@@ -125,6 +126,7 @@ fun Page5MySpaceScreen(
     sessionLogs: List<SessionLog>,
     themeConfig: GlassThemeConfig,
     userAccount: UserAccount = UserAccount(),
+    deviceProfile: DeviceHardwareProfile = DeviceHardwareProfile(),
     onUpdateOwnerName: (String) -> Unit = {},
     onOpenRedeemDialog: () -> Unit = {},
     onAddVitalLog: (String, String, String, String) -> Unit
@@ -143,6 +145,7 @@ fun Page5MySpaceScreen(
     val textColor = if (resolvedTheme.themeId != null || resolvedTheme.isSimpleMode || resolvedTheme.isProMode) resolvedTheme.textPrimary else if (isDark) TextWhite else TextCharcoal
 
     var selectedMetric by remember { mutableStateOf(MetricType.VOLTAGE) }
+    var showVoltageInVolts by remember { mutableStateOf(false) }
     var showProfileEditDialog by remember { mutableStateOf(false) }
     val activeCurrentMa = telemetry.currentMa
 
@@ -373,20 +376,39 @@ fun Page5MySpaceScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
+                    val isDualCell = telemetry.voltageMv > 6000 || deviceProfile.isDualCellSuspected
+                    val hasValidVoltage = telemetry.voltageMv > 0
+                    val voltageValueText = when {
+                        !hasValidVoltage -> "--"
+                        showVoltageInVolts -> String.format(Locale.US, "%.3f", telemetry.voltageMv / 1000f)
+                        else -> numberFormat.format(telemetry.voltageMv)
+                    }
+                    val voltageUnitText = if (showVoltageInVolts) "V" else "mV"
+                    val voltageSubtext = when {
+                        !hasValidVoltage -> if (isArabic) "بانتظار قراءة العتاد..." else "Awaiting sensor..."
+                        isDualCell -> if (isArabic) "القياسي 6.8V – 8.9V (2S)" else "Nominal 6.8V - 8.9V (2S)"
+                        else -> if (isArabic) "القياسي 3.4V – 4.48V (1S)" else "Nominal 3.4V - 4.48V (1S)"
+                    }
                     MySpaceMetricCard(
                         modifier = Modifier.weight(1f),
                         title = if (isArabic) "الجهد الكهربائي" else "VOLTAGE",
-                        value = numberFormat.format(telemetry.voltageMv),
-                        unit = "mV",
-                        subtext = if (isArabic) "القياسي 3.7V – 4.4V" else "Nominal 3.7V - 4.4V",
+                        value = voltageValueText,
+                        unit = voltageUnitText,
+                        subtext = voltageSubtext,
                         points = voltageHistory,
-                        minVisualSpan = 80f,
+                        minVisualSpan = 20f,
                         accentColor = if (selectedMetric == MetricType.VOLTAGE) animatedAmbientColor else baseAccent,
                         ambientGlowColor = animatedAmbientColor,
                         isDarkMode = isDark,
                         glowIntensity = glow,
                         isSelected = selectedMetric == MetricType.VOLTAGE,
-                        onClick = { selectedMetric = MetricType.VOLTAGE }
+                        onClick = {
+                            if (selectedMetric == MetricType.VOLTAGE) {
+                                showVoltageInVolts = !showVoltageInVolts
+                            } else {
+                                selectedMetric = MetricType.VOLTAGE
+                            }
+                        }
                     )
 
                     val currentSign = if (activeCurrentMa >= 0) "+" else ""
@@ -402,7 +424,7 @@ fun Page5MySpaceScreen(
                         },
                         points = currentHistory,
                         minVisualSpan = 180f,
-                        accentColor = animatedAmbientColor,
+                        accentColor = if (selectedMetric == MetricType.CURRENT) animatedAmbientColor else baseAccent,
                         ambientGlowColor = animatedAmbientColor,
                         isDarkMode = isDark,
                         glowIntensity = glow,
@@ -460,6 +482,25 @@ fun Page5MySpaceScreen(
                         onClick = { selectedMetric = MetricType.TEMPERATURE }
                     )
                 }
+
+                // Active Selected Metric Live Telemetry Inspector Console
+                SelectedMetricTelemetryConsole(
+                    selectedMetric = selectedMetric,
+                    telemetry = telemetry,
+                    deviceProfile = deviceProfile,
+                    temperatureUnit = themeConfig.temperatureUnit,
+                    voltageHistory = voltageHistory,
+                    currentHistory = currentHistory,
+                    wattageHistory = wattageHistory,
+                    temperatureHistory = temperatureHistory,
+                    showVoltageInVolts = showVoltageInVolts,
+                    onToggleVoltageUnit = { showVoltageInVolts = !showVoltageInVolts },
+                    accentColor = animatedAmbientColor,
+                    isDarkMode = isDark,
+                    glowIntensity = glow,
+                    isArabic = isArabic,
+                    numberFormat = numberFormat
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -785,7 +826,17 @@ fun MySpaceMetricCard(
             }
     ) {
         LiquidGlassCard(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(
+                    if (isSelected) {
+                        Modifier.border(
+                            width = 1.4.dp,
+                            color = accentColor.copy(alpha = if (isDarkMode) 0.72f else 0.58f),
+                            shape = RoundedCornerShape(22.dp)
+                        )
+                    } else Modifier
+                ),
             accentColor = accentColor,
             isDarkMode = isDarkMode,
             glowIntensity = if (isSelected) 1.0f else glowIntensity,
@@ -805,7 +856,7 @@ fun MySpaceMetricCard(
                         letterSpacing = 0.5.sp,
                         color = if (isSelected) accentColor else TextSlate
                     )
-                    PulsingNeonDot(color = accentColor, sizeDp = 5.dp)
+                    PulsingNeonDot(color = accentColor, sizeDp = if (isSelected) 6.dp else 5.dp)
                 }
 
                 Spacer(modifier = Modifier.height(2.dp))
@@ -845,6 +896,197 @@ fun MySpaceMetricCard(
                     glowIntensity = glowIntensity,
                     heightDp = 44.dp,
                     minVisualSpan = minVisualSpan
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SelectedMetricTelemetryConsole(
+    selectedMetric: MetricType,
+    telemetry: BatteryTelemetry,
+    deviceProfile: DeviceHardwareProfile,
+    temperatureUnit: TemperatureUnit,
+    voltageHistory: List<TelemetryPoint>,
+    currentHistory: List<TelemetryPoint>,
+    wattageHistory: List<TelemetryPoint>,
+    temperatureHistory: List<TelemetryPoint>,
+    showVoltageInVolts: Boolean,
+    onToggleVoltageUnit: () -> Unit,
+    accentColor: Color,
+    isDarkMode: Boolean,
+    glowIntensity: Float,
+    isArabic: Boolean,
+    numberFormat: NumberFormat
+) {
+    val historyPoints = when (selectedMetric) {
+        MetricType.VOLTAGE -> voltageHistory
+        MetricType.CURRENT -> currentHistory
+        MetricType.WATTAGE -> wattageHistory
+        MetricType.TEMPERATURE -> temperatureHistory
+    }
+    val span = when (selectedMetric) {
+        MetricType.VOLTAGE -> 20f
+        MetricType.CURRENT -> 180f
+        MetricType.WATTAGE -> 1.2f
+        MetricType.TEMPERATURE -> 2.0f
+    }
+
+    val isDualCell = telemetry.voltageMv > 6000 || deviceProfile.isDualCellSuspected
+    val rawValues = historyPoints.map {
+        if (selectedMetric == MetricType.TEMPERATURE && temperatureUnit == TemperatureUnit.FAHRENHEIT) {
+            (it.value * 9f / 5f) + 32f
+        } else {
+            it.value
+        }
+    }
+    val minVal = rawValues.minOrNull()
+    val maxVal = rawValues.maxOrNull()
+    val deltaVal = if (minVal != null && maxVal != null) maxVal - minVal else 0f
+
+    fun formatValue(v: Float): String = when (selectedMetric) {
+        MetricType.VOLTAGE -> if (showVoltageInVolts) {
+            String.format(Locale.US, "%.3f V", v / 1000f)
+        } else {
+            "${numberFormat.format(v.toInt())} mV"
+        }
+        MetricType.CURRENT -> "${numberFormat.format(v.toInt())} mA"
+        MetricType.WATTAGE -> String.format(Locale.US, "%.2f W", v)
+        MetricType.TEMPERATURE -> String.format(Locale.US, "%.1f %s", v, temperatureUnit.symbol)
+    }
+
+    val headlineValue = when (selectedMetric) {
+        MetricType.VOLTAGE -> if (telemetry.voltageMv <= 0) "--" else {
+            if (showVoltageInVolts) {
+                "${String.format(Locale.US, "%.3f", telemetry.voltageMv / 1000f)} V  (${numberFormat.format(telemetry.voltageMv)} mV)"
+            } else {
+                "${numberFormat.format(telemetry.voltageMv)} mV  (${String.format(Locale.US, "%.3f", telemetry.voltageMv / 1000f)} V)"
+            }
+        }
+        MetricType.CURRENT -> "${if (telemetry.currentMa >= 0) "+" else ""}${numberFormat.format(telemetry.currentMa)} mA"
+        MetricType.WATTAGE -> String.format(Locale.US, "%.2f W", telemetry.wattageW)
+        MetricType.TEMPERATURE -> {
+            val dispT = if (temperatureUnit == TemperatureUnit.FAHRENHEIT) (telemetry.temperatureC * 9f / 5f) + 32f else telemetry.temperatureC
+            String.format(Locale.US, "%.1f %s", dispT, temperatureUnit.symbol)
+        }
+    }
+
+    val statusText = when (selectedMetric) {
+        MetricType.VOLTAGE -> when {
+            telemetry.voltageMv <= 0 -> if (isArabic) "بانتظار إشارة المستشعر" else "Waiting for sensor"
+            telemetry.voltageMv > (if (isDualCell) 9050 else 4520) -> if (isArabic) "تحذير: جهد مرتفع" else "Warning: Over-Voltage"
+            telemetry.voltageMv < (if (isDualCell) 6400 else 3250) -> if (isArabic) "جهد منخفض" else "Low Cell Voltage"
+            else -> if (isArabic) "ضمن النطاق القياسي الآمن" else "Within IEEE Safe Window"
+        }
+        MetricType.CURRENT -> if (telemetry.currentMa >= 0) {
+            if (isArabic) "شحن نشط • +${telemetry.currentMa} mA" else "Active Inflow • +${telemetry.currentMa} mA"
+        } else {
+            if (isArabic) "سحب تفريغ • ${telemetry.currentMa} mA" else "Discharge Draw • ${telemetry.currentMa} mA"
+        }
+        MetricType.WATTAGE -> if (isArabic) "كفاءة الطاقة اللحظية P = V × I" else "Instant Power P = V × I"
+        MetricType.TEMPERATURE -> if (telemetry.temperatureC >= com.example.data.telemetry.BatteryScienceClassifier.TEMP_THERMAL_STRESS_C) {
+            if (isArabic) "إجهاد حراري مرتفع" else "Thermal Stress"
+        } else {
+            if (isArabic) "استقرار حراري مثالي" else "Optimal Thermal Zone"
+        }
+    }
+
+    LiquidGlassCard(
+        modifier = Modifier.fillMaxWidth(),
+        accentColor = accentColor,
+        isDarkMode = isDarkMode,
+        glowIntensity = glowIntensity
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (isArabic) {
+                            "المحلل الحي: ${selectedMetric.localizedTitle(true)}"
+                        } else {
+                            "LIVE INSPECTOR • ${selectedMetric.localizedTitle(false).uppercase()}"
+                        },
+                        fontFamily = OutfitFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 10.5.sp,
+                        letterSpacing = 0.5.sp,
+                        color = accentColor
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = headlineValue,
+                        fontFamily = OutfitFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        color = if (isDarkMode) TextWhite else TextCharcoal
+                    )
+                }
+
+                if (selectedMetric == MetricType.VOLTAGE) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(accentColor.copy(alpha = if (isDarkMode) 0.20f else 0.12f))
+                            .border(1.dp, accentColor.copy(alpha = 0.50f), RoundedCornerShape(10.dp))
+                            .clickable { onToggleVoltageUnit() }
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = if (showVoltageInVolts) "mV ⇄ V" else "V ⇄ mV",
+                            fontFamily = OutfitFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.5.sp,
+                            color = accentColor
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            MetricSparkline(
+                points = historyPoints,
+                lineColor = accentColor,
+                isDarkMode = isDarkMode,
+                glowIntensity = glowIntensity,
+                heightDp = 64.dp,
+                minVisualSpan = span
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = if (minVal != null && maxVal != null) {
+                        if (isArabic) {
+                            "الأدنى ${formatValue(minVal)} • الأعلى ${formatValue(maxVal)} • التغيّر ${formatValue(deltaVal)}"
+                        } else {
+                            "Min ${formatValue(minVal)} • Max ${formatValue(maxVal)} • Δ ${formatValue(deltaVal)}"
+                        }
+                    } else {
+                        statusText
+                    },
+                    fontFamily = PlusJakartaSansFontFamily,
+                    fontSize = 9.5.sp,
+                    color = TextSlate,
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = statusText,
+                    fontFamily = OutfitFontFamily,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 9.5.sp,
+                    color = accentColor
                 )
             }
         }

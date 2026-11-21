@@ -69,7 +69,7 @@ class SettingsPreferencesManager(context: Context) {
             glassBlurAmount = glassBlurAmount,
             ambientLiquidWaves = ambientLiquidWaves,
             temperatureUnit = temperatureUnit,
-            samplingIntervalMs = if (graphicsMode == GraphicsMode.PRO) 1L else 1000L,
+            samplingIntervalMs = if (graphicsMode == GraphicsMode.PRO) 10L else 1000L,
             soundEffectsEnabled = soundEnabled,
             backgroundServiceEnabled = bgServiceEnabled,
             alertOn80Percent = alertOn80,

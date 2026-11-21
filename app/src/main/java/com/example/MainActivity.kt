@@ -6,6 +6,9 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.local.SettingsPreferencesManager
 import com.example.service.AlarmScheduler
 import com.example.service.TelemetryForegroundService
@@ -26,20 +29,31 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         viewModel.attachUpdateLauncher(inAppUpdateLauncher)
 
-        // Configure hardware display for 120Hz / highest available refresh rate
+        setContent {
+            val themeConfig by viewModel.themeConfig.collectAsStateWithLifecycle()
+            LaunchedEffect(themeConfig.target120FpsMode) {
+                applyDisplayRefreshRatePreference(enableHighRefresh = themeConfig.target120FpsMode)
+            }
+            AmperePulseApp(viewModel = viewModel)
+        }
+    }
+
+    private fun applyDisplayRefreshRatePreference(enableHighRefresh: Boolean) {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-            val display = display
-            val supportedModes = display?.supportedModes ?: emptyArray()
-            val highRefreshMode = supportedModes.maxByOrNull { it.refreshRate }
-            if (highRefreshMode != null && highRefreshMode.refreshRate >= 90f) {
-                window.attributes = window.attributes.apply {
-                    preferredDisplayModeId = highRefreshMode.modeId
+            runCatching {
+                val supportedModes = display?.supportedModes ?: emptyArray()
+                val chosenMode = if (enableHighRefresh) {
+                    supportedModes.maxByOrNull { it.refreshRate }?.takeIf { it.refreshRate >= 90f }
+                } else {
+                    supportedModes.firstOrNull { it.refreshRate in 58f..62f }
+                        ?: supportedModes.minByOrNull { it.refreshRate }
+                }
+                if (chosenMode != null && window.attributes.preferredDisplayModeId != chosenMode.modeId) {
+                    window.attributes = window.attributes.apply {
+                        preferredDisplayModeId = chosenMode.modeId
+                    }
                 }
             }
-        }
-
-        setContent {
-            AmperePulseApp(viewModel = viewModel)
         }
     }
 
@@ -61,7 +75,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         viewModel.onResumeUpdateCheck()
-        viewModel.refreshAppBatteryUsage()
+        viewModel.refreshAppBatteryUsage(force = false)
     }
 
     override fun onStop() {

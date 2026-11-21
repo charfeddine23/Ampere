@@ -10,6 +10,7 @@ import com.example.data.CellHealthStatus
 import com.example.data.ChargePlug
 import com.example.data.DeviceFormFactor
 import com.example.data.DeviceHardwareProfile
+import com.example.data.DevicePerformanceTier
 import com.example.data.GlassThemeConfig
 import com.example.data.GraphicsMode
 import com.example.data.LivingBatteryState
@@ -18,6 +19,7 @@ import com.example.data.telemetry.AppBatteryUsageTracker
 import com.example.data.telemetry.BatteryScienceClassifier
 import com.example.data.telemetry.CableDnaStandardsEngine
 import com.example.data.telemetry.CurrentCalibrationEngine
+import com.example.data.telemetry.DeviceHardwareProfiler
 import com.example.data.telemetry.RawAppUsageMetric
 import com.example.data.update.InAppUpdateEngine
 import com.example.ui.AmperePulseViewModel
@@ -375,10 +377,10 @@ class ExampleUnitTest {
         assertTrue(simpleConfig.isSimpleMode)
         assertFalse(simpleConfig.isProMode)
 
-        val proConfig = defaultConfig.copy(graphicsMode = GraphicsMode.PRO, samplingIntervalMs = 1L)
+        val proConfig = defaultConfig.copy(graphicsMode = GraphicsMode.PRO, samplingIntervalMs = 10L)
         assertTrue(proConfig.isProMode)
         assertFalse(proConfig.isSimpleMode)
-        assertEquals(1L, proConfig.samplingIntervalMs)
+        assertEquals(10L, proConfig.samplingIntervalMs)
 
         assertEquals(GraphicsMode.SIMPLE, GraphicsMode.fromKey("simple"))
         assertEquals(GraphicsMode.PRO, GraphicsMode.fromKey("pro"))
@@ -463,5 +465,107 @@ class ExampleUnitTest {
         assertTrue(CableDnaTier.LEGENDARY_ORIGINAL.localizedTitle(true) != CableDnaTier.LEGENDARY_ORIGINAL.localizedTitle(false))
         assertTrue(CellHealthStatus.PRISTINE.localizedLabel(true) != CellHealthStatus.PRISTINE.localizedLabel(false))
         assertTrue(DeviceFormFactor.PHONE.localizedLabel(true) != DeviceFormFactor.PHONE.localizedLabel(false))
+    }
+
+    @Test
+    fun testVoltageNormalizationUnits() {
+        assertEquals(4182, com.example.data.BatteryMonitorRepository.normalizeVoltageMv(4182L))
+        assertEquals(4185, com.example.data.BatteryMonitorRepository.normalizeVoltageMv(4_185_000L))
+        assertEquals(8420, com.example.data.BatteryMonitorRepository.normalizeVoltageMv(8_420_000L))
+        assertEquals(4000, com.example.data.BatteryMonitorRepository.normalizeVoltageMv(4L))
+        assertEquals(4200, com.example.data.BatteryMonitorRepository.normalizeVoltageMv(42L))
+        assertEquals(0, com.example.data.BatteryMonitorRepository.normalizeVoltageMv(-1L))
+        assertEquals(0, com.example.data.BatteryMonitorRepository.normalizeVoltageMv(0L))
+    }
+
+    @Test
+    fun testInAppUpdateUrlAndFilenameSecurity() {
+        assertTrue(InAppUpdateEngine.isTrustedUpdateUrl("https://api.github.com/repos/charfeddine23/Ampere/releases/latest"))
+        assertTrue(InAppUpdateEngine.isTrustedUpdateUrl("https://github.com/charfeddine23/Ampere/releases/download/v1.0.1/VoltCore.apk"))
+        assertTrue(InAppUpdateEngine.isTrustedUpdateUrl("https://objects.githubusercontent.com/github-production-release-asset-2e65be/app.apk"))
+
+        assertFalse(InAppUpdateEngine.isTrustedUpdateUrl("http://github.com/charfeddine23/Ampere/releases/latest"))
+        assertFalse(InAppUpdateEngine.isTrustedUpdateUrl("https://evil.example.com/VoltCore.apk"))
+        assertFalse(InAppUpdateEngine.isTrustedUpdateUrl("https://github.com@evil.example.com/VoltCore.apk"))
+        assertFalse(InAppUpdateEngine.isTrustedUpdateUrl("file:///sdcard/Download/evil.apk"))
+        assertFalse(InAppUpdateEngine.isTrustedUpdateUrl(""))
+        assertFalse(InAppUpdateEngine.isTrustedUpdateUrl(null))
+
+        val traversed = InAppUpdateEngine.sanitizeApkFileName("../../etc/evil payload?.apk")
+        assertFalse(traversed.contains(".."))
+        assertFalse(traversed.contains("/"))
+        assertFalse(traversed.contains("\\"))
+        assertTrue(traversed.endsWith(".apk"))
+
+        val fallback = InAppUpdateEngine.sanitizeApkFileName("...")
+        assertEquals("Volt.Core.update.apk", fallback)
+    }
+
+    @Test
+    fun testGraphicsModeCycleAndCooldowns() {
+        val next = { mode: GraphicsMode ->
+            when (mode) {
+                GraphicsMode.STANDARD -> GraphicsMode.SIMPLE
+                GraphicsMode.SIMPLE -> GraphicsMode.PRO
+                GraphicsMode.PRO -> GraphicsMode.STANDARD
+            }
+        }
+        assertEquals(GraphicsMode.SIMPLE, next(GraphicsMode.STANDARD))
+        assertEquals(GraphicsMode.PRO, next(GraphicsMode.SIMPLE))
+        assertEquals(GraphicsMode.STANDARD, next(GraphicsMode.PRO))
+        assertEquals(6L * 60L * 60L * 1000L, AmperePulseViewModel.AUTO_UPDATE_COOLDOWN_MS)
+        assertEquals(45_000L, AmperePulseViewModel.APP_USAGE_REFRESH_COOLDOWN_MS)
+    }
+
+    @Test
+    fun testDeviceHardwarePerformanceTierDetection() {
+        val flagshipEval = DeviceHardwareProfiler.evaluatePerformanceTier(
+            isLowRamDevice = false,
+            totalRamGb = 8.0f,
+            cpuCores = 8,
+            sdkInt = 34,
+            primaryAbi = "arm64-v8a",
+            chipset = "Snapdragon 8 Gen 3",
+            model = "Galaxy S24"
+        )
+        assertEquals(DevicePerformanceTier.FLAGSHIP, flagshipEval.tier)
+        assertFalse(DeviceHardwareProfile(performanceTier = flagshipEval.tier).isLowEndDevice)
+
+        val midEval = DeviceHardwareProfiler.evaluatePerformanceTier(
+            isLowRamDevice = false,
+            totalRamGb = 4.0f,
+            cpuCores = 8,
+            sdkInt = 33,
+            primaryAbi = "arm64-v8a",
+            chipset = "Snapdragon 680",
+            model = "Redmi Note"
+        )
+        assertEquals(DevicePerformanceTier.MID_RANGE, midEval.tier)
+        assertFalse(DeviceHardwareProfile(performanceTier = midEval.tier).isLowEndDevice)
+
+        val lowRamEval = DeviceHardwareProfiler.evaluatePerformanceTier(
+            isLowRamDevice = true,
+            totalRamGb = 2.0f,
+            cpuCores = 4,
+            sdkInt = 31,
+            primaryAbi = "armeabi-v7a",
+            chipset = "MT6739",
+            model = "Galaxy A01 Core"
+        )
+        assertEquals(DevicePerformanceTier.LOW_END, lowRamEval.tier)
+        assertTrue(lowRamEval.reasonAr.isNotBlank())
+        assertTrue(lowRamEval.reasonEn.isNotBlank())
+        assertTrue(DeviceHardwareProfile(performanceTier = lowRamEval.tier).isLowEndDevice)
+
+        val entryChipEval = DeviceHardwareProfiler.evaluatePerformanceTier(
+            isLowRamDevice = false,
+            totalRamGb = 4.0f,
+            cpuCores = 8,
+            sdkInt = 31,
+            primaryAbi = "arm64-v8a",
+            chipset = "UNISOC SC9863A",
+            model = "Entry Phone"
+        )
+        assertEquals(DevicePerformanceTier.LOW_END, entryChipEval.tier)
     }
 }

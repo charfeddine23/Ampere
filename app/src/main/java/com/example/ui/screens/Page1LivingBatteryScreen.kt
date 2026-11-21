@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import android.graphics.Bitmap
+import android.util.LruCache
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -36,7 +37,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -79,7 +82,11 @@ import com.example.ui.theme.TactileGreen
 import com.example.ui.theme.TextCharcoal
 import com.example.ui.theme.TextSlate
 import com.example.ui.theme.TextWhite
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.util.Locale
+
+private val appIconCache = LruCache<String, ImageBitmap>(48)
 
 /**
  * PAGE 1: Scientific Real-Time Battery Monitor
@@ -203,7 +210,7 @@ fun Page1LivingBatteryScreen(
                                 PulsingNeonDot(color = primaryColor, sizeDp = 5.dp)
                             }
                             val syncTag = if (themeConfig.isProMode) {
-                                if (isArabic) " • 1ms محترف" else " • 1ms PRO"
+                                if (isArabic) " • 10ms محترف" else " • 10ms PRO"
                             } else ""
                             Text(
                                 text = "${scienceProfile.phaseLabelAr} • $formattedTemp • ${String.format(Locale.US, "%.2f", scienceProfile.cRate)}C$syncTag",
@@ -697,20 +704,22 @@ private fun AppBatteryConsumptionSection(
 
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             visibleApps.forEach { app ->
-                                AppConsumptionRowItem(
-                                    app = app,
-                                    maxPercent = maxPercent,
-                                    accentColor = accentColor,
-                                    insetBg = insetBg,
-                                    textColor = textColor,
-                                    subTextColor = subTextColor,
-                                    isDarkMode = isDarkMode,
-                                    isArabic = isArabic,
-                                    onClick = {
-                                        CyberHapticsEngine.triggerTactileTick(context)
-                                        AppBatteryUsageTracker.openAppBatteryDetailsSettings(context, app.packageName)
-                                    }
-                                )
+                                key(app.packageName) {
+                                    AppConsumptionRowItem(
+                                        app = app,
+                                        maxPercent = maxPercent,
+                                        accentColor = accentColor,
+                                        insetBg = insetBg,
+                                        textColor = textColor,
+                                        subTextColor = subTextColor,
+                                        isDarkMode = isDarkMode,
+                                        isArabic = isArabic,
+                                        onClick = {
+                                            CyberHapticsEngine.triggerTactileTick(context)
+                                            AppBatteryUsageTracker.openAppBatteryDetailsSettings(context, app.packageName)
+                                        }
+                                    )
+                                }
                             }
 
                             if (snapshot.apps.size > 5) {
@@ -762,11 +771,20 @@ private fun AppConsumptionRowItem(
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val appIconBitmap: ImageBitmap? = remember(app.packageName) {
-        runCatching {
-            val drawable = context.packageManager.getApplicationIcon(app.packageName)
-            drawable.toBitmap(width = 72, height = 72, config = Bitmap.Config.ARGB_8888).asImageBitmap()
-        }.getOrNull()
+    val cachedIcon = remember(app.packageName) { appIconCache.get(app.packageName) }
+    val appIconBitmap by produceState<ImageBitmap?>(initialValue = cachedIcon, key1 = app.packageName) {
+        if (value == null) {
+            val loaded = withContext(Dispatchers.IO) {
+                runCatching {
+                    val drawable = context.packageManager.getApplicationIcon(app.packageName)
+                    drawable.toBitmap(width = 72, height = 72, config = Bitmap.Config.ARGB_8888).asImageBitmap()
+                }.getOrNull()
+            }
+            if (loaded != null) {
+                appIconCache.put(app.packageName, loaded)
+                value = loaded
+            }
+        }
     }
 
     val rankColor = when (app.rank) {
@@ -827,9 +845,10 @@ private fun AppConsumptionRowItem(
                         .background(Color.White.copy(alpha = if (isDarkMode) 0.08f else 0.55f)),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (appIconBitmap != null) {
+                    val resolvedIcon = appIconBitmap
+                    if (resolvedIcon != null) {
                         Image(
-                            bitmap = appIconBitmap,
+                            bitmap = resolvedIcon,
                             contentDescription = app.appName,
                             modifier = Modifier
                                 .size(30.dp)

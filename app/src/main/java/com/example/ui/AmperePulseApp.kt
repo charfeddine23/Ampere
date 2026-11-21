@@ -21,10 +21,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -37,6 +37,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import com.example.audio.CyberHapticsEngine
+import com.example.data.GraphicsMode
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.isActive
 import kotlin.math.abs
@@ -48,6 +49,7 @@ import com.example.ui.components.LuxuryTopBar
 import com.example.ui.components.NavigationTab
 import com.example.ui.components.PremiumRedeemDialog
 import com.example.ui.components.ThemeEngineDialog
+import com.example.ui.components.UnsupportedModeDialog
 import com.example.ui.components.thermalLiquidGlassBackground
 import com.example.ui.screens.Page1LivingBatteryScreen
 import com.example.ui.screens.Page3BatterySohScreen
@@ -60,32 +62,34 @@ import com.example.ui.theme.NeumorphBgLight
 
 @Composable
 fun AmperePulseApp(viewModel: AmperePulseViewModel) {
-    val telemetry by viewModel.telemetry.collectAsState()
-    val voltageHistory by viewModel.voltageHistory.collectAsState()
-    val currentHistory by viewModel.currentHistory.collectAsState()
-    val wattageHistory by viewModel.wattageHistory.collectAsState()
-    val temperatureHistory by viewModel.temperatureHistory.collectAsState()
-    val sessionLogs by viewModel.sessionLogs.collectAsState()
+    val telemetry by viewModel.telemetry.collectAsStateWithLifecycle()
+    val voltageHistory by viewModel.voltageHistory.collectAsStateWithLifecycle()
+    val currentHistory by viewModel.currentHistory.collectAsStateWithLifecycle()
+    val wattageHistory by viewModel.wattageHistory.collectAsStateWithLifecycle()
+    val temperatureHistory by viewModel.temperatureHistory.collectAsStateWithLifecycle()
+    val sessionLogs by viewModel.sessionLogs.collectAsStateWithLifecycle()
 
-    val cableResult by viewModel.cableResult.collectAsState()
-    val sohPrediction by viewModel.sohPrediction.collectAsState()
-    val deviceProfile by viewModel.deviceProfile.collectAsState()
+    val cableResult by viewModel.cableResult.collectAsStateWithLifecycle()
+    val sohPrediction by viewModel.sohPrediction.collectAsStateWithLifecycle()
+    val deviceProfile by viewModel.deviceProfile.collectAsStateWithLifecycle()
 
-    val selectedTab by viewModel.selectedTab.collectAsState()
-    val themeConfig by viewModel.themeConfig.collectAsState()
-    val isSettingsOpen by viewModel.isSettingsMenuOpen.collectAsState()
-    val isSkinVaultOpen by viewModel.isSkinVaultOpen.collectAsState()
-    val isRedeemDialogOpen by viewModel.isRedeemDialogOpen.collectAsState()
-    val isThemeEngineOpen by viewModel.isThemeEngineOpen.collectAsState()
-    val appUsageSnapshot by viewModel.appUsageSnapshot.collectAsState()
-    val userAccount by viewModel.userAccount.collectAsState()
-    val updateUiState by viewModel.updateUiState.collectAsState()
+    val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
+    val themeConfig by viewModel.themeConfig.collectAsStateWithLifecycle()
+    val isSettingsOpen by viewModel.isSettingsMenuOpen.collectAsStateWithLifecycle()
+    val isSkinVaultOpen by viewModel.isSkinVaultOpen.collectAsStateWithLifecycle()
+    val isRedeemDialogOpen by viewModel.isRedeemDialogOpen.collectAsStateWithLifecycle()
+    val isThemeEngineOpen by viewModel.isThemeEngineOpen.collectAsStateWithLifecycle()
+    val appUsageSnapshot by viewModel.appUsageSnapshot.collectAsStateWithLifecycle()
+    val userAccount by viewModel.userAccount.collectAsStateWithLifecycle()
+    val updateUiState by viewModel.updateUiState.collectAsStateWithLifecycle()
+    val unsupportedModeAlert by viewModel.unsupportedModeAlert.collectAsStateWithLifecycle()
     val hostContext = LocalContext.current
 
     val isDark = themeConfig.isDarkMode
 
     LaunchedEffect(selectedTab) {
         viewModel.setSohPageActive(selectedTab == NavigationTab.BATTERY_SOH)
+        viewModel.setMySpacePageActive(selectedTab == NavigationTab.MY_SPACE)
     }
 
     // Handle back button: first close settings drawer, then return to BATTERY page
@@ -192,8 +196,20 @@ fun AmperePulseApp(viewModel: AmperePulseViewModel) {
                     isMenuOpen = isSettingsOpen,
                     onMenuToggle = { viewModel.toggleSettingsMenu(!isSettingsOpen) },
                     themeConfig = themeConfig,
-                    onToggleDarkMode = {
-                        viewModel.updateThemeConfig(themeConfig.copy(isDarkMode = !themeConfig.isDarkMode))
+                    isGraphicsLockedLowEnd = deviceProfile.isLowEndDevice,
+                    onCycleGraphicsMode = {
+                        CyberHapticsEngine.triggerTactileTick(hostContext)
+                        val nextMode = when (themeConfig.graphicsMode) {
+                            GraphicsMode.STANDARD -> GraphicsMode.SIMPLE
+                            GraphicsMode.SIMPLE -> GraphicsMode.PRO
+                            GraphicsMode.PRO -> GraphicsMode.STANDARD
+                        }
+                        viewModel.updateThemeConfig(
+                            themeConfig.copy(
+                                graphicsMode = nextMode,
+                                samplingIntervalMs = if (nextMode == GraphicsMode.PRO) 10L else 1000L
+                            )
+                        )
                     },
                     onOpenRedeemDialog = { viewModel.toggleRedeemDialog(true) }
                 )
@@ -311,7 +327,7 @@ fun AmperePulseApp(viewModel: AmperePulseViewModel) {
                                     themeConfig = themeConfig,
                                     deviceProfile = deviceProfile,
                                     appUsageSnapshot = appUsageSnapshot,
-                                    onRefreshAppUsage = { viewModel.refreshAppBatteryUsage() }
+                                    onRefreshAppUsage = { viewModel.refreshAppBatteryUsage(force = true) }
                                 )
                                 NavigationTab.BATTERY_SOH -> Page3BatterySohScreen(
                                     telemetry = telemetry,
@@ -335,6 +351,7 @@ fun AmperePulseApp(viewModel: AmperePulseViewModel) {
                                     sessionLogs = sessionLogs,
                                     themeConfig = themeConfig,
                                     userAccount = userAccount,
+                                    deviceProfile = deviceProfile,
                                     onUpdateOwnerName = { viewModel.updateOwnerName(it) },
                                     onOpenRedeemDialog = { viewModel.toggleRedeemDialog(true) },
                                     onAddVitalLog = { title, desc, tag, type ->
@@ -362,6 +379,7 @@ fun AmperePulseApp(viewModel: AmperePulseViewModel) {
                 isOpen = isSettingsOpen,
                 onClose = { viewModel.toggleSettingsMenu(false) },
                 themeConfig = themeConfig,
+                deviceProfile = deviceProfile,
                 onConfigChange = { viewModel.updateThemeConfig(it) },
                 onOpenThemeEngine = { viewModel.toggleThemeEngine(true) },
                 onOpenSkinVault = { viewModel.toggleSkinVault(true) },
@@ -413,6 +431,14 @@ fun AmperePulseApp(viewModel: AmperePulseViewModel) {
                 onEquipSkin = { skin ->
                     viewModel.equipCyberSkin(skin)
                 }
+            )
+
+            // Unsupported Hardware Graphics Mode Modal Alert
+            UnsupportedModeDialog(
+                alert = unsupportedModeAlert,
+                deviceProfile = deviceProfile,
+                themeConfig = themeConfig,
+                onDismiss = { viewModel.dismissUnsupportedModeAlert() }
             )
         }
     }

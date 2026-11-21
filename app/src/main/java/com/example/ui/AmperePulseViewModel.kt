@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.BatteryMonitorRepository
 import com.example.data.BatteryTelemetry
 import com.example.data.GlassThemeConfig
+import com.example.data.GraphicsMode
 import com.example.data.SessionLog
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.IntentSenderRequest
@@ -22,6 +23,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
 
 class AmperePulseViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -68,11 +71,31 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
     private val updateEngine = InAppUpdateEngine(application.applicationContext)
     val updateUiState: StateFlow<InAppUpdateUiState> = updateEngine.uiState
 
+    data class UnsupportedModeAlert(
+        val attemptedMode: GraphicsMode,
+        val timestampMs: Long = System.currentTimeMillis()
+    )
+
+    private val _unsupportedModeAlert = MutableStateFlow<UnsupportedModeAlert?>(null)
+    val unsupportedModeAlert: StateFlow<UnsupportedModeAlert?> = _unsupportedModeAlert.asStateFlow()
+
+    private var lastAutoUpdateCheckMs: Long = 0L
+    private var lastUsageRefreshMs: Long = 0L
+
     fun selectTab(tab: NavigationTab) {
         _selectedTab.value = tab
     }
 
     init {
+        if (deviceProfile.value.isLowEndDevice && _themeConfig.value.graphicsMode != GraphicsMode.SIMPLE) {
+            val forcedSimple = _themeConfig.value.copy(
+                graphicsMode = GraphicsMode.SIMPLE,
+                samplingIntervalMs = 1000L,
+                ambientLiquidWaves = false
+            )
+            _themeConfig.value = forcedSimple
+            prefsManager.saveThemeConfig(forcedSimple)
+        }
         // Apply persisted sound & haptic preferences on startup
         com.example.audio.CyberSoundscapeEngine.isEnabled = _themeConfig.value.soundEffectsEnabled
         com.example.audio.CyberHapticsEngine.isEnabled = _themeConfig.value.hapticFeedbackEnabled
@@ -83,8 +106,9 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
             multiplier = _themeConfig.value.currentMultiplier,
             zeroOffsetMa = _themeConfig.value.currentZeroOffsetMa
         )
-        refreshAppBatteryUsage()
+        refreshAppBatteryUsage(force = true)
         if (_themeConfig.value.autoUpdateEnabled) {
+            lastAutoUpdateCheckMs = System.currentTimeMillis()
             updateEngine.checkForUpdates(
                 autoShowOnAvailable = true,
                 autoDownloadIfFound = true
@@ -92,7 +116,12 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
-    fun refreshAppBatteryUsage() {
+    fun refreshAppBatteryUsage(force: Boolean = false) {
+        val now = System.currentTimeMillis()
+        if (!force && lastUsageRefreshMs > 0L && (now - lastUsageRefreshMs) < APP_USAGE_REFRESH_COOLDOWN_MS) {
+            return
+        }
+        lastUsageRefreshMs = now
         viewModelScope.launch {
             val capacityMah = telemetry.value.capacityMah
             val snapshot = withContext(Dispatchers.IO) {
@@ -141,7 +170,11 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun onResumeUpdateCheck() {
-        if (_themeConfig.value.autoUpdateEnabled) {
+        val now = System.currentTimeMillis()
+        if (_themeConfig.value.autoUpdateEnabled &&
+            (now - lastAutoUpdateCheckMs) >= AUTO_UPDATE_COOLDOWN_MS
+        ) {
+            lastAutoUpdateCheckMs = now
             updateEngine.checkForUpdates(
                 autoShowOnAvailable = true,
                 autoDownloadIfFound = true
@@ -152,6 +185,7 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
     override fun onCleared() {
         super.onCleared()
         updateEngine.unregisterListener()
+        repository.releaseResources()
     }
 
     fun setAppInForeground(inForeground: Boolean) {
@@ -164,16 +198,36 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
         repository.setSohPageActive(active)
     }
 
+    fun setMySpacePageActive(active: Boolean) {
+        repository.setMySpacePageActive(active)
+    }
+
+    fun dismissUnsupportedModeAlert() {
+        _unsupportedModeAlert.value = null
+    }
+
     fun updateThemeConfig(config: GlassThemeConfig) {
         val prev = _themeConfig.value
-        val activePreset = com.example.ui.theme.ThemeEngineCatalog.findById(config.activeThemeId)
-        val baseSanitized = if (activePreset != null && prev.isDarkMode != config.isDarkMode && activePreset.isDark != config.isDarkMode) {
-            config.copy(activeThemeId = null)
+        val lowEndBlocked = deviceProfile.value.isLowEndDevice && config.graphicsMode != GraphicsMode.SIMPLE
+        val modeGuardedConfig = if (lowEndBlocked) {
+            _unsupportedModeAlert.value = UnsupportedModeAlert(attemptedMode = config.graphicsMode)
+            com.example.audio.CyberHapticsEngine.triggerThermalWarning(getApplication())
+            config.copy(
+                graphicsMode = GraphicsMode.SIMPLE,
+                samplingIntervalMs = 1000L,
+                ambientLiquidWaves = false
+            )
         } else {
             config
         }
+        val activePreset = com.example.ui.theme.ThemeEngineCatalog.findById(modeGuardedConfig.activeThemeId)
+        val baseSanitized = if (activePreset != null && prev.isDarkMode != modeGuardedConfig.isDarkMode && activePreset.isDark != modeGuardedConfig.isDarkMode) {
+            modeGuardedConfig.copy(activeThemeId = null)
+        } else {
+            modeGuardedConfig
+        }
         val sanitized = baseSanitized.copy(
-            samplingIntervalMs = if (baseSanitized.isProMode) 1L else 1000L
+            samplingIntervalMs = if (baseSanitized.isProMode) 10L else 1000L
         )
         _themeConfig.value = sanitized
         prefsManager.saveThemeConfig(sanitized)
@@ -214,7 +268,7 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
             isDarkMode = preset.isDark,
             customAccentHex = argb,
             glowIntensity = preset.glowIntensity,
-            graphicsMode = com.example.data.GraphicsMode.STANDARD,
+            graphicsMode = if (deviceProfile.value.isLowEndDevice) GraphicsMode.SIMPLE else GraphicsMode.STANDARD,
             samplingIntervalMs = 1000L
         )
         _themeConfig.value = updated
@@ -268,7 +322,11 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
 
     fun redeemPremiumCode(rawCode: String): Boolean {
         val cleaned = rawCode.trim()
-        if (cleaned == PREMIUM_REDEEM_CODE) {
+        val isMatch = MessageDigest.isEqual(
+            cleaned.toByteArray(StandardCharsets.UTF_8),
+            PREMIUM_REDEEM_CODE.toByteArray(StandardCharsets.UTF_8)
+        )
+        if (isMatch) {
             val updated = _themeConfig.value.copy(
                 isPremiumUnlocked = true,
                 appTier = com.example.data.AppTier.PREMIUM
@@ -281,9 +339,9 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
             repository.addManualSessionLog(
                 title = if (isAr) "تم تفعيل النسخة المميزة" else "Premium Tier Unlocked",
                 desc = if (isAr) {
-                    "تم تفعيل صلاحية بريميوم مدى الحياة عبر الرمز ($PREMIUM_REDEEM_CODE)."
+                    "تم تفعيل صلاحية بريميوم مدى الحياة عبر الرمز السري."
                 } else {
-                    "Activated lifetime PREMIUM access via Redeem Code ($PREMIUM_REDEEM_CODE)."
+                    "Activated lifetime PREMIUM access via Redeem Code."
                 },
                 statTag = if (isAr) "بريميوم" else "PREMIUM",
                 type = "check"
@@ -336,5 +394,7 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
 
     companion object {
         const val PREMIUM_REDEEM_CODE = "charfeddine23a"
+        const val AUTO_UPDATE_COOLDOWN_MS = 6L * 60L * 60L * 1000L
+        const val APP_USAGE_REFRESH_COOLDOWN_MS = 45_000L
     }
 }

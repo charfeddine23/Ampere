@@ -28,6 +28,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -142,6 +143,9 @@ fun LiquidBatteryRing(
         label = "neonSecondary"
     )
 
+    val wavePath = remember { Path() }
+    val clipPath = remember { Path() }
+
     Box(
         modifier = modifier
             .size(sizeDp)
@@ -205,10 +209,11 @@ fun LiquidBatteryRing(
                     radius = radius * 0.88f,
                     fillRatio = (animatedPercent / 100f).coerceIn(0.05f, 0.96f),
                     wavePhase = wavePhase,
-                    livingState = livingState,
                     primaryColor = activePrimary,
                     secondaryColor = activeSecondary,
-                    isDarkMode = isDarkMode
+                    isDarkMode = isDarkMode,
+                    wavePath = wavePath,
+                    clipPath = clipPath
                 )
             }
 
@@ -383,38 +388,39 @@ private fun DrawScope.drawNeumorphicLiquidWave(
     radius: Float,
     fillRatio: Float,
     wavePhase: Float,
-    livingState: LivingBatteryState,
     primaryColor: Color,
     secondaryColor: Color,
-    isDarkMode: Boolean
+    isDarkMode: Boolean,
+    wavePath: Path,
+    clipPath: Path
 ) {
     val waterLevelY = (center.y + radius) - (radius * 2f * fillRatio)
-    val wavePath = Path()
     val waveHeight = 6.dp.toPx()
 
+    wavePath.reset()
     wavePath.moveTo(center.x - radius, center.y + radius)
 
     val segments = 24
+    val twoPi = (2.0 * PI).toFloat()
     for (i in 0..segments) {
         val x = (center.x - radius) + (radius * 2f * i / segments)
-        val normalizedX = (i.toFloat() / segments) * 2 * PI
-        val y = waterLevelY + sin(normalizedX + wavePhase).toFloat() * waveHeight
+        val normalizedX = (i.toFloat() / segments) * twoPi
+        val y = waterLevelY + sin(normalizedX + wavePhase) * waveHeight
         wavePath.lineTo(x, y)
     }
 
     wavePath.lineTo(center.x + radius, center.y + radius)
     wavePath.close()
 
-    val clipPath = Path().apply {
-        addOval(
-            androidx.compose.ui.geometry.Rect(
-                center.x - radius,
-                center.y - radius,
-                center.x + radius,
-                center.y + radius
-            )
+    clipPath.reset()
+    clipPath.addOval(
+        androidx.compose.ui.geometry.Rect(
+            center.x - radius,
+            center.y - radius,
+            center.x + radius,
+            center.y + radius
         )
-    }
+    )
 
     drawContext.canvas.save()
     drawContext.canvas.clipPath(clipPath)

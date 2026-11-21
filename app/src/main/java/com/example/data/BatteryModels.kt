@@ -366,6 +366,14 @@ enum class DeviceFormFactor(val labelAr: String, val labelEn: String) {
     fun localizedLabel(isArabic: Boolean): String = if (isArabic) labelAr else labelEn
 }
 
+enum class DevicePerformanceTier(val key: String, val labelAr: String, val labelEn: String) {
+    LOW_END("low_end", "جهاز ضعيف / اقتصادي", "Entry / Low-End Hardware"),
+    MID_RANGE("mid_range", "جهاز متوسط الأداء", "Mid-Range Hardware"),
+    FLAGSHIP("flagship", "جهاز قوي / رائد", "High-Performance Hardware");
+
+    fun localizedLabel(isArabic: Boolean): String = if (isArabic) labelAr else labelEn
+}
+
 data class DeviceHardwareProfile(
     val manufacturer: String = "Android",
     val brand: String = "Generic",
@@ -385,10 +393,18 @@ data class DeviceHardwareProfile(
     val recommendedPowerWatts: Int = 25,
     val safeThermalCeilingC: Float = 41.0f,
     val nominalDesignCapacityMah: Int = 5000,
-    val isDualCellSuspected: Boolean = false
+    val isDualCellSuspected: Boolean = false,
+    val isLowRamDevice: Boolean = false,
+    val performanceTier: DevicePerformanceTier = DevicePerformanceTier.FLAGSHIP,
+    val lowEndReasonAr: String = "",
+    val lowEndReasonEn: String = ""
 ) {
+    val isLowEndDevice: Boolean
+        get() = performanceTier == DevicePerformanceTier.LOW_END
+
     fun localizedEcosystem(isArabic: Boolean): String = if (isArabic) chargingEcosystemAr else chargingEcosystemEn
     fun localizedRecommendedCable(isArabic: Boolean): String = if (isArabic) recommendedCableAr else recommendedCableEn
+    fun localizedLowEndReason(isArabic: Boolean): String = if (isArabic) lowEndReasonAr else lowEndReasonEn
 }
 
 enum class CellHealthStatus(

@@ -1,11 +1,13 @@
 package com.example.data
 
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
 import android.os.Build
 import android.os.PowerManager
+import androidx.core.content.ContextCompat
 import com.example.data.telemetry.BatteryScienceClassifier
 import com.example.data.telemetry.CableDnaStandardsEngine
 import com.example.data.telemetry.CurrentCalibrationEngine
@@ -16,8 +18,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -28,6 +32,17 @@ class BatteryMonitorRepository(
     private val context: Context,
     private val scope: CoroutineScope
 ) {
+    companion object {
+        fun normalizeVoltageMv(rawVoltage: Long): Int {
+            return when {
+                rawVoltage > 20_000L -> (rawVoltage / 1000L).toInt()
+                rawVoltage in 1L..15L -> (rawVoltage * 1000L).toInt()
+                rawVoltage in 16L..100L -> (rawVoltage * 100L).toInt()
+                rawVoltage > 100L -> rawVoltage.toInt()
+                else -> 0
+            }
+        }
+    }
     private val batteryManager = context.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
     private val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
 
@@ -77,9 +92,13 @@ class BatteryMonitorRepository(
 
     @Volatile
     private var isAppInForeground: Boolean = true
+    private val foregroundSignal = MutableStateFlow(true)
 
     @Volatile
     private var isSohPageActive: Boolean = false
+
+    @Volatile
+    private var isMySpacePageActive: Boolean = false
 
     @Volatile
     private var isProModeActive: Boolean = false
@@ -91,10 +110,23 @@ class BatteryMonitorRepository(
     @Volatile
     private var currentLanguage: AppLanguage = AppLanguage.ARABIC
 
+    @Volatile
+    private var cachedBatteryStatus: Intent? = null
+    private var receiverRegistered: Boolean = false
+    private val batteryChangeReceiver = object : BroadcastReceiver() {
+        override fun onReceive(ctx: Context?, intent: Intent?) {
+            if (intent != null) {
+                cachedBatteryStatus = intent
+                lastIntentPollMs = System.currentTimeMillis()
+            }
+        }
+    }
+
     init {
         currentLanguage = com.example.data.local.SettingsPreferencesManager(context).loadThemeConfig().appLanguage
         initSessionLogsSeed()
         refreshWalLogCountAsync()
+        registerForegroundBatteryReceiver()
         startPolling()
     }
 
@@ -140,7 +172,14 @@ class BatteryMonitorRepository(
     }
 
     fun setAppInForeground(inForeground: Boolean) {
+        if (isAppInForeground == inForeground) return
         isAppInForeground = inForeground
+        foregroundSignal.value = inForeground
+        if (inForeground) {
+            registerForegroundBatteryReceiver()
+        } else {
+            unregisterForegroundBatteryReceiver()
+        }
     }
 
     fun setSohPageActive(active: Boolean) {
@@ -158,8 +197,41 @@ class BatteryMonitorRepository(
         }
     }
 
+    fun setMySpacePageActive(active: Boolean) {
+        isMySpacePageActive = active
+    }
+
     fun setProModeActive(enabled: Boolean) {
         isProModeActive = enabled
+    }
+
+    fun releaseResources() {
+        unregisterForegroundBatteryReceiver()
+    }
+
+    private fun registerForegroundBatteryReceiver() {
+        if (receiverRegistered) return
+        runCatching {
+            val sticky = ContextCompat.registerReceiver(
+                context,
+                batteryChangeReceiver,
+                IntentFilter(Intent.ACTION_BATTERY_CHANGED),
+                ContextCompat.RECEIVER_EXPORTED
+            )
+            if (sticky != null) {
+                cachedBatteryStatus = sticky
+                lastIntentPollMs = System.currentTimeMillis()
+            }
+            receiverRegistered = true
+        }
+    }
+
+    private fun unregisterForegroundBatteryReceiver() {
+        if (!receiverRegistered) return
+        runCatching {
+            context.unregisterReceiver(batteryChangeReceiver)
+        }
+        receiverRegistered = false
     }
 
     private fun queryHardwareChargeCounterUah(): Long {
@@ -199,33 +271,74 @@ class BatteryMonitorRepository(
     }
 
     private var subTick = 0
-    private var cachedBatteryStatus: Intent? = null
     private var lastIntentPollMs: Long = 0L
-    private var lastHistoryAppendMs: Long = 0L
+    private var lastFastHistoryAppendMs: Long = 0L
+    private var lastSlowHistoryAppendMs: Long = 0L
+    private var lastSlowHistoryVoltageMv: Int = 0
+    private var lastValidVoltageMv: Int = 0
+    private var sysfsVoltagePath: String? = null
+    private var sysfsVoltageChecked: Boolean = false
     private var lastWidgetSyncMs: Long = 0L
+
+    private fun readSysfsVoltageMv(): Int {
+        if (sysfsVoltageChecked && sysfsVoltagePath == null) return 0
+        val candidates = sysfsVoltagePath?.let { listOf(it) } ?: listOf(
+            "/sys/class/power_supply/battery/voltage_now",
+            "/sys/class/power_supply/bms/voltage_now"
+        )
+        for (path in candidates) {
+            try {
+                val rawText = File(path).readText().trim()
+                val rawVal = rawText.toLongOrNull() ?: continue
+                val mv = normalizeVoltageMv(rawVal)
+                if (mv in 2500..12000) {
+                    sysfsVoltagePath = path
+                    sysfsVoltageChecked = true
+                    return mv
+                }
+            } catch (_: Exception) {
+            }
+        }
+        sysfsVoltageChecked = true
+        sysfsVoltagePath = null
+        return 0
+    }
 
     private fun startPolling() {
         scope.launch(Dispatchers.Default) {
             while (isActive) {
-                val now = System.currentTimeMillis()
-                val activeForeground = isAppInForeground
-                val proActive = isProModeActive && activeForeground
+                // Zero-wakeup pause while the app UI is backgrounded
+                if (!isAppInForeground) {
+                    foregroundSignal.first { it }
+                    if (!isActive) break
+                }
 
-                val intentIntervalMs = if (proActive) 25L else if (isSohPageActive) 100L else 1000L
-                if (cachedBatteryStatus == null || now - lastIntentPollMs >= intentIntervalMs) {
+                val now = System.currentTimeMillis()
+                val isPowerSave = powerManager?.isPowerSaveMode == true
+                val isInteractive = powerManager?.isInteractive ?: true
+                val proActive = isProModeActive && isAppInForeground && isInteractive && !isPowerSave
+
+                val stickyRefreshMs = if (proActive) 250L else 1_500L
+                if (cachedBatteryStatus == null || (!receiverRegistered && now - lastIntentPollMs >= stickyRefreshMs)) {
                     val ifilter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
                     cachedBatteryStatus = context.registerReceiver(null, ifilter)
                     lastIntentPollMs = now
                 }
 
-                if ((isSohPageActive || proActive) && (now - lastWalSyncTimeMs >= 5_000L)) {
+                if ((isSohPageActive || proActive) && (now - lastWalSyncTimeMs >= 8_000L)) {
                     refreshWalLogCountAsync()
                 }
 
                 readBatteryState(cachedBatteryStatus, now = now, proActive = proActive)
 
                 subTick++
-                delay(if (proActive) 10L else if (activeForeground) 100L else 5_000L)
+                val delayMs = when {
+                    !isInteractive || isPowerSave -> 500L
+                    proActive -> 10L
+                    isSohPageActive || isMySpacePageActive -> 140L
+                    else -> 250L
+                }
+                delay(delayMs)
             }
         }
     }
@@ -265,10 +378,19 @@ class BatteryMonitorRepository(
         }
 
         val rawVoltage = batteryStatus?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, -1) ?: -1
-        val voltageMv = when {
-            rawVoltage in 1..15 -> rawVoltage * 1000
-            rawVoltage > 100 -> rawVoltage
-            else -> 0
+        val extraVoltageMv = normalizeVoltageMv(rawVoltage.toLong())
+        val sysfsMv = readSysfsVoltageMv()
+        val resolvedVoltageMv = when {
+            sysfsMv > 0 && extraVoltageMv <= 0 -> sysfsMv
+            sysfsMv > 0 && extraVoltageMv > 0 && abs(sysfsMv - extraVoltageMv) <= (extraVoltageMv * 0.25f) -> sysfsMv
+            extraVoltageMv > 0 -> extraVoltageMv
+            else -> lastValidVoltageMv
+        }
+        val voltageMv = if (resolvedVoltageMv > 0) {
+            lastValidVoltageMv = resolvedVoltageMv
+            resolvedVoltageMv
+        } else {
+            0
         }
 
         val rawTempTenths = batteryStatus?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, Int.MIN_VALUE) ?: Int.MIN_VALUE
@@ -397,10 +519,7 @@ class BatteryMonitorRepository(
         )
 
         _telemetry.value = telemetry
-        if (proActive || (now - lastHistoryAppendMs >= 100L)) {
-            lastHistoryAppendMs = now
-            appendHistoryPoint(telemetry)
-        }
+        appendHistoryPoint(telemetry, now)
 
         if (proActive || isSohPageActive || subTick % 10 == 0) {
             computeLiveSohPrediction(
@@ -507,8 +626,7 @@ class BatteryMonitorRepository(
         }
     }
 
-    private fun appendHistoryPoint(t: BatteryTelemetry) {
-        val now = System.currentTimeMillis()
+    private fun appendHistoryPoint(t: BatteryTelemetry, now: Long = System.currentTimeMillis()) {
         val maxPoints = 60
 
         fun append(currentList: List<TelemetryPoint>, newVal: Float): List<TelemetryPoint> {
@@ -520,10 +638,19 @@ class BatteryMonitorRepository(
             return list
         }
 
-        _voltageHistory.value = append(_voltageHistory.value, t.voltageMv.toFloat())
-        _currentHistory.value = append(_currentHistory.value, t.currentMa.toFloat())
-        _wattageHistory.value = append(_wattageHistory.value, t.wattageW)
-        _temperatureHistory.value = append(_temperatureHistory.value, t.temperatureC)
+        if (_currentHistory.value.isEmpty() || (now - lastFastHistoryAppendMs >= 120L)) {
+            lastFastHistoryAppendMs = now
+            _currentHistory.value = append(_currentHistory.value, t.currentMa.toFloat())
+            _wattageHistory.value = append(_wattageHistory.value, t.wattageW)
+        }
+
+        val voltageChanged = t.voltageMv > 0 && abs(t.voltageMv - lastSlowHistoryVoltageMv) >= 1
+        if (_voltageHistory.value.isEmpty() || (now - lastSlowHistoryAppendMs >= 1000L) || voltageChanged) {
+            lastSlowHistoryAppendMs = now
+            lastSlowHistoryVoltageMv = t.voltageMv
+            _voltageHistory.value = append(_voltageHistory.value, t.voltageMv.toFloat())
+            _temperatureHistory.value = append(_temperatureHistory.value, t.temperatureC)
+        }
     }
 
     fun addManualSessionLog(title: String, desc: String, statTag: String, type: String) {

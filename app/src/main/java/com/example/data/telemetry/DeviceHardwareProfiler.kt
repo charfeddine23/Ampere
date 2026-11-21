@@ -6,6 +6,7 @@ import android.content.res.Configuration
 import android.os.Build
 import com.example.data.DeviceFormFactor
 import com.example.data.DeviceHardwareProfile
+import com.example.data.DevicePerformanceTier
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -45,6 +46,17 @@ object DeviceHardwareProfiler {
         val oemKey = "${rawManufacturer.lowercase(Locale.ROOT)} ${rawBrand.lowercase(Locale.ROOT)} ${rawModel.lowercase(Locale.ROOT)}"
         val ecosystem = resolveOemChargingProfile(oemKey, formFactor, isDualCell)
 
+        val isLowRam = readIsLowRamDevice(context)
+        val perfClassification = evaluatePerformanceTier(
+            isLowRamDevice = isLowRam,
+            totalRamGb = totalRamGb,
+            cpuCores = cpuCores,
+            sdkInt = Build.VERSION.SDK_INT,
+            primaryAbi = primaryAbi,
+            chipset = chipset,
+            model = rawModel
+        )
+
         val designCapacity = estimateDesignCapacityMah(context, formFactor, isDualCell)
 
         return DeviceHardwareProfile(
@@ -66,8 +78,94 @@ object DeviceHardwareProfiler {
             recommendedPowerWatts = ecosystem.targetWatts,
             safeThermalCeilingC = ecosystem.safeThermalCeilingC,
             nominalDesignCapacityMah = designCapacity,
-            isDualCellSuspected = isDualCell
+            isDualCellSuspected = isDualCell,
+            isLowRamDevice = isLowRam,
+            performanceTier = perfClassification.tier,
+            lowEndReasonAr = perfClassification.reasonAr,
+            lowEndReasonEn = perfClassification.reasonEn
         )
+    }
+
+    data class HardwareTierEvaluation(
+        val tier: DevicePerformanceTier,
+        val reasonAr: String,
+        val reasonEn: String
+    )
+
+    fun evaluatePerformanceTier(
+        isLowRamDevice: Boolean,
+        totalRamGb: Float,
+        cpuCores: Int,
+        sdkInt: Int,
+        primaryAbi: String,
+        chipset: String,
+        model: String
+    ): HardwareTierEvaluation {
+        val abiLower = primaryAbi.lowercase(Locale.ROOT)
+        val chipLower = chipset.lowercase(Locale.ROOT)
+        val modelLower = model.lowercase(Locale.ROOT)
+
+        val is32BitOnly = abiLower.startsWith("armeabi") || abiLower == "x86"
+        val isAndroidGoModel = "go edition" in modelLower || " android go" in modelLower
+        val knownWeakChip = listOf(
+            "mt673", "mt6761", "mt6762", "mt6765", "helio a2", "helio g25",
+            "sc9863", "sc7731", "unisoc sc", "msm8917", "msm8937",
+            "sdm429", "sdm439", "qm215", "exynos 7570", "exynos 7870"
+        ).any { it in chipLower }
+
+        val reasonsAr = mutableListOf<String>()
+        val reasonsEn = mutableListOf<String>()
+
+        if (isLowRamDevice || isAndroidGoModel) {
+            reasonsAr += "نظام ذو ذاكرة منخفضة (Low-RAM / Go)"
+            reasonsEn += "Low-RAM / Android Go system profile"
+        }
+        if (totalRamGb < 3.4f) {
+            reasonsAr += "ذاكرة عشوائية محدودة (${totalRamGb} GB)"
+            reasonsEn += "Limited RAM (${totalRamGb} GB)"
+        }
+        if (cpuCores <= 4 && totalRamGb <= 4.2f) {
+            reasonsAr += "معالج محدود الأنوية ($cpuCores أنوية)"
+            reasonsEn += "Entry quad-core CPU ($cpuCores cores)"
+        }
+        if (is32BitOnly) {
+            reasonsAr += "معمارية 32-bit قديمة ($primaryAbi)"
+            reasonsEn += "32-bit ABI ($primaryAbi)"
+        }
+        if (sdkInt < Build.VERSION_CODES.O) {
+            reasonsAr += "إصدار أندرويد قديم (API $sdkInt)"
+            reasonsEn += "Legacy Android API $sdkInt"
+        }
+        if (knownWeakChip && totalRamGb <= 4.5f) {
+            reasonsAr += "شريحة اقتصادية ($chipset)"
+            reasonsEn += "Entry-level SoC ($chipset)"
+        }
+
+        if (reasonsAr.isNotEmpty()) {
+            return HardwareTierEvaluation(
+                tier = DevicePerformanceTier.LOW_END,
+                reasonAr = reasonsAr.joinToString(" • "),
+                reasonEn = reasonsEn.joinToString(" • ")
+            )
+        }
+
+        val tier = if (totalRamGb >= 5.5f && cpuCores >= 6 && sdkInt >= Build.VERSION_CODES.R) {
+            DevicePerformanceTier.FLAGSHIP
+        } else {
+            DevicePerformanceTier.MID_RANGE
+        }
+        return HardwareTierEvaluation(
+            tier = tier,
+            reasonAr = "",
+            reasonEn = ""
+        )
+    }
+
+    private fun readIsLowRamDevice(context: Context): Boolean {
+        return runCatching {
+            val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+            am?.isLowRamDevice == true
+        }.getOrDefault(false)
     }
 
     private data class OemChargingSpec(

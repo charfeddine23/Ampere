@@ -113,6 +113,7 @@ object AppBatteryUsageTracker {
     }
 
     fun openAppBatteryDetailsSettings(context: Context, packageName: String) {
+        if (packageName.isBlank()) return
         val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
             data = Uri.fromParts("package", packageName, null)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

@@ -2,6 +2,8 @@ package com.example.data.update
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.content.pm.Signature
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -32,6 +34,8 @@ import okhttp3.Request
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
+import java.net.URI
+import java.security.MessageDigest
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
@@ -77,6 +81,23 @@ class InAppUpdateEngine(private val context: Context) {
             .readTimeout(30, TimeUnit.SECONDS)
             .followRedirects(true)
             .followSslRedirects(true)
+            .addNetworkInterceptor { chain ->
+                val req = chain.request()
+                val reqUrl = req.url.toString()
+                if (!isTrustedUpdateUrl(reqUrl)) {
+                    throw SecurityException("Untrusted update host or insecure scheme")
+                }
+                val resp = chain.proceed(req)
+                val location = resp.header("Location")
+                if (resp.isRedirect && !location.isNullOrBlank()) {
+                    val resolved = runCatching { req.url.resolve(location)?.toString() }.getOrNull()
+                    if (resolved.isNullOrBlank() || !isTrustedUpdateUrl(resolved)) {
+                        resp.close()
+                        throw SecurityException("Blocked untrusted redirect target")
+                    }
+                }
+                resp
+            }
             .build()
     }
 
@@ -341,12 +362,13 @@ class InAppUpdateEngine(private val context: Context) {
             val request = Request.Builder()
                 .url(GITHUB_LATEST_RELEASE_API)
                 .header("Accept", "application/vnd.github+json")
-                .header("User-Agent", "AmperePulse-Android/${BuildConfig.VERSION_NAME}")
+                .header("User-Agent", "VoltCore-Android/${BuildConfig.VERSION_NAME}")
                 .build()
 
             httpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return null
                 val body = response.body?.string() ?: return null
+                if (body.length > MAX_RELEASE_JSON_CHARS) return null
                 val json = JSONObject(body)
 
                 val rawTag = json.optString("tag_name", "").trim()
@@ -354,7 +376,8 @@ class InAppUpdateEngine(private val context: Context) {
                     .substringBefore("-")
                     .ifBlank { return null }
 
-                val htmlUrl = json.optString("html_url", GITHUB_LATEST_RELEASE_URL)
+                val rawHtmlUrl = json.optString("html_url", GITHUB_LATEST_RELEASE_URL).trim()
+                val htmlUrl = if (isTrustedUpdateUrl(rawHtmlUrl)) rawHtmlUrl else GITHUB_LATEST_RELEASE_URL
                 var apkDownloadUrl: String? = null
                 var apkName: String? = null
                 var apkSizeMb: Float? = null
@@ -364,14 +387,15 @@ class InAppUpdateEngine(private val context: Context) {
                     for (i in 0 until assets.length()) {
                         val asset = assets.optJSONObject(i) ?: continue
                         val name = asset.optString("name", "")
-                        if (name.endsWith(".apk", ignoreCase = true)) {
-                            apkName = name
-                            apkDownloadUrl = asset.optString("browser_download_url", htmlUrl)
+                        val candidateUrl = asset.optString("browser_download_url", "").trim()
+                        if (name.endsWith(".apk", ignoreCase = true) && isTrustedUpdateUrl(candidateUrl)) {
                             val bytes = asset.optLong("size", 0L)
-                            if (bytes > 0L) {
+                            if (bytes in 1L..MAX_APK_BYTES) {
+                                apkName = name
+                                apkDownloadUrl = candidateUrl
                                 apkSizeMb = bytes / (1024f * 1024f)
+                                break
                             }
-                            break
                         }
                     }
                 }
@@ -534,8 +558,11 @@ class InAppUpdateEngine(private val context: Context) {
         }
 
         // 4. Direct In-App APK download from GitHub Releases (no external apps/browser!)
-        if (current.updateAvailable && current.downloadUrl.contains(".apk", ignoreCase = true)) {
-            val targetName = current.apkFileName ?: "Ampere.Pulse.v${current.availableVersionName ?: "latest"}.apk"
+        if (current.updateAvailable &&
+            isTrustedUpdateUrl(current.downloadUrl) &&
+            current.downloadUrl.contains(".apk", ignoreCase = true)
+        ) {
+            val targetName = current.apkFileName ?: "Volt.Core.v${current.availableVersionName ?: "latest"}.apk"
             startInAppApkDownload(
                 url = current.downloadUrl,
                 fileName = targetName,
@@ -559,12 +586,19 @@ class InAppUpdateEngine(private val context: Context) {
         expectedSizeMb: Float?,
         hostContext: Context
     ) {
+        if (!isTrustedUpdateUrl(url)) return
         activeDownloadJob?.cancel()
         activeDownloadJob = scope.launch {
             val updatesDir = File(appContext.cacheDir, "updates").apply { mkdirs() }
-            val safeFileName = fileName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+            val safeFileName = sanitizeApkFileName(fileName)
             val targetFile = File(updatesDir, safeFileName)
             val tempFile = File(updatesDir, "$safeFileName.part")
+            val updatesCanonical = updatesDir.canonicalPath + File.separator
+            if (!targetFile.canonicalPath.startsWith(updatesCanonical) ||
+                !tempFile.canonicalPath.startsWith(updatesCanonical)
+            ) {
+                return@launch
+            }
 
             val isArStart = isArabicLanguage
             _uiState.value = _uiState.value.copy(
@@ -583,15 +617,22 @@ class InAppUpdateEngine(private val context: Context) {
             try {
                 val request = Request.Builder()
                     .url(url)
-                    .header("User-Agent", "AmperePulse-Android/${BuildConfig.VERSION_NAME}")
+                    .header("User-Agent", "VoltCore-Android/${BuildConfig.VERSION_NAME}")
                     .build()
 
                 httpClient.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) {
                         throw IllegalStateException("HTTP ${response.code}")
                     }
+                    if (!isTrustedUpdateUrl(response.request.url.toString())) {
+                        throw SecurityException("Untrusted final download origin")
+                    }
                     val body = response.body ?: throw IllegalStateException("Empty body")
-                    val totalBytes = body.contentLength().let { len ->
+                    val contentLength = body.contentLength()
+                    if (contentLength > MAX_APK_BYTES) {
+                        throw SecurityException("APK exceeds maximum allowed size")
+                    }
+                    val totalBytes = contentLength.let { len ->
                         if (len > 0L) len else ((expectedSizeMb ?: 0f) * 1024f * 1024f).toLong()
                     }
                     val totalMbVal = if (totalBytes > 0L) totalBytes / (1024f * 1024f) else (expectedSizeMb ?: 0f)
@@ -605,8 +646,11 @@ class InAppUpdateEngine(private val context: Context) {
                             while (isActive) {
                                 val read = input.read(buffer)
                                 if (read == -1) break
-                                output.write(buffer, 0, read)
                                 bytesReadTotal += read
+                                if (bytesReadTotal > MAX_APK_BYTES) {
+                                    throw SecurityException("Streamed APK exceeds safety cap")
+                                }
+                                output.write(buffer, 0, read)
 
                                 val now = System.currentTimeMillis()
                                 if (now - lastUiEmitTime >= 80L) {
@@ -639,6 +683,11 @@ class InAppUpdateEngine(private val context: Context) {
                 if (!tempFile.renameTo(targetFile)) {
                     tempFile.copyTo(targetFile, overwrite = true)
                     tempFile.delete()
+                }
+
+                if (!verifyDownloadedApkIntegrity(targetFile)) {
+                    runCatching { targetFile.delete() }
+                    throw SecurityException("APK signature or package verification failed")
                 }
 
                 val canInstall = canInstallPackages()
@@ -716,6 +765,14 @@ class InAppUpdateEngine(private val context: Context) {
 
     private fun launchLocalApkInstaller(hostContext: Context, apkFile: File) {
         if (!apkFile.exists()) return
+        val updatesDir = File(appContext.cacheDir, "updates")
+        val insideUpdates = runCatching {
+            apkFile.canonicalPath.startsWith(updatesDir.canonicalPath + File.separator)
+        }.getOrDefault(false)
+        if (!insideUpdates || !verifyDownloadedApkIntegrity(apkFile)) {
+            runCatching { apkFile.delete() }
+            return
+        }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !canInstallPackages()) {
             _uiState.value = _uiState.value.copy(needsInstallPermission = true)
@@ -744,6 +801,56 @@ class InAppUpdateEngine(private val context: Context) {
             }
             hostContext.startActivity(installIntent)
         } catch (_: Exception) {}
+    }
+
+    /**
+     * Verifies that the downloaded APK belongs to the same packageName, does not downgrade
+     * VERSION_CODE, and shares at least one SHA-256 signing certificate with the running app.
+     */
+    @Suppress("DEPRECATION")
+    private fun verifyDownloadedApkIntegrity(apkFile: File): Boolean {
+        return runCatching {
+            if (!apkFile.isFile || apkFile.length() !in 1L..MAX_APK_BYTES) return@runCatching false
+            val pm = appContext.packageManager
+            val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                PackageManager.GET_SIGNING_CERTIFICATES
+            } else {
+                PackageManager.GET_SIGNATURES
+            }
+            val archiveInfo = pm.getPackageArchiveInfo(apkFile.absolutePath, flags) ?: return@runCatching false
+            if (archiveInfo.packageName != appContext.packageName) return@runCatching false
+            val archiveVersionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                archiveInfo.longVersionCode
+            } else {
+                archiveInfo.versionCode.toLong()
+            }
+            if (archiveVersionCode < BuildConfig.VERSION_CODE.toLong()) return@runCatching false
+
+            val installedInfo = pm.getPackageInfo(appContext.packageName, flags) ?: return@runCatching false
+            val installedDigests = extractSigningDigests(installedInfo)
+            val archiveDigests = extractSigningDigests(archiveInfo)
+            if (installedDigests.isEmpty() || archiveDigests.isEmpty()) return@runCatching false
+            installedDigests.any { it in archiveDigests }
+        }.getOrDefault(false)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun extractSigningDigests(packageInfo: android.content.pm.PackageInfo): Set<String> {
+        val signatures: Array<Signature> = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            val signingInfo = packageInfo.signingInfo ?: return emptySet()
+            if (signingInfo.hasMultipleSigners()) {
+                signingInfo.apkContentsSigners
+            } else {
+                signingInfo.signingCertificateHistory
+            }
+        } else {
+            packageInfo.signatures ?: emptyArray()
+        }
+        val md = MessageDigest.getInstance("SHA-256")
+        return signatures.map { sig ->
+            md.reset()
+            md.digest(sig.toByteArray()).joinToString("") { b -> "%02x".format(b) }
+        }.toSet()
     }
 
     private fun cleanupOldCachedApks() {
@@ -795,6 +902,33 @@ class InAppUpdateEngine(private val context: Context) {
             "https://api.github.com/repos/$GITHUB_OWNER/$GITHUB_REPO/releases/latest"
         const val GITHUB_LATEST_RELEASE_URL =
             "https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/latest"
+
+        private const val MAX_APK_BYTES = 150L * 1024L * 1024L
+        private const val MAX_RELEASE_JSON_CHARS = 512_000
+        private val TRUSTED_UPDATE_HOSTS = setOf(
+            "api.github.com",
+            "github.com",
+            "objects.githubusercontent.com",
+            "release-assets.githubusercontent.com",
+            "github-releases.githubusercontent.com"
+        )
+
+        fun isTrustedUpdateUrl(rawUrl: String?): Boolean {
+            if (rawUrl.isNullOrBlank()) return false
+            val parsed = runCatching { URI(rawUrl.trim()) }.getOrNull() ?: return false
+            if (!parsed.scheme.equals("https", ignoreCase = true)) return false
+            if (!parsed.userInfo.isNullOrEmpty()) return false
+            val host = parsed.host?.lowercase(Locale.US) ?: return false
+            return host in TRUSTED_UPDATE_HOSTS
+        }
+
+        fun sanitizeApkFileName(rawName: String): String {
+            val base = rawName.substringAfterLast('/').substringAfterLast('\\')
+                .replace(Regex("[^a-zA-Z0-9._-]"), "_")
+                .trimStart('.')
+            val validBase = base.ifBlank { "Volt.Core.update.apk" }
+            return if (validBase.endsWith(".apk", ignoreCase = true)) validBase else "$validBase.apk"
+        }
 
         fun compareSemanticVersions(remote: String, current: String): Int {
             val remoteParts = remote.split(".").map { it.filter(Char::isDigit).toIntOrNull() ?: 0 }

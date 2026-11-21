@@ -5,16 +5,20 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
     <!-- Material You / Android 13+ Monochrome Themed Volt Core V-Ribbon + Lightning Bolt -->
-    <!-- Sculptural 3D Ribbon V (outer & inner folds with clean separation gap around bolt) -->
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M24.5,35.2 C24.5,33.6 25.9,32.5 28.5,32.5 L34.8,32.5 C37.2,32.5 39.2,33.9 40.6,36.2 L54.2,59.5 C55.1,61.0 56.8,61.0 58.1,59.4 L60.2,56.8 L56.8,56.8 L47.2,71.4 C45.4,73.9 43.0,73.7 41.3,70.8 L24.9,38.0 C24.6,37.1 24.5,36.1 24.5,35.2 Z" />
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:fillAlpha="0.68"
-        android:pathData="M48.8,74.2 C51.2,74.5 54.0,73.2 57.0,70.2 L76.8,48.5 L73.2,54.8 L59.4,71.2 C55.6,75.4 51.6,76.8 48.0,76.4 Z" />
-    <!-- Piercing Diagonal Lightning Bolt -->
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M78.6,27.0 L52.2,50.8 L63.8,50.8 L44.6,81.0 L82.8,47.2 L70.6,47.2 Z" />
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:scaleX="1.15"
+        android:scaleY="1.15">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M24.5,35.2 C24.5,33.6 25.9,32.5 28.5,32.5 L34.8,32.5 C37.2,32.5 39.2,33.9 40.6,36.2 L54.2,59.5 C55.1,61.0 56.8,61.0 58.1,59.4 L60.2,56.8 L56.8,56.8 L47.2,71.4 C45.4,73.9 43.0,73.7 41.3,70.8 L24.9,38.0 C24.6,37.1 24.5,36.1 24.5,35.2 Z" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:fillAlpha="0.68"
+            android:pathData="M48.8,74.2 C51.2,74.5 54.0,73.2 57.0,70.2 L76.8,48.5 L73.2,54.8 L59.4,71.2 C55.6,75.4 51.6,76.8 48.0,76.4 Z" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M78.6,27.0 L52.2,50.8 L63.8,50.8 L44.6,81.0 L82.8,47.2 L70.6,47.2 Z" />
+    </group>
 </vector>

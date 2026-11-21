@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
 import android.os.Build
+import com.example.data.BatteryMonitorRepository
 import com.example.data.local.AmpereDatabase
 import com.example.data.local.SettingsPreferencesManager
 import com.example.data.local.TelemetryLogEntity
@@ -22,7 +23,7 @@ import kotlinx.coroutines.launch
  */
 object AlarmScheduler {
 
-    private const val ALARM_INTERVAL_MILLIS = 15 * 60 * 1000L // 15 minutes
+    private const val ALARM_INTERVAL_MILLIS = 30 * 60 * 1000L // 30 minutes
     const val ACTION_ALARM_HEARTBEAT = "com.example.amperepulse.ACTION_ALARM_HEARTBEAT"
     private const val REQUEST_CODE = 4001
 
@@ -85,6 +86,7 @@ object AlarmScheduler {
 class AlarmReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent?) {
+        if (intent?.action != AlarmScheduler.ACTION_ALARM_HEARTBEAT) return
         val appContext = context.applicationContext
         val config = SettingsPreferencesManager(appContext).loadThemeConfig()
         if (!config.backgroundServiceEnabled) {
@@ -105,10 +107,12 @@ class AlarmReceiver : BroadcastReceiver() {
 
                 val rawLevel = bStatus?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
                 val scale = bStatus?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
-                val pct = if (rawLevel >= 0 && scale > 0) ((rawLevel / scale.toFloat()) * 100).toInt() else 84
+                val pct = if (rawLevel >= 0 && scale > 0) ((rawLevel / scale.toFloat()) * 100).toInt().coerceIn(0, 100) else 84
 
                 val rawVoltage = bStatus?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 4150) ?: 4150
-                val voltageMv = if (rawVoltage in 1..15) rawVoltage * 1000 else rawVoltage
+                val voltageMv = BatteryMonitorRepository.normalizeVoltageMv(rawVoltage.toLong()).let {
+                    if (it > 0) it else 4150
+                }
 
                 val rawTemp = bStatus?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 285) ?: 285
                 val tempC = rawTemp / 10.0f

@@ -427,6 +427,9 @@ fun FloatingGlassNavBar(
             ) {
                 // Layer 1: Realistic Fluid Glass Droplet Canvas (draw-only invalidation)
                 if (showLiquidDroplet) {
+                    val dropletPath = remember { Path() }
+                    val highlightPath = remember { Path() }
+                    val leadingLensPath = remember { Path() }
                     Canvas(modifier = Modifier.fillMaxSize()) {
                         drawRealisticLiquidGlassDroplet(
                             headX = physics.headX,
@@ -437,7 +440,10 @@ fun FloatingGlassNavBar(
                             maxStretchPx = maxStretchPx,
                             isDarkMode = isDarkMode,
                             accentColor = accentColor,
-                            baseHeight = 44.dp.toPx().coerceAtMost(size.height - 4.dp.toPx())
+                            baseHeight = 44.dp.toPx().coerceAtMost(size.height - 4.dp.toPx()),
+                            dropletPath = dropletPath,
+                            highlightPath = highlightPath,
+                            leadingLensPath = leadingLensPath
                         )
                     }
                 }
@@ -526,7 +532,10 @@ private fun DrawScope.drawRealisticLiquidGlassDroplet(
     maxStretchPx: Float,
     isDarkMode: Boolean,
     accentColor: Color,
-    baseHeight: Float
+    baseHeight: Float,
+    dropletPath: Path,
+    highlightPath: Path,
+    leadingLensPath: Path
 ) {
     if (headX <= 0f) return
 
@@ -581,7 +590,8 @@ private fun DrawScope.drawRealisticLiquidGlassDroplet(
     )
 
     // 2. Single Unified Continuous Fluid Path (zero shape pops across any speed/state)
-    val dropletPath = Path().apply {
+    dropletPath.reset()
+    dropletPath.apply {
         moveTo(frontApexX, centerY)
 
         // Front-Top Quadrant (Front Apex -> Top Crest)
@@ -707,7 +717,8 @@ private fun DrawScope.drawRealisticLiquidGlassDroplet(
     // 5. Continuous Upper Crest Specular Reflection (gleams across droplet dome)
     val upperHighlightStart = headX - tailSign * (leadRx * 0.52f)
     val upperHighlightEnd = headX + tailSign * (leadRx * 0.42f + tailExtension * 0.45f)
-    val highlightCurve = Path().apply {
+    highlightPath.reset()
+    val highlightCurve = highlightPath.apply {
         moveTo(upperHighlightStart, centerY - ry * 0.74f)
         cubicTo(
             x1 = headX - tailSign * (leadRx * 0.12f),
@@ -732,7 +743,8 @@ private fun DrawScope.drawRealisticLiquidGlassDroplet(
 
     // 6. Leading-Edge Curved Lens Specular (brightens dynamically with motion/lift)
     if (dynamicMorph > 0.08f) {
-        val leadingLens = Path().apply {
+        leadingLensPath.reset()
+        val leadingLens = leadingLensPath.apply {
             moveTo(headX - tailSign * leadRx * 0.46f, centerY - ry * 0.62f)
             cubicTo(
                 x1 = frontApexX + tailSign * (leadRx * 0.15f),

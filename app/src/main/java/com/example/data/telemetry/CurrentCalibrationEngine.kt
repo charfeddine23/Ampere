@@ -3,6 +3,7 @@ package com.example.data.telemetry
 import android.content.Context
 import android.os.BatteryManager
 import android.util.Log
+import com.example.BuildConfig
 import kotlin.math.abs
 
 /**
@@ -52,9 +53,9 @@ class CurrentCalibrationEngine(
     fun updateCalibration(newMultiplier: Float, newOffsetMa: Float) {
         multiplier = newMultiplier.coerceIn(0.5f, 2.0f)
         zeroOffsetMa = newOffsetMa.coerceIn(-500f, 500f)
-        try {
-            Log.d(TAG, "Calibration updated: Multiplier=$multiplier, Offset=$zeroOffsetMa mA")
-        } catch (_: Exception) {}
+        if (BuildConfig.DEBUG) {
+            runCatching { Log.d(TAG, "Calibration updated: Multiplier=$multiplier, Offset=$zeroOffsetMa mA") }
+        }
     }
 
     /**
@@ -100,7 +101,9 @@ class CurrentCalibrationEngine(
         val rawProperty = try {
             batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
         } catch (e: Exception) {
-            Log.w(TAG, "Error querying BATTERY_PROPERTY_CURRENT_NOW: ${e.message}")
+            if (BuildConfig.DEBUG) {
+                runCatching { Log.w(TAG, "Error querying BATTERY_PROPERTY_CURRENT_NOW: ${e.message}") }
+            }
             Int.MIN_VALUE
         }
 
@@ -183,9 +186,9 @@ class CurrentCalibrationEngine(
     fun performManualZeroCalibration(currentReadingMa: Float, expectedNominalMa: Float) {
         val drift = currentReadingMa - expectedNominalMa
         zeroOffsetMa = drift.coerceIn(-400f, 400f)
-        try {
-            Log.i(TAG, "Manual Zero Calibration executed: Offset adjusted to $zeroOffsetMa mA")
-        } catch (_: Exception) {}
+        if (BuildConfig.DEBUG) {
+            runCatching { Log.i(TAG, "Manual Zero Calibration executed: Offset adjusted to $zeroOffsetMa mA") }
+        }
     }
 
     /**

@@ -1,5 +1,7 @@
 package com.example.ui.components
 
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -52,14 +54,18 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.foundation.Canvas
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Shield
@@ -73,8 +79,11 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material.icons.filled.WorkspacePremium
+import com.example.BuildConfig
 import com.example.data.AppLanguage
+import com.example.data.DeviceHardwareProfile
 import com.example.data.GraphicsMode
+import com.example.ui.AmperePulseViewModel.UnsupportedModeAlert
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -258,8 +267,8 @@ fun AmpereBrandEmblem(
 }
 
 /**
- * Top Header with Luxury 3-line frosted glass hamburger menu,
- * Quick Dark Mode / Light Mode toggle, and 90 FPS status HUD.
+ * Top Header with Luxury 3-line frosted glass hamburger menu
+ * and quick 3-state Graphics Mode switcher (Normal / Simple / Pro).
  */
 @Composable
 fun LuxuryTopBar(
@@ -268,7 +277,8 @@ fun LuxuryTopBar(
     isMenuOpen: Boolean,
     onMenuToggle: () -> Unit,
     themeConfig: GlassThemeConfig,
-    onToggleDarkMode: () -> Unit,
+    isGraphicsLockedLowEnd: Boolean = false,
+    onCycleGraphicsMode: () -> Unit,
     onOpenSkinVault: () -> Unit = {},
     onOpenRedeemDialog: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -383,28 +393,67 @@ fun LuxuryTopBar(
 
         Spacer(modifier = Modifier.width(8.dp))
 
-        // Actions: Quick Dark/Light Toggle + Luxury 3-Line Button
+        // Actions: Quick 3-Mode Switcher (Normal / Simple / Pro) + Luxury 3-Line Button
         Row(verticalAlignment = Alignment.CenterVertically) {
-            // Dark Mode Quick Toggle Button
+            val modeTint = when (themeConfig.graphicsMode) {
+                GraphicsMode.STANDARD -> accentColor
+                GraphicsMode.SIMPLE -> TactileGreen
+                GraphicsMode.PRO -> if (isDark) Color(0xFF6C9BCF) else Color(0xFF2E5B88)
+            }
+            val modeIcon = when (themeConfig.graphicsMode) {
+                GraphicsMode.STANDARD -> Icons.Default.AutoAwesome
+                GraphicsMode.SIMPLE -> Icons.Default.Layers
+                GraphicsMode.PRO -> Icons.Default.Bolt
+            }
+            val modeShortLabel = when (themeConfig.graphicsMode) {
+                GraphicsMode.STANDARD -> if (isArabic) "عادي" else "Normal"
+                GraphicsMode.SIMPLE -> if (isArabic) "بسيط" else "Simple"
+                GraphicsMode.PRO -> if (isArabic) "محترف" else "Pro"
+            }
+
             Box(
                 modifier = Modifier
-                    .size(40.dp)
+                    .minimumInteractiveComponentSize()
+                    .heightIn(min = 40.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .background(if (resolvedTheme.themeId != null) resolvedTheme.surface else if (isDark) Color(0xFF1E293B) else Color(0xFFE7ECF3))
                     .border(
-                        1.dp,
-                        if (resolvedTheme.themeId != null) resolvedTheme.border else if (isDark) Color(0x33475569) else Color(0x99BECAD8),
+                        1.1.dp,
+                        modeTint.copy(alpha = 0.48f),
                         RoundedCornerShape(12.dp)
                     )
-                    .clickable { onToggleDarkMode() },
+                    .clickable { onCycleGraphicsMode() }
+                    .padding(horizontal = 9.dp, vertical = 7.dp)
+                    .testTag("top_bar_graphics_mode_button"),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = if (isDark) Icons.Default.LightMode else Icons.Default.DarkMode,
-                    contentDescription = if (isArabic) "تبديل المظهر" else "Toggle Dark Mode",
-                    tint = accentColor,
-                    modifier = Modifier.size(18.dp)
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = modeIcon,
+                        contentDescription = if (isArabic) "تبديل وضع الرسوميات ($modeShortLabel)" else "Cycle Mode ($modeShortLabel)",
+                        tint = modeTint,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = modeShortLabel,
+                        fontFamily = OutfitFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp,
+                        color = modeTint,
+                        maxLines = 1
+                    )
+                    if (isGraphicsLockedLowEnd) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = if (isArabic) "مقفل على الوضع البسيط" else "Locked to Simple Mode",
+                            tint = modeTint,
+                            modifier = Modifier.size(12.dp)
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.width(8.dp))
@@ -519,6 +568,7 @@ fun LuxurySettingsDrawer(
     isOpen: Boolean,
     onClose: () -> Unit,
     themeConfig: GlassThemeConfig,
+    deviceProfile: DeviceHardwareProfile = DeviceHardwareProfile(),
     onConfigChange: (GlassThemeConfig) -> Unit,
     onOpenThemeEngine: () -> Unit = {},
     onOpenSkinVault: () -> Unit = {},
@@ -1335,6 +1385,73 @@ fun LuxurySettingsDrawer(
                         testTag = "settings_graphics_section"
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            // Hardware Capability Identification Card
+                            val isLowEndDevice = deviceProfile.isLowEndDevice
+                            val hwAccent = if (isLowEndDevice) TactileAmber else TactileGreen
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(15.dp))
+                                    .background(hwAccent.copy(alpha = if (isDark) 0.14f else 0.09f))
+                                    .border(1.dp, hwAccent.copy(alpha = 0.42f), RoundedCornerShape(15.dp))
+                                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                                    .testTag("device_hardware_tier_card"),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "${deviceProfile.brand} ${deviceProfile.model}",
+                                        fontFamily = OutfitFontFamily,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp,
+                                        color = textColor,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(7.dp))
+                                            .background(hwAccent.copy(alpha = 0.22f))
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = deviceProfile.performanceTier.localizedLabel(isArabic),
+                                            fontFamily = OutfitFontFamily,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 9.sp,
+                                            color = hwAccent
+                                        )
+                                    }
+                                }
+                                Text(
+                                    text = "${deviceProfile.chipset} • ${deviceProfile.totalRamGb} GB RAM • ${deviceProfile.cpuCores} ${if (isArabic) "أنوية" else "Cores"}",
+                                    fontFamily = PlusJakartaSansFontFamily,
+                                    fontSize = 10.sp,
+                                    color = subTextColor,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                if (isLowEndDevice) {
+                                    Text(
+                                        text = if (isArabic) {
+                                            "مواصفات الهاتف محدودة: تم فرض الوضع البسيط وتعطيل الوضع العادي والاحترافي."
+                                        } else {
+                                            "Entry hardware detected: Simple Mode is enforced; Normal & Pro modes are disabled."
+                                        },
+                                        fontFamily = PlusJakartaSansFontFamily,
+                                        fontSize = 10.sp,
+                                        color = hwAccent,
+                                        lineHeight = 14.sp
+                                    )
+                                }
+                            }
+
                             // 3a. Simple Mode Toggle Card
                             val isSimpleSelected = themeConfig.graphicsMode == GraphicsMode.SIMPLE
                             Row(
@@ -1367,13 +1484,34 @@ fun LuxurySettingsDrawer(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = if (isArabic) "الوضع البسيط" else "Simple Mode",
-                                        fontFamily = OutfitFontFamily,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 12.5.sp,
-                                        color = textColor
-                                    )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(
+                                            text = if (isArabic) "الوضع البسيط" else "Simple Mode",
+                                            fontFamily = OutfitFontFamily,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 12.5.sp,
+                                            color = textColor
+                                        )
+                                        if (isLowEndDevice) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(6.dp))
+                                                    .background(TactileAmber.copy(alpha = 0.22f))
+                                                    .padding(horizontal = 5.dp, vertical = 1.5.dp)
+                                            ) {
+                                                Text(
+                                                    text = if (isArabic) "إجباري لهذا الجهاز" else "REQUIRED",
+                                                    fontFamily = OutfitFontFamily,
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 9.sp,
+                                                    color = TactileAmber
+                                                )
+                                            }
+                                        }
+                                    }
                                     Text(
                                         text = if (isArabic) {
                                             "مظهر عادي وهادئ يميل إلى البساطة بدون ألوان زاهية أو حركات لامعة"
@@ -1408,7 +1546,7 @@ fun LuxurySettingsDrawer(
                                 )
                             }
 
-                            // 3b. Pro Mode Toggle Card (Classic Luxury Eye-Comfort + 1ms Ultra-Fast Sync)
+                            // 3b. Pro Mode Toggle Card (Classic Luxury Eye-Comfort + 10ms Ultra-Fast Sync)
                             val isProSelected = themeConfig.graphicsMode == GraphicsMode.PRO
                             val proGoldAccent = if (isDark) Color(0xFF6C9BCF) else Color(0xFF2E5B88)
                             Row(
@@ -1418,7 +1556,7 @@ fun LuxurySettingsDrawer(
                                     .clip(RoundedCornerShape(16.dp))
                                     .background(
                                         if (isProSelected) proGoldAccent.copy(alpha = if (isDark) 0.22f else 0.13f)
-                                        else softTileColor.copy(alpha = 0.65f)
+                                        else softTileColor.copy(alpha = if (isLowEndDevice) 0.40f else 0.65f)
                                     )
                                     .border(
                                         1.1.dp,
@@ -1431,7 +1569,7 @@ fun LuxurySettingsDrawer(
                                         onConfigChange(
                                             themeConfig.copy(
                                                 graphicsMode = nextMode,
-                                                samplingIntervalMs = if (nextMode == GraphicsMode.PRO) 1L else 1000L
+                                                samplingIntervalMs = if (nextMode == GraphicsMode.PRO) 10L else 1000L
                                             )
                                         )
                                     }
@@ -1450,9 +1588,24 @@ fun LuxurySettingsDrawer(
                                             fontFamily = OutfitFontFamily,
                                             fontWeight = FontWeight.Bold,
                                             fontSize = 12.5.sp,
-                                            color = textColor
+                                            color = if (isLowEndDevice) subTextColor else textColor
                                         )
-                                        if (isProSelected) {
+                                        if (isLowEndDevice) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(6.dp))
+                                                    .background(TactileCoralRed.copy(alpha = 0.18f))
+                                                    .padding(horizontal = 5.dp, vertical = 1.5.dp)
+                                            ) {
+                                                Text(
+                                                    text = if (isArabic) "غير مدعوم" else "UNSUPPORTED",
+                                                    fontFamily = OutfitFontFamily,
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 9.sp,
+                                                    color = TactileCoralRed
+                                                )
+                                            }
+                                        } else if (isProSelected) {
                                             Box(
                                                 modifier = Modifier
                                                     .clip(RoundedCornerShape(6.dp))
@@ -1460,7 +1613,7 @@ fun LuxurySettingsDrawer(
                                                     .padding(horizontal = 5.dp, vertical = 1.5.dp)
                                             ) {
                                                 Text(
-                                                    text = if (isArabic) "تزامن 1ms" else "1ms SYNC",
+                                                    text = if (isArabic) "تزامن 10ms" else "10ms SYNC",
                                                     fontFamily = OutfitFontFamily,
                                                     fontWeight = FontWeight.Bold,
                                                     fontSize = 9.sp,
@@ -1471,9 +1624,9 @@ fun LuxurySettingsDrawer(
                                     }
                                     Text(
                                         text = if (isArabic) {
-                                            "مظهر كلاسيكي فخم ناعم ومريح للعين في كل الأوضاع + رفع تزامن القياسات إلى 1 جزء من الثانية"
+                                            "مظهر كلاسيكي فخم ناعم ومريح للعين في كل الأوضاع + رفع تزامن القياسات إلى 10 أجزاء من الثانية"
                                         } else {
-                                            "Classic executive eye-comfort finish + 1ms high-frequency sensor synchronization"
+                                            "Classic executive eye-comfort finish + 10ms high-frequency sensor synchronization"
                                         },
                                         fontFamily = PlusJakartaSansFontFamily,
                                         fontSize = 10.sp,
@@ -1490,7 +1643,7 @@ fun LuxurySettingsDrawer(
                                         onConfigChange(
                                             themeConfig.copy(
                                                 graphicsMode = nextMode,
-                                                samplingIntervalMs = if (checked) 1L else 1000L
+                                                samplingIntervalMs = if (checked) 10L else 1000L
                                             )
                                         )
                                     },
@@ -1847,10 +2000,254 @@ fun LuxurySettingsDrawer(
                         }
                     }
 
+                    // 8. Developer Info, App Version & Pulse Ecosystem Showcase
+                    SettingsDeveloperFooterCard(
+                        isDark = isDark,
+                        isArabic = isArabic,
+                        accentColor = accentColor,
+                        surfaceColor = surfaceCardColor,
+                        softColor = softTileColor,
+                        borderColor = subtleBorder,
+                        textColor = textColor,
+                        subTextColor = subTextColor
+                    )
+
                     Spacer(modifier = Modifier.height(14.dp))
                 }
             }
         }
+    }
+}
+
+private const val PULSE_TELEGRAM_URL = "https://t.me/pulseprojectdz"
+
+@Composable
+private fun SettingsDeveloperFooterCard(
+    isDark: Boolean,
+    isArabic: Boolean,
+    accentColor: Color,
+    surfaceColor: Color,
+    softColor: Color,
+    borderColor: Color,
+    textColor: Color,
+    subTextColor: Color
+) {
+    val context = LocalContext.current
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("settings_developer_footer")
+            .clip(RoundedCornerShape(20.dp))
+            .background(surfaceColor)
+            .border(1.1.dp, accentColor.copy(alpha = 0.35f), RoundedCornerShape(20.dp))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        // Developer Signature Row
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(11.dp))
+                        .background(accentColor.copy(alpha = if (isDark) 0.20f else 0.12f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Code,
+                        contentDescription = null,
+                        tint = accentColor,
+                        modifier = Modifier.size(19.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                Column {
+                    Text(
+                        text = if (isArabic) "معلومات المطور" else "Developer Info",
+                        fontFamily = PlusJakartaSansFontFamily,
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 10.sp,
+                        color = subTextColor
+                    )
+                    Text(
+                        text = "Developed by Charfeddine Ka",
+                        fontFamily = OutfitFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        color = textColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+
+        // Version, Release Number & Last Update Metadata Grid
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            DeveloperMetaChip(
+                label = if (isArabic) "رقم النسخة" else "Version",
+                value = "v${BuildConfig.VERSION_NAME}",
+                accentColor = accentColor,
+                softColor = softColor,
+                textColor = textColor,
+                subTextColor = subTextColor,
+                modifier = Modifier.weight(1f)
+            )
+            DeveloperMetaChip(
+                label = if (isArabic) "رقم الإصدار" else "Build",
+                value = "#${BuildConfig.VERSION_CODE}",
+                accentColor = accentColor,
+                softColor = softColor,
+                textColor = textColor,
+                subTextColor = subTextColor,
+                modifier = Modifier.weight(0.85f)
+            )
+            DeveloperMetaChip(
+                label = if (isArabic) "آخر تحديث" else "Last Update",
+                value = BuildConfig.LAST_UPDATE_DATE,
+                accentColor = accentColor,
+                softColor = softColor,
+                textColor = textColor,
+                subTextColor = subTextColor,
+                modifier = Modifier.weight(1.25f)
+            )
+        }
+
+        // More Apps & Telegram Showcase Box
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(15.dp))
+                .background(softColor.copy(alpha = if (isDark) 0.72f else 0.65f))
+                .border(1.dp, borderColor, RoundedCornerShape(15.dp))
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = if (isArabic) "للمزيد من التطبيقات" else "More Apps",
+                fontFamily = OutfitFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 12.sp,
+                color = accentColor
+            )
+            Text(
+                text = "🚀 Welcome to the Pulse Apps Ecosystem | Crafting Android apps with a stunning Pulse identity. 💎",
+                fontFamily = PlusJakartaSansFontFamily,
+                fontSize = 11.sp,
+                color = textColor,
+                lineHeight = 16.sp
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(accentColor.copy(alpha = if (isDark) 0.22f else 0.13f))
+                    .border(1.dp, accentColor.copy(alpha = 0.55f), RoundedCornerShape(12.dp))
+                    .clickable {
+                        CyberHapticsEngine.triggerTactileTick(context)
+                        runCatching {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(PULSE_TELEGRAM_URL)).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            context.startActivity(intent)
+                        }
+                    }
+                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                    .testTag("developer_telegram_button"),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Send,
+                            contentDescription = null,
+                            tint = accentColor,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = if (isArabic) "قناة تيليغرام Pulse Apps" else "Telegram • Pulse Apps",
+                                fontFamily = OutfitFontFamily,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                color = textColor
+                            )
+                            Text(
+                                text = PULSE_TELEGRAM_URL,
+                                fontFamily = PlusJakartaSansFontFamily,
+                                fontSize = 10.sp,
+                                color = accentColor,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                        contentDescription = if (isArabic) "فتح رابط تيليغرام" else "Open Telegram link",
+                        tint = accentColor,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DeveloperMetaChip(
+    label: String,
+    value: String,
+    accentColor: Color,
+    softColor: Color,
+    textColor: Color,
+    subTextColor: Color,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(softColor.copy(alpha = 0.72f))
+            .padding(horizontal = 8.dp, vertical = 7.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Text(
+            text = label,
+            fontFamily = PlusJakartaSansFontFamily,
+            fontSize = 9.5.sp,
+            color = subTextColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            text = value,
+            fontFamily = OutfitFontFamily,
+            fontWeight = FontWeight.Bold,
+            fontSize = 11.sp,
+            color = accentColor.takeIf { it != Color.Unspecified } ?: textColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
@@ -2809,6 +3206,144 @@ fun PremiumRedeemDialog(
                             color = Color(0xFFF2F6FA)
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Hardware Compatibility Alert Dialog displayed when low-end devices attempt to
+ * enable Normal (Standard) or Pro Mode. Enforces Simple Mode cleanly.
+ */
+@Composable
+fun UnsupportedModeDialog(
+    alert: UnsupportedModeAlert?,
+    deviceProfile: DeviceHardwareProfile,
+    themeConfig: GlassThemeConfig,
+    onDismiss: () -> Unit
+) {
+    if (alert == null) return
+
+    val context = LocalContext.current
+    val resolvedTheme = LocalAmpereTheme.current
+    val isDark = resolvedTheme.isDark
+    val isArabic = themeConfig.appLanguage.isArabic
+    val cardBg = if (resolvedTheme.themeId != null) resolvedTheme.surface else if (isDark) Color(0xFF172133) else Color(0xFFECF1F7)
+    val softInset = if (resolvedTheme.themeId != null) resolvedTheme.surfaceInset else if (isDark) Color(0xFF1E2A3F) else Color(0xFFD8E1EC)
+    val textColor = if (resolvedTheme.themeId != null) resolvedTheme.textPrimary else if (isDark) TextWhite else TextCharcoal
+    val subTextColor = if (resolvedTheme.themeId != null) resolvedTheme.textSecondary else TextSlate
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.90f)
+                .widthIn(max = 420.dp)
+                .clip(RoundedCornerShape(26.dp))
+                .background(cardBg)
+                .border(1.2.dp, TactileAmber.copy(alpha = 0.65f), RoundedCornerShape(26.dp))
+                .padding(22.dp)
+                .testTag("unsupported_mode_dialog")
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(58.dp)
+                        .clip(CircleShape)
+                        .background(TactileAmber.copy(alpha = if (isDark) 0.20f else 0.14f))
+                        .border(1.2.dp, TactileAmber.copy(alpha = 0.65f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = null,
+                        tint = TactileAmber,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+
+                Text(
+                    text = if (isArabic) "هاتفك لايدعم هذا الوضع" else "Your phone does not support this mode",
+                    fontFamily = OutfitFontFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 19.sp,
+                    color = textColor,
+                    textAlign = TextAlign.Center
+                )
+
+                Text(
+                    text = if (isArabic) {
+                        "لا يمكن تفعيل ${alert.attemptedMode.localizedTitle(true)} على هذا الجهاز. تم فرض الوضع البسيط تلقائياً لضمان أفضل أداء واستقرار للبطارية."
+                    } else {
+                        "${alert.attemptedMode.localizedTitle(false)} is disabled on this device. Simple Mode is enforced automatically for stability and power efficiency."
+                    },
+                    fontFamily = PlusJakartaSansFontFamily,
+                    fontSize = 12.5.sp,
+                    color = subTextColor,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 18.sp
+                )
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(softInset)
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = "${deviceProfile.brand} ${deviceProfile.model}",
+                        fontFamily = OutfitFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        color = textColor
+                    )
+                    Text(
+                        text = "${deviceProfile.chipset} • ${deviceProfile.totalRamGb} GB RAM • ${deviceProfile.cpuCores} ${if (isArabic) "أنوية" else "Cores"} • ${deviceProfile.androidVersion}",
+                        fontFamily = PlusJakartaSansFontFamily,
+                        fontSize = 10.5.sp,
+                        color = subTextColor
+                    )
+                    val reasonText = deviceProfile.localizedLowEndReason(isArabic)
+                    if (reasonText.isNotBlank()) {
+                        Text(
+                            text = reasonText,
+                            fontFamily = PlusJakartaSansFontFamily,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 10.5.sp,
+                            color = TactileAmber
+                        )
+                    }
+                }
+
+                Button(
+                    onClick = {
+                        CyberHapticsEngine.triggerTactileTick(context)
+                        onDismiss()
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .testTag("unsupported_mode_dismiss_button"),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = TactileAmber,
+                        contentColor = Color(0xFF101827)
+                    )
+                ) {
+                    Text(
+                        text = if (isArabic) "حسناً، المتابعة بالوضع البسيط" else "OK, Keep Simple Mode",
+                        fontFamily = OutfitFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.5.sp
+                    )
                 }
             }
         }

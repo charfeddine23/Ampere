@@ -16,8 +16,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -129,36 +132,46 @@ fun MetricSparkline(
 
     // Rendered knot heights interpolated smoothly at display refresh rate
     val renderedKnots = remember { FloatArray(FluidCurveMath.DEFAULT_KNOT_COUNT) { targetKnots[it] } }
+    val latestTarget = rememberUpdatedState(targetKnots)
+    var isMorphing by remember { mutableStateOf(false) }
     var animTick by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(targetKnots) {
-        var lastFrameNs = 0L
-        var settled = false
-        while (!settled) {
-            withFrameNanos { frameTimeNs ->
-                val dtSec = if (lastFrameNs == 0L) {
-                    0.016f
-                } else {
-                    ((frameTimeNs - lastFrameNs) / 1_000_000_000f).coerceIn(0.001f, 0.05f)
-                }
-                lastFrameNs = frameTimeNs
+        if (!targetKnots.contentEquals(renderedKnots)) {
+            isMorphing = true
+        }
+    }
 
-                // Critically damped smooth exponential convergence (~5.5 rad/s)
-                val alpha = (1f - exp(-dtSec * 5.8f)).coerceIn(0.02f, 0.45f)
-                var maxDelta = 0f
-                for (i in renderedKnots.indices) {
-                    val diff = targetKnots[i] - renderedKnots[i]
-                    if (abs(diff) > maxDelta) maxDelta = abs(diff)
-                    renderedKnots[i] = renderedKnots[i] + diff * alpha
-                }
-
-                if (maxDelta < 0.0005f) {
-                    for (i in renderedKnots.indices) {
-                        renderedKnots[i] = targetKnots[i]
+    LaunchedEffect(Unit) {
+        snapshotFlow { isMorphing }.collect { active ->
+            if (!active) return@collect
+            var lastFrameNs = 0L
+            while (isMorphing) {
+                withFrameNanos { frameTimeNs ->
+                    val target = latestTarget.value
+                    val dtSec = if (lastFrameNs == 0L) {
+                        0.016f
+                    } else {
+                        ((frameTimeNs - lastFrameNs) / 1_000_000_000f).coerceIn(0.001f, 0.05f)
                     }
-                    settled = true
+                    lastFrameNs = frameTimeNs
+
+                    val alpha = (1f - exp(-dtSec * 5.8f)).coerceIn(0.02f, 0.45f)
+                    var maxDelta = 0f
+                    for (i in renderedKnots.indices) {
+                        val diff = target[i] - renderedKnots[i]
+                        if (abs(diff) > maxDelta) maxDelta = abs(diff)
+                        renderedKnots[i] = renderedKnots[i] + diff * alpha
+                    }
+
+                    if (maxDelta < 0.0005f) {
+                        for (i in renderedKnots.indices) {
+                            renderedKnots[i] = target[i]
+                        }
+                        isMorphing = false
+                    }
+                    animTick++
                 }
-                animTick++
             }
         }
     }

@@ -43,6 +43,16 @@ fun Modifier.thermalLiquidGlassBackground(
     criticalTempThreshold: Float = 40.0f,
     normalTempThreshold: Float = 34.0f
 ): Modifier = composed {
+    // Base background (respects active Theme Engine preset or Simple/Pro modes)
+    val theme = LocalAmpereTheme.current
+    val rootBg = if (theme.themeId != null) theme.background else if (isDarkMode) NeumorphBgDark else NeumorphBgLight
+
+    if (theme.isSimpleMode || glowIntensity <= 0.01f) {
+        return@composed this.drawBehind {
+            drawRect(color = rootBg)
+        }
+    }
+
     // 1. Color Palettes
     // Cool Blue Normal Spectrum
     val coolBluePrimary = Color(0xFF00B0FF)      // Electric Cryo Cyan
@@ -105,16 +115,6 @@ fun Modifier.thermalLiquidGlassBackground(
         ),
         label = "thermalPulse"
     )
-
-    // Base background (respects active Theme Engine preset or Simple/Pro modes)
-    val theme = LocalAmpereTheme.current
-    val rootBg = if (theme.themeId != null) theme.background else if (isDarkMode) NeumorphBgDark else NeumorphBgLight
-
-    if (theme.isSimpleMode) {
-        return@composed this.drawBehind {
-            drawRect(color = rootBg)
-        }
-    }
 
     // Alpha multipliers calibrated for Soft Stone Light Neumorphism vs Dark Obsidian vs Pro Mode
     val alphaScale = (if (isDarkMode) 1.0f else 0.78f) * (if (theme.isProMode) 0.36f else 1.0f)

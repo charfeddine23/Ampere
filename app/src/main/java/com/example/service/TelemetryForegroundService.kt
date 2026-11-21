@@ -15,6 +15,8 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import com.example.MainActivity
+import com.example.data.BatteryMonitorRepository
+import com.example.data.GlassThemeConfig
 import com.example.data.local.AmpereDatabase
 import com.example.data.local.SettingsPreferencesManager
 import com.example.data.local.TelemetryLogEntity
@@ -42,12 +44,18 @@ class TelemetryForegroundService : Service() {
     private var lastNotifiedPct: Int = -1
     private var lastNotifiedState: String = ""
     private var lastNotificationUpdateMs: Long = 0L
+    private var insertCountSinceTrim: Int = 0
+    @Volatile
+    private var cachedConfig: GlassThemeConfig = GlassThemeConfig()
+    private var lastConfigReloadMs: Long = 0L
 
     override fun onCreate() {
         super.onCreate()
         database = AmpereDatabase.getInstance(applicationContext)
         prefsManager = SettingsPreferencesManager(applicationContext)
         val initialConfig = prefsManager.loadThemeConfig()
+        cachedConfig = initialConfig
+        lastConfigReloadMs = System.currentTimeMillis()
         calibrationEngine = CurrentCalibrationEngine(
             context = applicationContext,
             initialMultiplier = initialConfig.currentMultiplier,
@@ -71,6 +79,8 @@ class TelemetryForegroundService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val config = prefsManager.loadThemeConfig()
+        cachedConfig = config
+        lastConfigReloadMs = System.currentTimeMillis()
         if (!config.backgroundServiceEnabled) {
             ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
             stopSelf(startId)
@@ -123,7 +133,12 @@ class TelemetryForegroundService : Service() {
     private fun startTelemetrySamplingLoop() {
         serviceScope.launch {
             while (isActive) {
-                val config = prefsManager.loadThemeConfig()
+                val now = System.currentTimeMillis()
+                if (now - lastConfigReloadMs >= 60_000L) {
+                    cachedConfig = prefsManager.loadThemeConfig()
+                    lastConfigReloadMs = now
+                }
+                val config = cachedConfig
                 if (!config.backgroundServiceEnabled) {
                     stopSelf()
                     break
@@ -132,24 +147,26 @@ class TelemetryForegroundService : Service() {
                     newMultiplier = config.currentMultiplier,
                     newOffsetMa = config.currentZeroOffsetMa
                 )
-                sampleAndPersistTelemetry()
-                // Save to Room every 15 seconds to minimize background wakeups and DB churn
-                delay(15_000L)
+                sampleAndPersistTelemetry(config)
+                // Save to Room every 20 seconds to minimize background wakeups and DB churn
+                delay(20_000L)
             }
         }
     }
 
-    private suspend fun sampleAndPersistTelemetry() {
+    private suspend fun sampleAndPersistTelemetry(config: GlassThemeConfig) {
         try {
             val ifilter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
             val bStatus: Intent? = registerReceiver(null, ifilter)
 
             val rawLevel = bStatus?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
             val scale = bStatus?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
-            val pct = if (rawLevel >= 0 && scale > 0) ((rawLevel / scale.toFloat()) * 100).toInt() else 84
+            val pct = if (rawLevel >= 0 && scale > 0) ((rawLevel / scale.toFloat()) * 100).toInt().coerceIn(0, 100) else 84
 
             val rawVoltage = bStatus?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 4150) ?: 4150
-            val voltageMv = if (rawVoltage in 1..15) rawVoltage * 1000 else rawVoltage
+            val voltageMv = BatteryMonitorRepository.normalizeVoltageMv(rawVoltage.toLong()).let {
+                if (it > 0) it else 4150
+            }
 
             val rawTemp = bStatus?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 285) ?: 285
             val tempC = rawTemp / 10.0f
@@ -179,7 +196,11 @@ class TelemetryForegroundService : Service() {
                 state = stateString
             )
             database.telemetryLogDao().insertLog(entity)
-            database.telemetryLogDao().trimOldLogs(2000)
+            insertCountSinceTrim++
+            if (insertCountSinceTrim >= 20) {
+                insertCountSinceTrim = 0
+                database.telemetryLogDao().trimOldLogs(2000)
+            }
 
             // Throttle notification updates to prevent Android notification rate-limit warnings
             val now = System.currentTimeMillis()
@@ -191,7 +212,7 @@ class TelemetryForegroundService : Service() {
                 lastNotifiedPct = pct
                 lastNotifiedState = stateString
                 lastNotificationUpdateMs = now
-                val isAr = prefsManager.loadThemeConfig().appLanguage.isArabic
+                val isAr = config.appLanguage.isArabic
                 val currentText = if (currentMa >= 0) "+$currentMa" else "$currentMa"
                 val notificationText = "${pct}% • ${voltageMv}mV • ${currentText}mA • ${String.format(Locale.US, "%.1f", tempC)}°C"
                 val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
