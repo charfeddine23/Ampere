@@ -171,16 +171,21 @@ fun Page5MySpaceScreen(
         label = "ambientGlowColor"
     )
 
-    val infiniteTransition = rememberInfiniteTransition(label = "ambientPulse90Fps")
-    val ambientAuraBreath by infiniteTransition.animateFloat(
-        initialValue = if (isHighStress) 0.80f else 0.65f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(if (isHighStress) 800 else 1600, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "auraBreath"
-    )
+    val ambientAuraBreath = if (resolvedTheme.isSimpleMode || glow <= 0f) {
+        0.85f
+    } else {
+        val infiniteTransition = rememberInfiniteTransition(label = "ambientPulse90Fps")
+        val animatedBreath by infiniteTransition.animateFloat(
+            initialValue = if (isHighStress) 0.80f else 0.65f,
+            targetValue = 1.0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(if (isHighStress) 800 else 1600, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "auraBreath"
+        )
+        animatedBreath
+    }
 
     Box(
         modifier = Modifier
@@ -690,17 +695,23 @@ private fun CurrentFlowVfxBar(
         }
     }
 
-    // 90 FPS traveling wave phase
-    val infiniteTransition = rememberInfiniteTransition(label = "electronFlow")
-    val flowPhase by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(if (absCurrent > 2000) 900 else 1800, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "flowPhase"
-    )
+    val isSimpleMode = com.example.ui.theme.LocalAmpereTheme.current.isSimpleMode
+    // 90 FPS traveling wave phase (disabled in Simple Mode to save power)
+    val flowPhase = if (isSimpleMode) {
+        0f
+    } else {
+        val infiniteTransition = rememberInfiniteTransition(label = "electronFlow")
+        val animatedFlow by infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(if (absCurrent > 2000) 900 else 1800, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "flowPhase"
+        )
+        animatedFlow
+    }
 
     Box(
         modifier = Modifier
@@ -766,24 +777,26 @@ private fun CurrentFlowVfxBar(
                     strokeWidth = 2.dp.toPx()
                 )
 
-                // 8 traveling electron wave beads
-                val beadCount = 8
-                for (i in 0 until beadCount) {
-                    val rawFrac = (i.toFloat() / beadCount) + (if (isCharging) flowPhase else (1f - flowPhase))
-                    val frac = (rawFrac % 1f)
-                    val x = frac * w
-                    val beadAlpha = sin(frac * Math.PI).toFloat().coerceIn(0.2f, 1f)
+                if (!isSimpleMode) {
+                    // 8 traveling electron wave beads
+                    val beadCount = 8
+                    for (i in 0 until beadCount) {
+                        val rawFrac = (i.toFloat() / beadCount) + (if (isCharging) flowPhase else (1f - flowPhase))
+                        val frac = (rawFrac % 1f)
+                        val x = frac * w
+                        val beadAlpha = sin(frac * Math.PI).toFloat().coerceIn(0.2f, 1f)
 
-                    drawCircle(
-                        color = ambientColor.copy(alpha = beadAlpha),
-                        radius = 2.5.dp.toPx(),
-                        center = Offset(x, h * 0.5f)
-                    )
-                    drawCircle(
-                        color = Color.White.copy(alpha = beadAlpha),
-                        radius = 1.dp.toPx(),
-                        center = Offset(x, h * 0.5f)
-                    )
+                        drawCircle(
+                            color = ambientColor.copy(alpha = beadAlpha),
+                            radius = 2.5.dp.toPx(),
+                            center = Offset(x, h * 0.5f)
+                        )
+                        drawCircle(
+                            color = Color.White.copy(alpha = beadAlpha),
+                            radius = 1.dp.toPx(),
+                            center = Offset(x, h * 0.5f)
+                        )
+                    }
                 }
             }
         }
@@ -1544,29 +1557,37 @@ fun ChargingStateNeonProfileAvatar(
     val stateBadgeIcon = config.stateBadgeIcon
     val pulseDurationMs = config.pulseDurationMs
 
-    val infiniteTransition = rememberInfiniteTransition(label = "avatarNeonTransition")
+    val isSimpleMode = com.example.ui.theme.LocalAmpereTheme.current.isSimpleMode
+    val pulseFraction: Float
+    val orbitAngle: Float
+    if (isSimpleMode) {
+        pulseFraction = 0.65f
+        orbitAngle = 0f
+    } else {
+        val infiniteTransition = rememberInfiniteTransition(label = "avatarNeonTransition")
 
-    // Pulsing Neon Glow Intensity & Outer Halo Scale
-    val pulseFraction by infiniteTransition.animateFloat(
-        initialValue = 0.35f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(pulseDurationMs, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "avatarPulseFraction"
-    )
+        // Pulsing Neon Glow Intensity & Outer Halo Scale
+        pulseFraction = infiniteTransition.animateFloat(
+            initialValue = 0.35f,
+            targetValue = 1.0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(pulseDurationMs, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "avatarPulseFraction"
+        ).value
 
-    // Fluid Orbiting Electron Arc Rotation
-    val orbitAngle by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(if (isFastCharging) 2400 else 4000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "avatarOrbitAngle"
-    )
+        // Fluid Orbiting Electron Arc Rotation
+        orbitAngle = infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(if (isFastCharging) 2400 else 4000, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "avatarOrbitAngle"
+        ).value
+    }
 
     Box(
         modifier = modifier

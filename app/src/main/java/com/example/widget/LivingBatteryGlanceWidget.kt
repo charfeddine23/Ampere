@@ -31,6 +31,7 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import com.example.MainActivity
+import java.util.Locale
 
 /**
  * High-Fidelity Liquid Glass Home Screen Widget for Volt Core.
@@ -139,7 +140,7 @@ class LivingBatteryGlanceWidget : GlanceAppWidget() {
                                     )
                                 )
                                 Text(
-                                    text = "${String.format("%.1f", tempC)}°C • ${voltageMv}mV • ${if (currentMa >= 0) "+$currentMa" else "$currentMa"}mA",
+                                    text = "${String.format(Locale.US, "%.1f", tempC)}°C • ${voltageMv}mV • ${if (currentMa >= 0) "+$currentMa" else "$currentMa"}mA",
                                     style = TextStyle(
                                         color = androidx.glance.unit.ColorProvider(Color(0xFFCBD5E1)),
                                         fontSize = 10.sp

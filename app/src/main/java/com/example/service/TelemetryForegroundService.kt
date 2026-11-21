@@ -182,7 +182,7 @@ class TelemetryForegroundService : Service() {
             )
 
             val stateString = when {
-                tempC >= 42.0f -> "HEATING"
+                tempC >= config.highTempThresholdC -> "HEATING"
                 isCharging -> "STORING"
                 tempC < 15.0f -> "COOLING"
                 else -> "SLEEP"

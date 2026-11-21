@@ -6,6 +6,7 @@ import com.example.data.CableDiagnosticResult
 import com.example.data.CableDnaTier
 import com.example.data.ChargePlug
 import com.example.data.DeviceHardwareProfile
+import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -307,7 +308,7 @@ object CableDnaStandardsEngine {
             when {
                 overThermal -> "حرارة البطارية تجاوزت الحد الآمن لجهاز ${profile.model} (${profile.safeThermalCeilingC}°C) — يخفض النظام الشحن لحماية الخلايا."
                 isCvTaper -> "البطارية في مرحلة الامتلاء النهائي (CV Taper)؛ خفض التيار الآن سلوك طبيعي من متحكم شحن ${profile.brand}."
-                resistance <= 130 -> "توافق ممتاز مع ${profile.chargingEcosystemEn}: المسار يحافظ على كفاءة نقل عالية بقدرة ${String.format("%.1f", watts)}W."
+                resistance <= 130 -> "توافق ممتاز مع ${profile.chargingEcosystemEn}: المسار يحافظ على كفاءة نقل عالية بقدرة ${String.format(Locale.US, "%.1f", watts)}W."
                 resistance <= 230 -> "كابل جيد؛ قد لا يبلغ الذروة القصوى (${profile.recommendedPowerWatts}W) لجهاز ${profile.model} لكنه آمن ومطابق لـ USB-IF."
                 else -> "مقاومة مرتفعة تحدّ من قدرة شحن ${profile.brand} ${profile.model}؛ يُنصح باستخدام: ${profile.recommendedCableAr}."
             }
@@ -315,7 +316,7 @@ object CableDnaStandardsEngine {
             when {
                 overThermal -> "Battery temperature exceeded the safe ceiling for ${profile.model} (${profile.safeThermalCeilingC}°C) — charging is throttled to protect the cells."
                 isCvTaper -> "Cell is in final Constant-Voltage Taper; reduced current is normal behavior by the ${profile.brand} PMIC."
-                resistance <= 130 -> "Optimal match with ${profile.chargingEcosystemEn}: line maintains high power efficiency at ${String.format("%.1f", watts)}W."
+                resistance <= 130 -> "Optimal match with ${profile.chargingEcosystemEn}: line maintains high power efficiency at ${String.format(Locale.US, "%.1f", watts)}W."
                 resistance <= 230 -> "Solid cable; may not hit ${profile.model}'s full ${profile.recommendedPowerWatts}W peak, yet stays safe and USB-IF compliant."
                 else -> "Elevated resistance is limiting ${profile.brand} ${profile.model} charge rate; recommended: ${profile.recommendedCableEn}."
             }

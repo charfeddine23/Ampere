@@ -1,14 +1,5 @@
 package com.example.ui.components
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -68,9 +59,6 @@ import com.example.ui.theme.TactileRoyalBlue
 import com.example.ui.theme.TextCharcoal
 import com.example.ui.theme.TextSlate
 import com.example.ui.theme.TextWhite
-import kotlin.math.PI
-import kotlin.math.cos
-import kotlin.math.sin
 
 /**
  * Cyber Skin (Liquid Glass Vault) - متجر الأقنعة والثيمات السيبرانية
@@ -175,7 +163,7 @@ fun CyberSkinVaultDialog(
                         // Close Button
                         Box(
                             modifier = Modifier
-                                .size(36.dp)
+                                .size(48.dp)
                                 .clip(CircleShape)
                                 .background(if (isDark) Color(0xFF1E293B) else Color(0xFFD2DBE6))
                                 .clickable { onClose() },
@@ -303,17 +291,6 @@ private fun CyberSkinItemCard(
     val cardBg = if (isDarkMode) Color(0xFF1E293B) else Color(0xFFECF0F6)
     val textColor = if (isDarkMode) TextWhite else TextCharcoal
     val subTextColor = if (isDarkMode) Color(0xFF94A3B8) else TextSlate
-
-    val infiniteTransition = rememberInfiniteTransition(label = "holographicSweep")
-    val sweepPhase by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = (2 * PI).toFloat(),
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 3500, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "sweepPhase"
-    )
 
     Box(
         modifier = Modifier

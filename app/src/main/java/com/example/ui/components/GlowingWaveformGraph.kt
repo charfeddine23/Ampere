@@ -176,25 +176,34 @@ fun MetricSparkline(
         }
     }
 
-    val infiniteTransition = rememberInfiniteTransition(label = "sparklineSilkVfx")
-    val pulseAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.55f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1600, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "sparklineAlpha"
-    )
-    val sheenPhase by infiniteTransition.animateFloat(
-        initialValue = -0.25f,
-        targetValue = 1.25f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(3200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "sparklineSheen"
-    )
+    val pulseAlpha: Float
+    val sheenPhase: Float
+    if (isSimple) {
+        pulseAlpha = 1.0f
+        sheenPhase = 0f
+    } else {
+        val infiniteTransition = rememberInfiniteTransition(label = "sparklineSilkVfx")
+        val animPulse by infiniteTransition.animateFloat(
+            initialValue = 0.55f,
+            targetValue = 1.0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1600, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "sparklineAlpha"
+        )
+        val animSheen by infiniteTransition.animateFloat(
+            initialValue = -0.25f,
+            targetValue = 1.25f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(3200, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "sparklineSheen"
+        )
+        pulseAlpha = animPulse
+        sheenPhase = animSheen
+    }
 
     // Pre-allocated paths & coordinate buffers to prevent GC churn
     val strokePath = remember { Path() }

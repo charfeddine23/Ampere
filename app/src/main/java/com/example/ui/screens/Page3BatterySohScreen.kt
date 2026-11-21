@@ -41,6 +41,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -112,16 +113,21 @@ fun Page3BatterySohScreen(
         label = "sohGaugeFraction"
     )
 
-    val infiniteTransition = rememberInfiniteTransition(label = "sohPulse")
-    val pulseAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.50f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "sohPulseAlpha"
-    )
+    val pulseAlpha: Float = if (resolvedTheme.isSimpleMode) {
+        0.85f
+    } else {
+        val infiniteTransition = rememberInfiniteTransition(label = "sohPulse")
+        val animAlpha by infiniteTransition.animateFloat(
+            initialValue = 0.50f,
+            targetValue = 1.0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1200, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "sohPulseAlpha"
+        )
+        animAlpha
+    }
 
     Column(
         modifier = Modifier
@@ -457,6 +463,10 @@ fun Page3BatterySohScreen(
                     Spacer(modifier = Modifier.height(14.dp))
 
                     // Canvas Trajectory Curve
+                    val trajectoryPath = remember { Path() }
+                    val trajectoryFillPath = remember { Path() }
+                    val trajectoryDashEffect = remember { PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f) }
+
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -466,8 +476,8 @@ fun Page3BatterySohScreen(
                             val w = size.width
                             val h = size.height
 
-                            val path = Path()
-                            val fillPath = Path()
+                            val path = trajectoryPath.apply { reset() }
+                            val fillPath = trajectoryFillPath.apply { reset() }
 
                             val points = listOf(
                                 Offset(0f, h * 0.15f), // 100%
@@ -509,13 +519,12 @@ fun Page3BatterySohScreen(
                             )
 
                             // 80% EOL guideline
-                            val dashEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
                             drawLine(
                                 color = TactileCoralRed.copy(alpha = 0.4f),
                                 start = Offset(0f, h * 0.82f),
                                 end = Offset(w, h * 0.82f),
                                 strokeWidth = 1.dp.toPx(),
-                                pathEffect = dashEffect
+                                pathEffect = trajectoryDashEffect
                             )
 
                             // Stroke

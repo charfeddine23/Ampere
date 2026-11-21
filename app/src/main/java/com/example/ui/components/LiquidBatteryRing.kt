@@ -57,6 +57,7 @@ import com.example.ui.theme.TextWhite
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
+import java.util.Locale
 
 /**
  * Tactile Neumorphic & Soft Liquid Glass Battery Ring
@@ -329,7 +330,7 @@ fun LiquidBatteryRing(
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
                     text = if (status == BatteryStatus.CHARGING) {
-                        if (isArabic) "${String.format("%.1f", wattageW)}W شحن" else "${String.format("%.1f", wattageW)}W CHARGING"
+                        if (isArabic) "${String.format(Locale.US, "%.1f", wattageW)}W شحن" else "${String.format(Locale.US, "%.1f", wattageW)}W CHARGING"
                     } else {
                         livingState.localizedTitle(isArabic).uppercase()
                     },
@@ -369,7 +370,7 @@ fun LiquidBatteryRing(
             // Real-time hardware sensor status indicator (no XP display)
             Text(
                 text = if (status == BatteryStatus.CHARGING) {
-                    if (isArabic) "${String.format("%.1f", wattageW)}W • شحن نشط" else "${String.format("%.1f", wattageW)}W • ACTIVE CHARGE"
+                    if (isArabic) "${String.format(Locale.US, "%.1f", wattageW)}W • شحن نشط" else "${String.format(Locale.US, "%.1f", wattageW)}W • ACTIVE CHARGE"
                 } else {
                     if (isArabic) "مستشعرات العتاد نشطة" else "HARDWARE SENSORS ACTIVE"
                 },

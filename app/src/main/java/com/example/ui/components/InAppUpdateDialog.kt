@@ -369,6 +369,13 @@ fun InAppUpdateDialog(
                     Spacer(modifier = Modifier.height(6.dp))
 
                     // Kinetic Rocket Emblem with Expanding Shockwave, Rotating Orbit & Particle Sparks
+                    val outerFlamePath = remember { Path() }
+                    val innerFlamePath = remember { Path() }
+                    val leftFinPath = remember { Path() }
+                    val rightFinPath = remember { Path() }
+                    val fuselagePath = remember { Path() }
+                    val noseConePath = remember { Path() }
+
                     Box(
                         modifier = Modifier.size(134.dp),
                         contentAlignment = Alignment.Center
@@ -466,44 +473,49 @@ fun InAppUpdateDialog(
 
                             rotate(degrees = rocketTilt, pivot = Offset(cx, rY)) {
                                 // Dual-layer Plasma Thruster Flame
-                                val outerFlame = Path().apply {
+                                outerFlamePath.reset()
+                                outerFlamePath.apply {
                                     moveTo(cx - bodyW * 0.38f, rY + bodyH * 0.40f)
                                     lineTo(cx, rY + bodyH * (0.42f + 0.46f * flameFlicker))
                                     lineTo(cx + bodyW * 0.38f, rY + bodyH * 0.40f)
                                     close()
                                 }
                                 drawPath(
-                                    path = outerFlame,
+                                    path = outerFlamePath,
                                     brush = Brush.verticalGradient(
                                         colors = listOf(Color(0xFFFFD54F), Color(0xFFFF6D00))
                                     )
                                 )
-                                val innerFlame = Path().apply {
+                                innerFlamePath.reset()
+                                innerFlamePath.apply {
                                     moveTo(cx - bodyW * 0.20f, rY + bodyH * 0.40f)
                                     lineTo(cx, rY + bodyH * (0.42f + 0.25f * flameFlicker))
                                     lineTo(cx + bodyW * 0.20f, rY + bodyH * 0.40f)
                                     close()
                                 }
-                                drawPath(innerFlame, color = Color(0xFFFFF8E1))
+                                drawPath(innerFlamePath, color = Color(0xFFFFF8E1))
 
                                 // Swept Fins
-                                val leftFin = Path().apply {
+                                leftFinPath.reset()
+                                leftFinPath.apply {
                                     moveTo(cx - bodyW * 0.45f, rY + bodyH * 0.05f)
                                     lineTo(cx - bodyW * 1.15f, rY + bodyH * 0.46f)
                                     lineTo(cx - bodyW * 0.38f, rY + bodyH * 0.38f)
                                     close()
                                 }
-                                val rightFin = Path().apply {
+                                rightFinPath.reset()
+                                rightFinPath.apply {
                                     moveTo(cx + bodyW * 0.45f, rY + bodyH * 0.05f)
                                     lineTo(cx + bodyW * 1.15f, rY + bodyH * 0.46f)
                                     lineTo(cx + bodyW * 0.38f, rY + bodyH * 0.38f)
                                     close()
                                 }
-                                drawPath(leftFin, color = statusTint)
-                                drawPath(rightFin, color = statusTint)
+                                drawPath(leftFinPath, color = statusTint)
+                                drawPath(rightFinPath, color = statusTint)
 
                                 // Main Fuselage
-                                val fuselage = Path().apply {
+                                fuselagePath.reset()
+                                fuselagePath.apply {
                                     moveTo(cx, rY - bodyH * 0.62f)
                                     cubicTo(
                                         cx + bodyW * 0.72f, rY - bodyH * 0.22f,
@@ -519,19 +531,20 @@ fun InAppUpdateDialog(
                                     close()
                                 }
                                 drawPath(
-                                    path = fuselage,
+                                    path = fuselagePath,
                                     color = if (isDark) Color(0xFFF2F6FA) else Color(0xFFF0F4FA)
                                 )
                                 if (!isDark) {
                                     drawPath(
-                                        path = fuselage,
+                                        path = fuselagePath,
                                         color = Color(0x2E64748B),
                                         style = Stroke(width = 1.2.dp.toPx())
                                     )
                                 }
 
                                 // Nose Cone
-                                val noseCone = Path().apply {
+                                noseConePath.reset()
+                                noseConePath.apply {
                                     moveTo(cx, rY - bodyH * 0.62f)
                                     cubicTo(
                                         cx + bodyW * 0.36f, rY - bodyH * 0.44f,
@@ -546,7 +559,7 @@ fun InAppUpdateDialog(
                                     )
                                     close()
                                 }
-                                drawPath(noseCone, color = statusTint)
+                                drawPath(noseConePath, color = statusTint)
 
                                 // Luminous Porthole Window
                                 val windowCenter = Offset(cx, rY - bodyH * 0.02f)

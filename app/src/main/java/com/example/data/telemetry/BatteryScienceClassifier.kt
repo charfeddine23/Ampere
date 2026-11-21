@@ -7,6 +7,7 @@ import com.example.data.ChargePlug
 import com.example.data.DeviceHardwareProfile
 import com.example.data.LivingBatteryState
 import com.example.data.MetricType
+import java.util.Locale
 import kotlin.math.abs
 
 /**
@@ -199,7 +200,7 @@ object BatteryScienceClassifier {
             } else {
                 if (isCharging) "Charge Current (C-Rate)" else "Discharge Current (Load)"
             },
-            formattedValue = "${if (telemetry.currentMa >= 0) "+" else ""}${telemetry.currentMa} mA (${String.format("%.2f", cRate)}C)",
+            formattedValue = "${if (telemetry.currentMa >= 0) "+" else ""}${telemetry.currentMa} mA (${String.format(Locale.US, "%.2f", cRate)}C)",
             standardRangeAr = if (isArabic) {
                 if (isCharging) "الحد الآمن المستدام ≤ 1.20C" else "الخمول المثالي < 0.08C"
             } else {
@@ -217,7 +218,7 @@ object BatteryScienceClassifier {
         val wattageMetric = ModeOrderedMetric(
             type = MetricType.WATTAGE,
             titleAr = if (isArabic) "القدرة اللحظية" else "Instant Power",
-            formattedValue = "${String.format("%.1f", telemetry.wattageW)} W",
+            formattedValue = "${String.format(Locale.US, "%.1f", telemetry.wattageW)} W",
             standardRangeAr = if (isArabic) {
                 "هدف ${deviceProfile.brand}: ${deviceProfile.recommendedPowerWatts}W"
             } else {
@@ -291,9 +292,9 @@ object BatteryScienceClassifier {
             )
             LivingBatteryState.DEEP_SLEEP -> QuadData(
                 reason = if (isArabic) {
-                    "سحب خامل منخفض جداً (${abs(telemetry.currentMa)}mA = ${String.format("%.2f", cRate)}C) وحرارة هادئة لإطالة العمر الافتراضي."
+                    "سحب خامل منخفض جداً (${abs(telemetry.currentMa)}mA = ${String.format(Locale.US, "%.2f", cRate)}C) وحرارة هادئة لإطالة العمر الافتراضي."
                 } else {
-                    "Ultra-low quiescent draw (${abs(telemetry.currentMa)}mA = ${String.format("%.2f", cRate)}C) and calm temperature preserving cell longevity."
+                    "Ultra-low quiescent draw (${abs(telemetry.currentMa)}mA = ${String.format(Locale.US, "%.2f", cRate)}C) and calm temperature preserving cell longevity."
                 },
                 phase = if (isArabic) "سكون كهربائي (استقرار الجهد)" else "Quiescent Longevity (Resting OCV)",
                 ordered = listOf(currentMetric, voltageMetric, tempMetric, wattageMetric),

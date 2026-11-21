@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.File
@@ -48,6 +49,7 @@ class BatteryMonitorRepository(
 
     val currentCalibrationEngine = CurrentCalibrationEngine(context)
 
+    @Volatile
     private var previousTempC: Float = 25.0f
 
     private val _telemetry = MutableStateFlow(BatteryTelemetry())
@@ -82,12 +84,19 @@ class BatteryMonitorRepository(
     private val _sohPrediction = MutableStateFlow(BatterySohPrediction())
     val sohPrediction: StateFlow<BatterySohPrediction> = _sohPrediction.asStateFlow()
 
+    @Volatile
     private var previousLivingState: LivingBatteryState? = null
+    @Volatile
     private var previousIsCharging: Boolean = false
+    @Volatile
     private var observedBaselineOcvMv: Int? = null
+    @Volatile
     private var prevSampleVoltageMv: Int = 0
+    @Volatile
     private var prevSampleCurrentMa: Int = 0
+    @Volatile
     private var smoothedDynamicImpedanceMohm: Int? = null
+    @Volatile
     private var smoothedRipplePercent: Float = 0.0f
 
     @Volatile
@@ -105,6 +114,7 @@ class BatteryMonitorRepository(
 
     @Volatile
     private var cachedWalLogCount: Int = 0
+    @Volatile
     private var lastWalSyncTimeMs: Long = 0L
 
     @Volatile
@@ -112,6 +122,7 @@ class BatteryMonitorRepository(
 
     @Volatile
     private var cachedBatteryStatus: Intent? = null
+    @Volatile
     private var receiverRegistered: Boolean = false
     private val batteryChangeReceiver = object : BroadcastReceiver() {
         override fun onReceive(ctx: Context?, intent: Intent?) {
@@ -209,6 +220,7 @@ class BatteryMonitorRepository(
         unregisterForegroundBatteryReceiver()
     }
 
+    @Synchronized
     private fun registerForegroundBatteryReceiver() {
         if (receiverRegistered) return
         runCatching {
@@ -226,6 +238,7 @@ class BatteryMonitorRepository(
         }
     }
 
+    @Synchronized
     private fun unregisterForegroundBatteryReceiver() {
         if (!receiverRegistered) return
         runCatching {
@@ -271,13 +284,21 @@ class BatteryMonitorRepository(
     }
 
     private var subTick = 0
+    @Volatile
     private var lastIntentPollMs: Long = 0L
+    @Volatile
     private var lastFastHistoryAppendMs: Long = 0L
+    @Volatile
     private var lastSlowHistoryAppendMs: Long = 0L
+    @Volatile
     private var lastSlowHistoryVoltageMv: Int = 0
+    @Volatile
     private var lastValidVoltageMv: Int = 0
+    @Volatile
     private var sysfsVoltagePath: String? = null
+    @Volatile
     private var sysfsVoltageChecked: Boolean = false
+    @Volatile
     private var lastWidgetSyncMs: Long = 0L
 
     private fun readSysfsVoltageMv(): Int {
@@ -662,7 +683,9 @@ class BatteryMonitorRepository(
             statTag = statTag,
             type = type
         )
-        _sessionLogs.value = listOf(newLog) + _sessionLogs.value
+        _sessionLogs.update { current ->
+            listOf(newLog) + current.take(99)
+        }
     }
 
     fun updateOwnerName(name: String) {

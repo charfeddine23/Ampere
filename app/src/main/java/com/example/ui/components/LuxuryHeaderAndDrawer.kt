@@ -285,8 +285,12 @@ fun LuxuryTopBar(
 ) {
     val isDark = themeConfig.isDarkMode
     val isArabic = themeConfig.appLanguage.isArabic
-    val accentColor = themeConfig.accentColor
     val resolvedTheme = LocalAmpereTheme.current
+    val accentColor = if (resolvedTheme.themeId != null || resolvedTheme.isSimpleMode || resolvedTheme.isProMode) {
+        resolvedTheme.accent
+    } else {
+        themeConfig.accentColor
+    }
 
     Row(
         modifier = modifier
@@ -323,16 +327,21 @@ fun LuxuryTopBar(
                 Spacer(modifier = Modifier.width(7.dp))
                 val tier = themeConfig.appTier
                 val tierColor = tier.displayColor(isDark)
-                val infiniteTransition = rememberInfiniteTransition(label = "tierGlow")
-                val pulseGlow by infiniteTransition.animateFloat(
-                    initialValue = 0.55f,
-                    targetValue = 1.0f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(1200, easing = FastOutSlowInEasing),
-                        repeatMode = RepeatMode.Reverse
-                    ),
-                    label = "tierPulse"
-                )
+                val pulseGlow = if (resolvedTheme.isSimpleMode) {
+                    0.75f
+                } else {
+                    val infiniteTransition = rememberInfiniteTransition(label = "tierGlow")
+                    val animatedPulse by infiniteTransition.animateFloat(
+                        initialValue = 0.55f,
+                        targetValue = 1.0f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(1200, easing = FastOutSlowInEasing),
+                            repeatMode = RepeatMode.Reverse
+                        ),
+                        label = "tierPulse"
+                    )
+                    animatedPulse
+                }
 
                 Box(
                     modifier = Modifier
@@ -513,6 +522,7 @@ fun LuxuryHamburgerButton(
     Box(
         modifier = modifier
             .testTag("luxury_hamburger_button")
+            .minimumInteractiveComponentSize()
             .size(40.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(buttonBg)
@@ -588,7 +598,11 @@ fun LuxurySettingsDrawer(
     val isDark = themeConfig.isDarkMode
     val isArabic = themeConfig.appLanguage.isArabic
     val isRtl = themeConfig.appLanguage.isRtl
-    val accentColor = themeConfig.accentColor
+    val accentColor = if (resolvedTheme.themeId != null || resolvedTheme.isSimpleMode || resolvedTheme.isProMode) {
+        resolvedTheme.accent
+    } else {
+        themeConfig.accentColor
+    }
 
     // Respects Theme Engine preset if active, otherwise uses Soft Nordic twilight / Stone Mist palette
     val drawerBgBrush = if (resolvedTheme.themeId != null) {
@@ -1430,7 +1444,7 @@ fun LuxurySettingsDrawer(
                                     }
                                 }
                                 Text(
-                                    text = "${deviceProfile.chipset} • ${deviceProfile.totalRamGb} GB RAM • ${deviceProfile.cpuCores} ${if (isArabic) "أنوية" else "Cores"}",
+                                    text = "${deviceProfile.chipset} • ${String.format(Locale.US, "%.1f", deviceProfile.totalRamGb)} GB RAM • ${deviceProfile.cpuCores} ${if (isArabic) "أنوية" else "Cores"}",
                                     fontFamily = PlusJakartaSansFontFamily,
                                     fontSize = 10.sp,
                                     color = subTextColor,
@@ -2534,25 +2548,33 @@ private fun LuxuriousAutoUpdateStatusCard(
         label = "updateCardStatusColor"
     )
 
-    val infiniteTransition = rememberInfiniteTransition(label = "luxuriousUpdateCardAnim")
-    val breathPhase by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2600, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "cardBreathPhase"
-    )
-    val sheenSweep by infiniteTransition.animateFloat(
-        initialValue = -0.35f,
-        targetValue = 1.35f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 3600, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "cardSheenSweep"
-    )
+    val isSimpleMode = LocalAmpereTheme.current.isSimpleMode
+    val breathPhase: Float
+    val sheenSweep: Float
+    if (isSimpleMode) {
+        breathPhase = 0.5f
+        sheenSweep = -1f
+    } else {
+        val infiniteTransition = rememberInfiniteTransition(label = "luxuriousUpdateCardAnim")
+        breathPhase = infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 2600, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "cardBreathPhase"
+        ).value
+        sheenSweep = infiniteTransition.animateFloat(
+            initialValue = -0.35f,
+            targetValue = 1.35f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 3600, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "cardSheenSweep"
+        ).value
+    }
     val animatedDownloadProgress by animateFloatAsState(
         targetValue = updateUiState.downloadProgress.coerceIn(0f, 1f),
         animationSpec = spring(
@@ -3306,7 +3328,7 @@ fun UnsupportedModeDialog(
                         color = textColor
                     )
                     Text(
-                        text = "${deviceProfile.chipset} • ${deviceProfile.totalRamGb} GB RAM • ${deviceProfile.cpuCores} ${if (isArabic) "أنوية" else "Cores"} • ${deviceProfile.androidVersion}",
+                        text = "${deviceProfile.chipset} • ${String.format(Locale.US, "%.1f", deviceProfile.totalRamGb)} GB RAM • ${deviceProfile.cpuCores} ${if (isArabic) "أنوية" else "Cores"} • ${deviceProfile.androidVersion}",
                         fontFamily = PlusJakartaSansFontFamily,
                         fontSize = 10.5.sp,
                         color = subTextColor

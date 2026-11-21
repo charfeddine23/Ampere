@@ -120,16 +120,21 @@ fun Page4CableDnaScreen(
         label = "voltageDrop500ms"
     )
 
-    val infiniteTransition = rememberInfiniteTransition(label = "cableDnaGlow")
-    val pulseAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.40f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(if (tier.isDangerous) 600 else 1400, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulseAlpha"
-    )
+    val pulseAlpha: Float = if (resolvedTheme.isSimpleMode) {
+        0.85f
+    } else {
+        val infiniteTransition = rememberInfiniteTransition(label = "cableDnaGlow")
+        val animAlpha by infiniteTransition.animateFloat(
+            initialValue = 0.40f,
+            targetValue = 1.0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(if (tier.isDangerous) 600 else 1400, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "pulseAlpha"
+        )
+        animAlpha
+    }
 
     Column(
         modifier = Modifier
