@@ -6,7 +6,7 @@ import android.util.Log
 import kotlin.math.abs
 
 /**
- * High-Precision, Noise-Filtered Current Calibration & Telemetry Engine for "Ampere Pulse".
+ * High-Precision, Noise-Filtered Current Calibration & Telemetry Engine for "Volt Core".
  *
  * Guarantees ultra-accurate current (mA) readings from [BatteryManager]:
  * 1. Robust Unit & Property Handling:

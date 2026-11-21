@@ -13,7 +13,7 @@ import kotlin.math.PI
 import kotlin.math.sin
 
 /**
- * Cyber Soundscape Engine for Ampere Pulse.
+ * Cyber Soundscape Engine for Volt Core.
  * Generates futuristic, high-frequency cybernetic sound cues in real-time
  * using procedural AudioTrack synthesis with deterministic cleanup.
  */
@@ -60,17 +60,6 @@ object CyberSoundscapeEngine {
         if (!canPlay()) return
         scope.launch {
             playFrequencySweep(startFreq = 400f, endFreq = 2400f, durationMs = 200)
-        }
-    }
-
-    fun playCableTierLegendary() {
-        if (!canPlay()) return
-        scope.launch {
-            playTone(523.25f, 60)
-            delay(25)
-            if (canPlay()) playTone(659.25f, 60)
-            delay(25)
-            if (canPlay()) playTone(1046.50f, 130)
         }
     }
 

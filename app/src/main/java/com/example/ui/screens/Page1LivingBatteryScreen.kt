@@ -623,9 +623,9 @@ private fun AppBatteryConsumptionSection(
                             )
                             Text(
                                 text = if (isArabic) {
-                                    "لمعرفة التطبيقات التي تستهلك البطارية بشكل حقيقي وترتيبها من الأعلى استهلاكاً، يرجى تفعيل صلاحية مراقبة الاستخدام لتطبيق Ampere Pulse."
+                                    "لمعرفة التطبيقات التي تستهلك البطارية بشكل حقيقي وترتيبها من الأعلى استهلاكاً، يرجى تفعيل صلاحية مراقبة الاستخدام لتطبيق Volt Core."
                                 } else {
-                                    "To inspect real app battery drain and rank the highest consumers, please grant Usage Access permission to Ampere Pulse."
+                                    "To inspect real app battery drain and rank the highest consumers, please grant Usage Access permission to Volt Core."
                                 },
                                 fontFamily = PlusJakartaSansFontFamily,
                                 fontSize = 11.sp,

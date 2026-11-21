@@ -35,18 +35,3 @@ val TactileCyan = Color(0xFF00B0FF)             // Cooling / Cryo Cyan
 val TactileViolet = Color(0xFF7C4DFF)           // Deep Sleep / Cosmic Violet
 val TactileAmber = Color(0xFFFFAB00)            // Shield / Alert Amber
 
-// Glass Overlays
-val GlassWhite80 = Color(0xD9E8EDF4)
-val GlassWhite40 = Color(0x73E8EDF4)
-val GlassDark80 = Color(0xCC1E293B)
-val GlassDark40 = Color(0x661E293B)
-
-// Compatibility & Legacy Aliases
-val NeonPhosphorusGreen = TactileGreen
-val NeonCyan = TactileCyan
-val CyberViolet = TactileViolet
-val SolarAmber = TactileAmber
-val ElectricMint = TactileGreen
-val TextLuminous = TextWhite
-val TextMutedGreen = TextSlate
-val ObsidianOled = NeumorphBgDark

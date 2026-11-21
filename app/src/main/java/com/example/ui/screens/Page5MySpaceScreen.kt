@@ -274,7 +274,7 @@ fun Page5MySpaceScreen(
                                         )
                                         Spacer(modifier = Modifier.width(5.dp))
                                         Text(
-                                            text = "Ampere Pulse • ${themeConfig.appTier.localizedLabel(isArabic)}",
+                                            text = "Volt Core • ${themeConfig.appTier.localizedLabel(isArabic)}",
                                             fontFamily = PlusJakartaSansFontFamily,
                                             fontWeight = FontWeight.SemiBold,
                                             fontSize = 11.sp,
@@ -997,7 +997,7 @@ fun UserProfileEditDialog(
                         color = textColor
                     )
                     Text(
-                        text = if (isArabic) "النواة المحلية لـ Ampere Pulse" else "Ampere Pulse Local Core",
+                        text = if (isArabic) "النواة المحلية لـ Volt Core" else "Volt Core Local Core",
                         fontFamily = PlusJakartaSansFontFamily,
                         fontSize = 10.sp,
                         color = subTextColor

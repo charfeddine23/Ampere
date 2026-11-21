@@ -97,7 +97,7 @@ class InAppUpdateEngine(private val context: Context) {
         descriptionText = if (isAr) {
             "يتوفر تحديث جديد للتطبيق جاهز للتنزيل والتثبيت المباشر من الداخل."
         } else {
-            "A new version of Ampere Pulse is ready for direct in-app download and installation."
+            "A new version of Volt Core is ready for direct in-app download and installation."
         },
         lastCheckSummary = if (isAr) {
             "الإصدار الحالي v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})"
@@ -291,7 +291,7 @@ class InAppUpdateEngine(private val context: Context) {
                     if (autoDownloadIfFound && githubResult.downloadUrl.contains(".apk", ignoreCase = true)) {
                         startInAppApkDownload(
                             url = githubResult.downloadUrl,
-                            fileName = githubResult.apkFileName ?: "Ampere.Pulse.v${githubResult.versionName}.apk",
+                            fileName = githubResult.apkFileName ?: "Volt.Core.v${githubResult.versionName}.apk",
                             expectedSizeMb = githubResult.apkSizeMb,
                             hostContext = appContext
                         )
@@ -314,7 +314,7 @@ class InAppUpdateEngine(private val context: Context) {
                             if (ar) "تحديث جديد متاح" else "Update Available"
                         },
                         descriptionText = if (openDialogImmediatelyOnManual) {
-                            if (ar) "أنت تستخدم أحدث إصدار متاح من Ampere Pulse (v${BuildConfig.VERSION_NAME})." else "You are running the latest version of Ampere Pulse (v${BuildConfig.VERSION_NAME})."
+                            if (ar) "أنت تستخدم أحدث إصدار متاح من Volt Core (v${BuildConfig.VERSION_NAME})." else "You are running the latest version of Volt Core (v${BuildConfig.VERSION_NAME})."
                         } else {
                             if (ar) "تحديث جديد متاح" else "Update Available"
                         },

@@ -182,7 +182,7 @@ fun AmperePulseApp(viewModel: AmperePulseViewModel) {
                 // Luxury 3-Line Top Settings Header Bar with Dark Mode Toggle & Cyber Vault Button
                 val isArabic = themeConfig.appLanguage.isArabic
                 LuxuryTopBar(
-                    title = "AMPERE PULSE",
+                    title = "VOLT CORE",
                     subtitle = when (selectedTab) {
                         NavigationTab.BATTERY -> if (isArabic) "الصفحة 1: مصفوفة البطارية الحية" else "PAGE 1: LIVING BATTERY MATRIX"
                         NavigationTab.BATTERY_SOH -> if (isArabic) "الصفحة 2: صحة الخلية ودورات الشحن" else "PAGE 2: BATTERY SOH & CYCLE PREDICTOR"

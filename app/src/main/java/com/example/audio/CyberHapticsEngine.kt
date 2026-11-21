@@ -7,7 +7,7 @@ import android.os.Vibrator
 import android.os.VibratorManager
 
 /**
- * Cyber Haptics Engine for Ampere Pulse.
+ * Cyber Haptics Engine for Volt Core.
  * Implements tactical, fine-grained haptic cues via VibratorManager & VibrationEffect
  * for state transitions, ice crystal morphing, electric discharge, and thermal warnings.
  */

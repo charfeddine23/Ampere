@@ -41,7 +41,6 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
     val cableResult: StateFlow<com.example.data.CableDiagnosticResult> = repository.cableResult
     val sohPrediction: StateFlow<com.example.data.BatterySohPrediction> = repository.sohPrediction
     val deviceProfile: StateFlow<com.example.data.DeviceHardwareProfile> = repository.deviceProfile
-    val hourlyStats: StateFlow<List<com.example.data.local.HourlyBatteryStatEntity>> = repository.hourlyStats
 
     private val _selectedTab = MutableStateFlow(NavigationTab.BATTERY)
     val selectedTab: StateFlow<NavigationTab> = _selectedTab.asStateFlow()
@@ -227,9 +226,9 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
         repository.addManualSessionLog(
             title = if (isAr) "محرك الثيمات: ${preset.localizedName(true)}" else "Theme Engine: ${preset.localizedName(false)}",
             desc = if (isAr) {
-                "تم تطبيق ثيم ${preset.localizedName(true)} (${preset.category.localizedLabel(true)}) في Ampere Pulse."
+                "تم تطبيق ثيم ${preset.localizedName(true)} (${preset.category.localizedLabel(true)}) في Volt Core."
             } else {
-                "Applied ${preset.localizedName(false)} (${preset.category.localizedLabel(false)}) across Ampere Pulse."
+                "Applied ${preset.localizedName(false)} (${preset.category.localizedLabel(false)}) across Volt Core."
             },
             statTag = if (isAr) "ثيم" else "THEME",
             type = "check"
@@ -325,10 +324,6 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
 
     fun updateOwnerName(name: String) {
         repository.updateOwnerName(name)
-    }
-
-    fun toggleCloudSync(enabled: Boolean) {
-        repository.toggleCloudSync(enabled)
     }
 
     fun runCableDiagnosticSweep(tierOverride: com.example.data.CableDnaTier? = null) {

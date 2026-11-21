@@ -21,10 +21,6 @@ val OutfitFontFamily = FontFamily(
     Font(R.font.outfit, FontWeight.Bold)
 )
 
-// Aliases mapped to organic modern fonts
-val RajdhaniFontFamily = OutfitFontFamily
-val SpaceGroteskFontFamily = PlusJakartaSansFontFamily
-
 val Typography = Typography(
     displayLarge = TextStyle(
         fontFamily = OutfitFontFamily,

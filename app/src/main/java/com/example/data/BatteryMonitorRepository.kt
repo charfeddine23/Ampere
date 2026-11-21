@@ -88,16 +88,12 @@ class BatteryMonitorRepository(
     private var cachedWalLogCount: Int = 0
     private var lastWalSyncTimeMs: Long = 0L
 
-    private val _hourlyStats = MutableStateFlow<List<com.example.data.local.HourlyBatteryStatEntity>>(emptyList())
-    val hourlyStats: StateFlow<List<com.example.data.local.HourlyBatteryStatEntity>> = _hourlyStats.asStateFlow()
-
     @Volatile
     private var currentLanguage: AppLanguage = AppLanguage.ARABIC
 
     init {
         currentLanguage = com.example.data.local.SettingsPreferencesManager(context).loadThemeConfig().appLanguage
         initSessionLogsSeed()
-        initHourlyStatsFromDatabase()
         refreshWalLogCountAsync()
         startPolling()
     }
@@ -553,10 +549,6 @@ class BatteryMonitorRepository(
         }
     }
 
-    fun toggleCloudSync(enabled: Boolean) {
-        _userAccount.value = _userAccount.value.copy(isCloudSyncActive = enabled)
-    }
-
     fun runCableDiagnosticSweep(tierOverride: CableDnaTier? = null) {
         val isAr = currentLanguage.isArabic
         val result = CableDnaStandardsEngine.evaluate(
@@ -713,23 +705,7 @@ class BatteryMonitorRepository(
         }
     }
 
-    private fun initHourlyStatsFromDatabase() {
-        scope.launch(Dispatchers.IO) {
-            try {
-                val db = com.example.data.local.AmpereDatabase.getInstance(context)
-                val dao = db.hourlyBatteryStatDao()
-                dao.getAllHourlyStats().collect { list ->
-                    _hourlyStats.value = list
-                }
-            } catch (_: Exception) {}
-        }
-    }
-
     fun updateCurrentCalibration(multiplier: Float, zeroOffsetMa: Float) {
         currentCalibrationEngine.updateCalibration(multiplier, zeroOffsetMa)
-    }
-
-    fun resetCurrentCalibration() {
-        currentCalibrationEngine.resetCalibration()
     }
 }

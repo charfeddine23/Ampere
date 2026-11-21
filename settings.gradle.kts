@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "Ampere Pulse"
+rootProject.name = "Volt Core"
 
 include(":app")

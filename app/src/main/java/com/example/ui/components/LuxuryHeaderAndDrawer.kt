@@ -146,33 +146,19 @@ import com.example.ui.theme.TextWhite
 import com.example.ui.theme.ThemeEngineCatalog
 import java.util.Locale
 
-private val EMP_RING_SEGMENTS = listOf(
-    "M26.12,2.30 A21.80,21.80 0 0,1 32.91,4.10 Q33.39,4.32 33.16,4.80 L32.46,6.26 Q32.23,6.74 31.76,6.52 A19.13,19.13 0 0,0 25.93,4.97 Q25.40,4.92 25.44,4.40 L25.56,2.78 Q25.60,2.26 26.12,2.30 Z",
-    "M38.13,7.40 A21.80,21.80 0 0,1 41.21,10.61 Q41.52,11.03 41.10,11.35 L39.80,12.31 Q39.38,12.62 39.06,12.20 A19.13,19.13 0 0,0 36.44,9.47 Q36.04,9.13 36.37,8.73 L37.39,7.47 Q37.72,7.06 38.13,7.40 Z",
-    "M42.95,13.23 A21.80,21.80 0 0,1 45.70,21.88 Q45.74,22.40 45.22,22.44 L43.60,22.56 Q43.08,22.60 43.03,22.07 A19.13,19.13 0 0,0 40.66,14.60 Q40.40,14.15 40.85,13.88 L42.23,13.04 Q42.69,12.77 42.95,13.23 Z",
-    "M45.70,26.12 A21.80,21.80 0 0,1 26.12,45.70 Q25.60,45.74 25.56,45.22 L25.44,43.60 Q25.40,43.08 25.93,43.03 A19.13,19.13 0 0,0 43.03,25.93 Q43.08,25.40 43.60,25.44 L45.22,25.56 Q45.74,25.60 45.70,26.12 Z",
-    "M21.88,45.70 A21.80,21.80 0 0,1 15.09,43.90 Q14.61,43.68 14.84,43.20 L15.54,41.74 Q15.77,41.26 16.24,41.48 A19.13,19.13 0 0,0 22.07,43.03 Q22.60,43.08 22.56,43.60 L22.44,45.22 Q22.40,45.74 21.88,45.70 Z",
-    "M9.87,40.60 A21.80,21.80 0 0,1 6.56,37.08 Q6.25,36.66 6.68,36.35 L8.00,35.41 Q8.43,35.11 8.74,35.53 A19.13,19.13 0 0,0 11.56,38.53 Q11.96,38.87 11.63,39.27 L10.61,40.53 Q10.28,40.94 9.87,40.60 Z",
-    "M4.86,34.44 A21.80,21.80 0 0,1 2.30,26.12 Q2.26,25.60 2.78,25.56 L4.40,25.44 Q4.92,25.40 4.97,25.93 A19.13,19.13 0 0,0 7.18,33.10 Q7.43,33.56 6.98,33.83 L5.58,34.64 Q5.12,34.90 4.86,34.44 Z",
-    "M2.30,21.88 A21.80,21.80 0 0,1 21.88,2.30 Q22.40,2.26 22.44,2.78 L22.56,4.40 Q22.60,4.92 22.07,4.97 A19.13,19.13 0 0,0 4.97,22.07 Q4.92,22.60 4.40,22.56 L2.78,22.44 Q2.26,22.40 2.30,21.88 Z",
-    "M26.05,7.25 A16.88,16.88 0 0,1 29.13,7.92 Q29.63,8.09 29.46,8.59 L28.92,10.11 Q28.74,10.61 28.24,10.44 A14.21,14.21 0 0,0 25.81,9.91 Q25.29,9.85 25.34,9.33 L25.48,7.72 Q25.53,7.19 26.05,7.25 Z",
-    "M35.79,11.92 A16.88,16.88 0 0,1 40.75,21.95 Q40.81,22.47 40.28,22.52 L38.67,22.66 Q38.15,22.71 38.09,22.19 A14.21,14.21 0 0,0 33.98,13.89 Q33.60,13.53 33.95,13.14 L35.05,11.95 Q35.40,11.56 35.79,11.92 Z",
-    "M21.95,40.75 A16.88,16.88 0 0,1 18.59,39.99 Q18.09,39.81 18.27,39.31 L18.84,37.80 Q19.03,37.31 19.52,37.48 A14.21,14.21 0 0,0 22.19,38.09 Q22.71,38.15 22.66,38.67 L22.52,40.28 Q22.47,40.81 21.95,40.75 Z",
-    "M12.01,35.87 A16.88,16.88 0 0,1 10.66,34.34 Q10.35,33.92 10.77,33.61 L12.08,32.66 Q12.51,32.35 12.83,32.77 A14.21,14.21 0 0,0 13.85,33.93 Q14.22,34.30 13.86,34.69 L12.75,35.86 Q12.38,36.24 12.01,35.87 Z",
-    "M9.06,31.85 A16.88,16.88 0 0,1 7.25,26.05 Q7.19,25.53 7.72,25.48 L9.33,25.34 Q9.85,25.29 9.91,25.81 A14.21,14.21 0 0,0 11.39,30.53 Q11.64,30.99 11.18,31.25 L9.77,32.05 Q9.31,32.31 9.06,31.85 Z",
-    "M7.25,21.95 A16.88,16.88 0 0,1 21.95,7.25 Q22.47,7.19 22.52,7.72 L22.66,9.33 Q22.71,9.85 22.19,9.91 A14.21,14.21 0 0,0 9.91,22.19 Q9.85,22.71 9.33,22.66 L7.72,22.52 Q7.19,22.47 7.25,21.95 Z"
-)
+private const val VOLT_RIBBON_OUTER =
+    "M3.6,14.8 C3.1,13.5 4.2,12.3 6.2,12.3 L12.0,12.3 C14.6,12.3 16.5,13.7 18.0,16.4 L28.4,34.4 C29.3,35.9 31.2,35.7 32.7,34.0 L42.2,21.5 C43.2,20.3 44.3,21.0 43.2,22.8 L30.8,38.9 C27.2,43.1 23.0,44.7 19.6,43.8 C18.1,43.4 16.9,42.1 15.8,40.0 L3.9,16.2 Z"
 
-private const val EMP_ACCENT_ARC =
-    "M40.75,26.05 A16.88,16.88 0 0,1 26.05,40.75 Q25.53,40.81 25.48,40.28 L25.34,38.67 Q25.29,38.15 25.81,38.09 A14.21,14.21 0 0,0 38.09,25.81 Q38.15,25.29 38.67,25.34 L40.28,25.48 Q40.81,25.53 40.75,26.05 Z"
+private const val VOLT_RIBBON_HIGHLIGHT =
+    "M4.2,13.3 C6.5,12.4 9.0,13.2 10.7,15.8 L21.8,35.5 C23.3,38.1 25.7,38.4 28.0,36.2 L32.2,32.0 L28.5,35.4 C25.9,37.7 23.5,37.1 22.0,34.5 L11.4,15.8 C9.8,13.3 7.2,12.6 4.2,13.3 Z"
 
-private const val EMP_LIGHTNING_BOLT =
-    "M36.10,4.87 L11.48,25.55 L21.33,25.55 L11.90,43.13 L36.52,22.45 L26.67,22.45 Z"
+private const val VOLT_CORE_BOLT =
+    "M40.2,9.0 L21.8,25.2 L29.4,25.2 L19.6,44.4 L44.4,20.8 L35.0,20.8 Z"
 
 /**
- * Precision-crafted, theme- & size-adaptive Ampere Pulse emblem.
- * Scales smoothly to any Dp dimension and adapts colors seamlessly across Light, Dark,
- * Simple, Pro, and all 60 Theme Engine studio presets.
+ * Precision-crafted, theme- & size-adaptive Volt Core emblem.
+ * Features the sculptural 3D V-ribbon and electric lightning bolt, scaling smoothly
+ * to any Dp dimension and adapting across Light, Dark, Simple, Pro, and all 60 themes.
  */
 @Composable
 fun AmpereBrandEmblem(
@@ -188,37 +174,35 @@ fun AmpereBrandEmblem(
     val parsedPaths = remember {
         val parser = PathParser()
         Triple(
-            EMP_RING_SEGMENTS.map { parser.parsePathString(it).toPath() },
-            parser.parsePathString(EMP_ACCENT_ARC).toPath(),
-            parser.parsePathString(EMP_LIGHTNING_BOLT).toPath()
+            parser.parsePathString(VOLT_RIBBON_OUTER).toPath(),
+            parser.parsePathString(VOLT_RIBBON_HIGHLIGHT).toPath(),
+            parser.parsePathString(VOLT_CORE_BOLT).toPath()
         )
     }
 
-    val ringFillColor = when {
-        isSimple -> if (isDark) Color(0xFFDDE3EC) else Color(0xFFF9FBFD)
-        isPro -> if (isDark) Color(0xFFEAF0F7) else Color(0xFFFAFCFF)
-        isDark -> lerp(Color(0xFFF3F8FF), resolvedTheme.surface, 0.14f)
-        else -> Color(0xFFFAFCFF)
+    val ribbonStartColor = when {
+        isSimple -> if (isDark) Color(0xFF94A3B8) else Color(0xFF1E293B)
+        isDark -> lerp(Color(0xFF1C2742), resolvedTheme.surface, 0.30f)
+        else -> Color(0xFF0A0F1D)
     }
-    val strokeTint = when {
-        isSimple -> resolvedTheme.accent.copy(alpha = 0.82f)
+    val ribbonEndColor = when {
+        isSimple -> if (isDark) Color(0xFFCBD5E1) else Color(0xFF334155)
+        isDark -> lerp(Color(0xFF34476E), resolvedTheme.textPrimary, 0.22f)
+        else -> Color(0xFF1D2842)
+    }
+    val ribbonBorderTint = when {
+        isDark -> resolvedTheme.textPrimary.copy(alpha = 0.28f)
+        else -> Color(0xFF3B4B6B).copy(alpha = 0.25f)
+    }
+    val boltTopColor = when {
+        isSimple -> resolvedTheme.accent
+        isPro -> lerp(resolvedTheme.secondaryAccent, Color(0xFF00C2FF), 0.45f)
+        else -> lerp(Color(0xFF00D4FF), resolvedTheme.secondaryAccent, if (resolvedTheme.themeId != null) 0.45f else 0.15f)
+    }
+    val boltBottomColor = when {
+        isSimple -> resolvedTheme.accent
         isPro -> resolvedTheme.accent
-        else -> lerp(resolvedTheme.accent, Color(0xFF005CFF), if (resolvedTheme.themeId != null) 0.25f else 0.72f)
-    }
-    val arcStartColor = when {
-        isSimple -> resolvedTheme.accent.copy(alpha = 0.38f)
-        isPro -> lerp(resolvedTheme.secondaryAccent, resolvedTheme.accent, 0.35f)
-        else -> lerp(TactileCyan, resolvedTheme.secondaryAccent, 0.35f)
-    }
-    val arcEndColor = when {
-        isSimple -> resolvedTheme.accent.copy(alpha = 0.55f)
-        isPro -> resolvedTheme.accent
-        else -> strokeTint
-    }
-    val boltTintEnd = when {
-        isSimple -> ringFillColor
-        isPro -> lerp(ringFillColor, resolvedTheme.accent, 0.14f)
-        else -> lerp(Color(0xFFD8EAFF), resolvedTheme.accent, 0.18f)
+        else -> lerp(Color(0xFF005CFF), resolvedTheme.accent, if (resolvedTheme.themeId != null) 0.55f else 0.20f)
     }
 
     val semanticsMod = if (contentDescription != null) {
@@ -229,40 +213,46 @@ fun AmpereBrandEmblem(
 
     Canvas(modifier = semanticsMod.size(size)) {
         val scaleFactor = minOf(this.size.width, this.size.height) / 48f
-        val arcBrush = Brush.linearGradient(
-            colors = listOf(arcStartColor, lerp(arcStartColor, arcEndColor, 0.5f), arcEndColor),
-            start = Offset(41f, 25f),
-            end = Offset(25f, 41f)
+        val ribbonBrush = Brush.linearGradient(
+            colors = listOf(ribbonStartColor, ribbonEndColor, ribbonStartColor),
+            start = Offset(4f, 12f),
+            end = Offset(34f, 44f)
         )
-        val boltFillBrush = Brush.linearGradient(
-            colors = listOf(Color.White, lerp(Color.White, boltTintEnd, 0.55f), boltTintEnd),
-            start = Offset(13f, 10f),
-            end = Offset(35f, 38f)
-        )
-        val boltStrokeBrush = Brush.linearGradient(
-            colors = listOf(arcStartColor, strokeTint, arcEndColor),
-            start = Offset(34f, 6f),
-            end = Offset(14f, 42f)
+        val boltBrush = Brush.linearGradient(
+            colors = listOf(boltTopColor, lerp(boltTopColor, boltBottomColor, 0.55f), boltBottomColor),
+            start = Offset(40f, 9f),
+            end = Offset(20f, 44f)
         )
 
         withTransform({
             scale(scaleFactor, scaleFactor, Offset.Zero)
         }) {
-            val segStroke = Stroke(width = 0.74f, join = StrokeJoin.Round)
-            parsedPaths.first.forEach { segPath ->
-                drawPath(path = segPath, color = ringFillColor, style = Fill)
-                drawPath(path = segPath, color = strokeTint, style = segStroke)
+            // 1. Sculptural V-ribbon base
+            drawPath(path = parsedPaths.first, brush = ribbonBrush, style = Fill)
+            if (isDark && !isSimple) {
+                drawPath(
+                    path = parsedPaths.first,
+                    color = ribbonBorderTint,
+                    style = Stroke(width = 0.85f, join = StrokeJoin.Round)
+                )
+            }
+            if (!isSimple) {
+                drawPath(
+                    path = parsedPaths.second,
+                    color = Color.White.copy(alpha = if (isDark) 0.22f else 0.14f),
+                    style = Fill
+                )
             }
 
-            drawPath(path = parsedPaths.second, brush = arcBrush, style = Fill)
-            drawPath(path = parsedPaths.second, color = strokeTint, style = segStroke)
-
-            drawPath(path = parsedPaths.third, brush = boltFillBrush, style = Fill)
-            drawPath(
-                path = parsedPaths.third,
-                brush = boltStrokeBrush,
-                style = Stroke(width = 0.92f, join = StrokeJoin.Miter)
-            )
+            // 2. Electric Cyan-to-Blue Lightning Bolt
+            drawPath(path = parsedPaths.third, brush = boltBrush, style = Fill)
+            if (!isSimple) {
+                drawPath(
+                    path = parsedPaths.third,
+                    color = Color.White.copy(alpha = 0.28f),
+                    style = Stroke(width = 0.55f, join = StrokeJoin.Miter)
+                )
+            }
         }
     }
 }
@@ -301,8 +291,8 @@ fun LuxuryTopBar(
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 AmpereBrandEmblem(
-                    size = 24.dp,
-                    contentDescription = if (isArabic) "شعار Ampere Pulse" else "Ampere Pulse Emblem",
+                    size = 26.dp,
+                    contentDescription = if (isArabic) "شعار Volt Core" else "Volt Core Emblem",
                     modifier = Modifier.testTag("in_app_brand_icon")
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -671,7 +661,7 @@ fun LuxurySettingsDrawer(
                         ) {
                             AmpereBrandEmblem(
                                 size = 30.dp,
-                                contentDescription = if (isArabic) "شعار Ampere Pulse" else "Ampere Pulse Logo"
+                                contentDescription = if (isArabic) "شعار Volt Core" else "Volt Core Logo"
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Column(modifier = Modifier.weight(1f)) {
@@ -684,9 +674,9 @@ fun LuxurySettingsDrawer(
                                 )
                                 Text(
                                     text = if (isArabic) {
-                                        "تخصيص شامل لتجربة Ampere Pulse"
+                                        "تخصيص شامل لتجربة Volt Core"
                                     } else {
-                                        "Precision control for Ampere Pulse"
+                                        "Precision control for Volt Core"
                                     },
                                     fontFamily = PlusJakartaSansFontFamily,
                                     fontSize = 10.5.sp,

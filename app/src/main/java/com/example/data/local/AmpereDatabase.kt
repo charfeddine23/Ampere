@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 /**
- * Room Database singleton for Ampere Pulse.
+ * Room Database singleton for Volt Core.
  * Configured with Write-Ahead Logging (WAL) explicitly enabled for
  * ultra-fast, crash-resilient 24/7 background writes without database locks.
  */

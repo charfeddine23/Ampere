@@ -33,7 +33,7 @@ import androidx.glance.text.TextStyle
 import com.example.MainActivity
 
 /**
- * High-Fidelity Liquid Glass Home Screen Widget for Ampere Pulse.
+ * High-Fidelity Liquid Glass Home Screen Widget for Volt Core.
  * Built with Jetpack Glance, mirroring the Living Battery state (Storing, Heating, Cooling, Sleep)
  * with dynamic ambient glowing colors and real-time battery telemetry.
  */
@@ -104,7 +104,7 @@ class LivingBatteryGlanceWidget : GlanceAppWidget() {
                             ) {}
                             Spacer(modifier = GlanceModifier.width(8.dp))
                             Text(
-                                text = if (isArabic) "أمبير بالس" else "AMPERE PULSE",
+                                text = if (isArabic) "فولت كور" else "VOLT CORE",
                                 style = TextStyle(
                                     color = androidx.glance.unit.ColorProvider(Color(0xFF94A3B8)),
                                     fontSize = 10.sp,

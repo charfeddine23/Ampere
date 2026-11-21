@@ -57,7 +57,7 @@ class TelemetryForegroundService : Service() {
         val isAr = initialConfig.appLanguage.isArabic
         createNotificationChannel(isAr)
         promoteToForeground(
-            title = if (isAr) "أمبير بالس نشط" else "Ampere Pulse Active",
+            title = if (isAr) "فولت كور نشط" else "Volt Core Active",
             text = if (isAr) "المراقبة الصامتة للعتاد نشطة" else "Silent Hardware Telemetry Active"
         )
 
@@ -84,7 +84,7 @@ class TelemetryForegroundService : Service() {
             newOffsetMa = config.currentZeroOffsetMa
         )
         promoteToForeground(
-            title = if (isAr) "أمبير بالس نشط" else "Ampere Pulse Active",
+            title = if (isAr) "فولت كور نشط" else "Volt Core Active",
             text = if (isAr) "المراقبة الصامتة للعتاد نشطة" else "Silent Hardware Telemetry Active"
         )
         return START_NOT_STICKY
@@ -198,7 +198,7 @@ class TelemetryForegroundService : Service() {
                 notificationManager?.notify(
                     NOTIFICATION_ID,
                     createNotification(
-                        if (isAr) "قياسات Ampere Pulse" else "Ampere Pulse Telemetry",
+                        if (isAr) "قياسات Volt Core" else "Volt Core Telemetry",
                         notificationText
                     )
                 )
@@ -212,7 +212,7 @@ class TelemetryForegroundService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                if (isArabic) "خدمة قياسات Ampere Pulse" else "Ampere Pulse Telemetry Service",
+                if (isArabic) "خدمة قياسات Volt Core" else "Volt Core Telemetry Service",
                 NotificationManager.IMPORTANCE_MIN
             ).apply {
                 description = if (isArabic) {

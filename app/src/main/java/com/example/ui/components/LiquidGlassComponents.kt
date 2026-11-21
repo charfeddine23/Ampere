@@ -12,17 +12,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -33,12 +26,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.ui.theme.LocalAmpereTheme
 import com.example.ui.theme.NeumorphBorderDark
 import com.example.ui.theme.NeumorphBorderLight
@@ -46,17 +36,11 @@ import com.example.ui.theme.NeumorphCardBottomLight
 import com.example.ui.theme.NeumorphCardTopLight
 import com.example.ui.theme.NeumorphHighlightDark
 import com.example.ui.theme.NeumorphHighlightLight
-import com.example.ui.theme.NeumorphInsetLight
 import com.example.ui.theme.NeumorphShadowDark
 import com.example.ui.theme.NeumorphShadowLight
 import com.example.ui.theme.NeumorphSurfaceDark
 import com.example.ui.theme.NeumorphSurfaceLight
-import com.example.ui.theme.OutfitFontFamily
-import com.example.ui.theme.PlusJakartaSansFontFamily
 import com.example.ui.theme.TactileRoyalBlue
-import com.example.ui.theme.TextCharcoal
-import com.example.ui.theme.TextSlate
-import com.example.ui.theme.TextWhite
 
 /**
  * Tactile Neumorphic & Soft Liquid Glass Card
@@ -246,100 +230,3 @@ fun PulsingNeonDot(
     }
 }
 
-/**
- * Tactile Neumorphic Pill Badge
- */
-@Composable
-fun NeonBadge(
-    text: String,
-    modifier: Modifier = Modifier,
-    accentColor: Color = TactileRoyalBlue,
-    isDarkMode: Boolean = false,
-    icon: ImageVector? = null
-) {
-    val theme = LocalAmpereTheme.current
-    Row(
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(
-                if (theme.themeId != null) theme.surfaceInset
-                else if (isDarkMode) Color(0x33334155) else NeumorphInsetLight
-            )
-            .border(
-                width = 1.dp,
-                color = accentColor.copy(alpha = 0.3f),
-                shape = RoundedCornerShape(12.dp)
-            )
-            .padding(horizontal = 10.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center
-    ) {
-        if (icon != null) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = accentColor,
-                modifier = Modifier.size(13.dp)
-            )
-            Spacer(modifier = Modifier.width(4.dp))
-        } else {
-            PulsingNeonDot(color = accentColor, sizeDp = 5.dp)
-            Spacer(modifier = Modifier.width(6.dp))
-        }
-        Text(
-            text = text.uppercase(),
-            fontFamily = OutfitFontFamily,
-            fontWeight = FontWeight.Bold,
-            fontSize = 11.sp,
-            letterSpacing = 0.6.sp,
-            color = accentColor
-        )
-    }
-}
-
-/**
- * Top App Bar with Tactile Neumorphic Styling
- */
-@Composable
-fun LiquidTopAppBar(
-    title: String,
-    subtitle: String? = null,
-    accentColor: Color = TactileRoyalBlue,
-    isDarkMode: Boolean = false,
-    rightAction: (@Composable () -> Unit)? = null
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Column {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = title,
-                    fontFamily = OutfitFontFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 22.sp,
-                    letterSpacing = (-0.2).sp,
-                    color = if (isDarkMode) TextWhite else TextCharcoal
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                PulsingNeonDot(color = accentColor, sizeDp = 6.dp)
-            }
-            if (subtitle != null) {
-                Text(
-                    text = subtitle,
-                    fontFamily = PlusJakartaSansFontFamily,
-                    fontWeight = FontWeight.Normal,
-                    fontSize = 11.sp,
-                    color = TextSlate
-                )
-            }
-        }
-        if (rightAction != null) {
-            rightAction()
-        }
-    }
-}
