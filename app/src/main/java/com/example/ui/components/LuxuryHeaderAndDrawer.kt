@@ -291,21 +291,23 @@ fun LuxuryTopBar(
     } else {
         themeConfig.accentColor
     }
+    val titleColor = if (resolvedTheme.themeId != null) resolvedTheme.textPrimary else if (isDark) TextWhite else TextCharcoal
+    val subColor = if (resolvedTheme.themeId != null) resolvedTheme.textSecondary else TextSlate
 
     Row(
         modifier = modifier
             .fillMaxWidth()
             .windowInsetsPadding(WindowInsets.statusBars)
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .padding(horizontal = 16.dp, vertical = 10.dp)
             .graphicsLayer { clip = false },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        // App Title, Theme-Adaptive Emblem & Status Subtitle
+        // Brand Emblem, Crisp Title, Subtle Tier Pill & Concise Subtitle
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 AmpereBrandEmblem(
-                    size = 26.dp,
+                    size = 25.dp,
                     contentDescription = if (isArabic) "شعار Volt Core" else "Volt Core Emblem",
                     modifier = Modifier.testTag("in_app_brand_icon")
                 )
@@ -314,16 +316,14 @@ fun LuxuryTopBar(
                     text = title,
                     fontFamily = OutfitFontFamily,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 21.sp,
-                    letterSpacing = (-0.3).sp,
-                    color = if (resolvedTheme.themeId != null) resolvedTheme.textPrimary else if (isDark) TextWhite else TextCharcoal,
+                    fontSize = 19.5.sp,
+                    letterSpacing = (-0.2).sp,
+                    color = titleColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Spacer(modifier = Modifier.width(6.dp))
-                PulsingNeonDot(color = accentColor, sizeDp = 5.5.dp)
 
-                // Dynamic glowing AppTier badge (FREE / VIP / PREMIUM)
+                // Clean Tier Pill (FREE / VIP / PREMIUM)
                 Spacer(modifier = Modifier.width(7.dp))
                 val tier = themeConfig.appTier
                 val tierColor = tier.displayColor(isDark)
@@ -332,10 +332,10 @@ fun LuxuryTopBar(
                 } else {
                     val infiniteTransition = rememberInfiniteTransition(label = "tierGlow")
                     val animatedPulse by infiniteTransition.animateFloat(
-                        initialValue = 0.55f,
+                        initialValue = 0.65f,
                         targetValue = 1.0f,
                         animationSpec = infiniteRepeatable(
-                            animation = tween(1200, easing = FastOutSlowInEasing),
+                            animation = tween(1600, easing = FastOutSlowInEasing),
                             repeatMode = RepeatMode.Reverse
                         ),
                         label = "tierPulse"
@@ -345,65 +345,57 @@ fun LuxuryTopBar(
 
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(
-                            brush = Brush.horizontalGradient(
-                                colors = listOf(
-                                    tierColor.copy(alpha = if (isDark) 0.28f else 0.16f),
-                                    tierColor.copy(alpha = if (isDark) 0.14f else 0.08f)
-                                )
-                            )
-                        )
+                        .clip(RoundedCornerShape(7.dp))
+                        .background(tierColor.copy(alpha = if (isDark) 0.16f else 0.10f))
                         .border(
-                            width = 1.1.dp,
-                            brush = Brush.horizontalGradient(
-                                colors = listOf(
-                                    tierColor.copy(alpha = 0.85f * pulseGlow),
-                                    tierColor.copy(alpha = 0.40f)
-                                )
-                            ),
-                            shape = RoundedCornerShape(8.dp)
+                            width = 0.9.dp,
+                            color = tierColor.copy(alpha = 0.50f * pulseGlow),
+                            shape = RoundedCornerShape(7.dp)
                         )
                         .clickable {
                             if (!themeConfig.isPremiumUnlocked) onOpenRedeemDialog() else onMenuToggle()
                         }
-                        .padding(horizontal = 7.dp, vertical = 2.5.dp)
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
                         .testTag("app_tier_badge")
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(5.dp)
-                                .clip(CircleShape)
-                                .background(tierColor)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = tier.localizedLabel(isArabic),
-                            fontFamily = OutfitFontFamily,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 10.5.sp,
-                            letterSpacing = 0.4.sp,
-                            color = tierColor
-                        )
-                    }
+                    Text(
+                        text = tier.localizedLabel(isArabic),
+                        fontFamily = OutfitFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 9.5.sp,
+                        letterSpacing = 0.4.sp,
+                        color = tierColor
+                    )
                 }
             }
-            Text(
-                text = subtitle,
-                fontFamily = PlusJakartaSansFontFamily,
-                fontWeight = FontWeight.Normal,
-                fontSize = 11.sp,
-                color = TextSlate,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            Spacer(modifier = Modifier.height(1.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(5.dp)
+                        .clip(CircleShape)
+                        .background(accentColor)
+                )
+                Spacer(modifier = Modifier.width(5.dp))
+                Text(
+                    text = subtitle,
+                    fontFamily = PlusJakartaSansFontFamily,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 11.sp,
+                    color = subColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
 
         Spacer(modifier = Modifier.width(8.dp))
 
-        // Actions: Quick 3-Mode Switcher (Normal / Simple / Pro) + Luxury 3-Line Button
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        // Quick 3-Mode Switcher (Normal / Simple / Pro) + Minimal Menu Button
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             val modeTint = when (themeConfig.graphicsMode) {
                 GraphicsMode.STANDARD -> accentColor
                 GraphicsMode.SIMPLE -> TactileGreen
@@ -423,16 +415,19 @@ fun LuxuryTopBar(
             Box(
                 modifier = Modifier
                     .minimumInteractiveComponentSize()
-                    .heightIn(min = 40.dp)
+                    .heightIn(min = 38.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(if (resolvedTheme.themeId != null) resolvedTheme.surface else if (isDark) Color(0xFF1E293B) else Color(0xFFE7ECF3))
+                    .background(
+                        if (resolvedTheme.themeId != null) resolvedTheme.surface
+                        else if (isDark) Color(0xFF1E293B) else Color(0xFFE7ECF3)
+                    )
                     .border(
-                        1.1.dp,
-                        modeTint.copy(alpha = 0.48f),
+                        1.dp,
+                        modeTint.copy(alpha = 0.42f),
                         RoundedCornerShape(12.dp)
                     )
                     .clickable { onCycleGraphicsMode() }
-                    .padding(horizontal = 9.dp, vertical = 7.dp)
+                    .padding(horizontal = 10.dp, vertical = 7.dp)
                     .testTag("top_bar_graphics_mode_button"),
                 contentAlignment = Alignment.Center
             ) {
@@ -444,7 +439,7 @@ fun LuxuryTopBar(
                         imageVector = modeIcon,
                         contentDescription = if (isArabic) "تبديل وضع الرسوميات ($modeShortLabel)" else "Cycle Mode ($modeShortLabel)",
                         tint = modeTint,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(15.dp)
                     )
                     Text(
                         text = modeShortLabel,
@@ -459,15 +454,12 @@ fun LuxuryTopBar(
                             imageVector = Icons.Default.Lock,
                             contentDescription = if (isArabic) "مقفل على الوضع البسيط" else "Locked to Simple Mode",
                             tint = modeTint,
-                            modifier = Modifier.size(12.dp)
+                            modifier = Modifier.size(11.dp)
                         )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.width(8.dp))
-
-            // Luxury 3-Line Animated Hamburger Button
             LuxuryHamburgerButton(
                 isOpen = isMenuOpen,
                 onClick = onMenuToggle,

@@ -12,13 +12,17 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AcUnit
 import androidx.compose.material.icons.filled.Bedtime
@@ -31,7 +35,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -40,6 +46,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -49,19 +56,21 @@ import com.example.data.BatteryStatus
 import com.example.data.ChargePlug
 import com.example.data.LivingBatteryState
 import com.example.ui.theme.LocalAmpereTheme
+import com.example.ui.theme.LocalAppLanguage
 import com.example.ui.theme.OutfitFontFamily
 import com.example.ui.theme.PlusJakartaSansFontFamily
 import com.example.ui.theme.TextCharcoal
 import com.example.ui.theme.TextSlate
 import com.example.ui.theme.TextWhite
+import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
-import java.util.Locale
 
 /**
- * Tactile Neumorphic & Soft Liquid Glass Battery Ring
- * Supports Light & Dark themes with 4 dynamic living states.
+ * Precision Instrument Battery Ring
+ * Minimalist Swiss-inspired circular dial with crisp graduation ticks,
+ * calm liquid depth, and clear digital hierarchy.
  */
 @Composable
 fun LiquidBatteryRing(
@@ -72,7 +81,7 @@ fun LiquidBatteryRing(
     livingState: LivingBatteryState,
     modifier: Modifier = Modifier,
     isDarkMode: Boolean = false,
-    sizeDp: Dp = 230.dp,
+    sizeDp: Dp = 216.dp,
     glowIntensity: Float = 0.75f,
     ambientLiquidWaves: Boolean = true
 ) {
@@ -82,22 +91,26 @@ fun LiquidBatteryRing(
 
     val animatedPercent by animateFloatAsState(
         targetValue = percentage.toFloat(),
-        animationSpec = if (isSimple) tween(160) else spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
+        animationSpec = if (isSimple) {
+            tween(160)
+        } else {
+            spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
+        },
         label = "animatedPercent"
     )
 
     val waveDuration = when (livingState) {
-        LivingBatteryState.OVERDRIVE_HEATING -> 1400
-        LivingBatteryState.COOLING -> 2400
-        LivingBatteryState.ENERGY_STORING -> 2000
-        LivingBatteryState.DEEP_SLEEP -> 3800
+        LivingBatteryState.OVERDRIVE_HEATING -> 1600
+        LivingBatteryState.COOLING -> 2600
+        LivingBatteryState.ENERGY_STORING -> 2200
+        LivingBatteryState.DEEP_SLEEP -> 4000
     }
 
     val wavePhase: Float
     val auraPulse: Float
-    if (isSimple) {
+    if (isSimple || !ambientLiquidWaves) {
         wavePhase = 0f
-        auraPulse = 0.7f
+        auraPulse = 0.72f
     } else {
         val infiniteTransition = rememberInfiniteTransition(label = "liquidWaves")
         val animWave by infiniteTransition.animateFloat(
@@ -110,10 +123,10 @@ fun LiquidBatteryRing(
             label = "wavePhase"
         )
         val animAura by infiniteTransition.animateFloat(
-            initialValue = 0.7f,
+            initialValue = 0.72f,
             targetValue = 1.0f,
             animationSpec = infiniteRepeatable(
-                animation = tween(1200, easing = FastOutSlowInEasing),
+                animation = tween(1400, easing = FastOutSlowInEasing),
                 repeatMode = RepeatMode.Reverse
             ),
             label = "auraPulse"
@@ -124,7 +137,7 @@ fun LiquidBatteryRing(
 
     val targetPrimaryColor = when {
         isSimple -> theme.accent
-        isPro -> androidx.compose.ui.graphics.lerp(livingState.neonPrimary, theme.accent, 0.55f)
+        isPro -> lerp(livingState.neonPrimary, theme.accent, 0.55f)
         else -> livingState.neonPrimary
     }
     val targetSecondaryColor = when {
@@ -156,29 +169,22 @@ fun LiquidBatteryRing(
     ) {
         Canvas(modifier = Modifier.size(sizeDp)) {
             val canvasSize = size.minDimension
-            val strokeWidth = 14.dp.toPx()
+            val strokeWidth = 13.dp.toPx()
             val radius = (canvasSize - strokeWidth) / 2f
             val center = Offset(size.width / 2f, size.height / 2f)
 
-            // 1. Neumorphic Extruded Dial Dual Shadows (omitted cleanly in Simple Mode)
+            // 1. Subtle Elevation Ring Shadow
             if (!isSimple) {
-                val shadowOffset = if (isPro) 4.dp.toPx() else 6.dp.toPx()
-                val shadowColor = if (isDarkMode) Color(0x55000000) else Color(0x367589A2)
-                val highlightColor = if (isDarkMode) Color(0x1894A3B8) else Color(0x6AF2F5FA)
-
+                val shadowOffset = if (isPro) 3.dp.toPx() else 4.5.dp.toPx()
+                val shadowColor = if (isDarkMode) Color(0x44000000) else Color(0x287589A2)
                 drawCircle(
                     color = shadowColor,
                     radius = radius,
-                    center = Offset(center.x + shadowOffset, center.y + shadowOffset)
-                )
-                drawCircle(
-                    color = highlightColor,
-                    radius = radius,
-                    center = Offset(center.x - shadowOffset * 0.7f, center.y - shadowOffset * 0.7f)
+                    center = Offset(center.x, center.y + shadowOffset)
                 )
             }
 
-            // Dial Disc Surface
+            // 2. Dial Disc Surface
             if (isSimple) {
                 drawCircle(
                     color = theme.surface,
@@ -191,9 +197,9 @@ fun LiquidBatteryRing(
                         colors = if (isPro) {
                             listOf(theme.surface, theme.surfaceInset)
                         } else if (isDarkMode) {
-                            listOf(Color(0xFF243348), Color(0xFF1A2433))
+                            listOf(Color(0xFF223045), Color(0xFF182232))
                         } else {
-                            listOf(Color(0xFFECF1F7), Color(0xFFE5EBF2), Color(0xFFD9E1EB))
+                            listOf(Color(0xFFF0F4F9), Color(0xFFE5ECF4), Color(0xFFDCE4EE))
                         },
                         center = center,
                         radius = radius
@@ -203,11 +209,11 @@ fun LiquidBatteryRing(
                 )
             }
 
-            // 2. Liquid Fluid Wave inside circle (disabled in Simple Mode)
+            // 3. Calm Liquid Wave inside Dial
             if (ambientLiquidWaves && !isSimple) {
                 drawNeumorphicLiquidWave(
                     center = center,
-                    radius = radius * 0.88f,
+                    radius = radius * 0.87f,
                     fillRatio = (animatedPercent / 100f).coerceIn(0.05f, 0.96f),
                     wavePhase = wavePhase,
                     primaryColor = activePrimary,
@@ -218,15 +224,15 @@ fun LiquidBatteryRing(
                 )
             }
 
-            // 3. Tactile Inner Ring Bevel
+            // 4. Crisp Inner Hairline Bevel
             drawCircle(
-                color = if (isSimple) theme.border else if (isDarkMode) Color(0x33475569) else Color(0x88B4C2D3),
-                radius = radius * 0.90f,
+                color = if (isSimple) theme.border else if (isDarkMode) Color(0x2B475569) else Color(0x70B4C2D3),
+                radius = radius * 0.88f,
                 center = center,
                 style = Stroke(width = 1.dp.toPx())
             )
 
-            // 4. Background Track Arc (Soft Neumorphic Groove)
+            // 5. Recessed Track Arc
             val trackColor = if (isSimple || isPro) theme.surfaceInset else if (isDarkMode) Color(0xFF28364B) else Color(0xFFCFD9E6)
             drawArc(
                 color = trackColor,
@@ -238,17 +244,16 @@ fun LiquidBatteryRing(
                 style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
             )
 
-            // 5. Active Tactile Liquid Progress Arc
+            // 6. Active Precision Arc
             val activeSweep = (animatedPercent / 100f).coerceIn(0f, 1f) * 270f
             if (activeSweep > 0f) {
-                // Soft glow halo behind active arc (omitted in Simple Mode, restrained in Pro Mode)
-                if (!isSimple) {
-                    val proHaloScale = if (isPro) 0.40f else 1f
+                if (!isSimple && glowIntensity > 0.05f) {
+                    val proHaloScale = if (isPro) 0.35f else 0.75f
                     drawArc(
                         brush = Brush.sweepGradient(
-                            0.0f to activeSecondary.copy(alpha = 0.22f * auraPulse * proHaloScale),
-                            0.5f to activePrimary.copy(alpha = 0.35f * auraPulse * proHaloScale),
-                            1.0f to activePrimary.copy(alpha = 0.45f * proHaloScale),
+                            0.0f to activeSecondary.copy(alpha = 0.16f * auraPulse * proHaloScale),
+                            0.5f to activePrimary.copy(alpha = 0.25f * auraPulse * proHaloScale),
+                            1.0f to activePrimary.copy(alpha = 0.32f * auraPulse * proHaloScale),
                             center = center
                         ),
                         startAngle = 135f,
@@ -256,11 +261,10 @@ fun LiquidBatteryRing(
                         useCenter = false,
                         topLeft = Offset(center.x - radius, center.y - radius),
                         size = Size(radius * 2, radius * 2),
-                        style = Stroke(width = strokeWidth * 1.6f, cap = StrokeCap.Round)
+                        style = Stroke(width = strokeWidth * 1.45f, cap = StrokeCap.Round)
                     )
                 }
 
-                // Crisp Progress Arc
                 drawArc(
                     brush = Brush.sweepGradient(
                         0.0f to activeSecondary,
@@ -276,38 +280,38 @@ fun LiquidBatteryRing(
                     style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
                 )
 
-                // Head tracking dot
                 val endAngleRad = Math.toRadians((135f + activeSweep).toDouble())
                 val headX = center.x + radius * cos(endAngleRad).toFloat()
                 val headY = center.y + radius * sin(endAngleRad).toFloat()
 
-                if (!isSimple) {
-                    drawCircle(
-                        color = activePrimary.copy(alpha = if (isPro) 0.24f else 0.4f),
-                        radius = strokeWidth * 0.85f,
-                        center = Offset(headX, headY)
-                    )
-                }
                 drawCircle(
                     color = Color.White,
-                    radius = strokeWidth * 0.45f,
+                    radius = strokeWidth * 0.42f,
                     center = Offset(headX, headY)
                 )
                 drawCircle(
                     color = activePrimary,
-                    radius = strokeWidth * 0.25f,
+                    radius = strokeWidth * 0.24f,
                     center = Offset(headX, headY)
                 )
             }
 
-            // 6. Perimeter Technical Graduation Ticks
+            // 7. Minimal Clean Graduation Markers (11 crisp ticks instead of 36 noisy ticks)
             if (!isSimple) {
-                drawDialTicks(center = center, radius = radius + 10.dp.toPx(), accentColor = activePrimary, isDarkMode = isDarkMode)
+                drawDialTicks(
+                    center = center,
+                    radius = radius + 9.dp.toPx(),
+                    accentColor = activePrimary,
+                    isDarkMode = isDarkMode
+                )
             }
         }
 
-        // Center Digital Display Readout
-        val isArabic = com.example.ui.theme.LocalAppLanguage.current.isArabic
+        // Center Digital Telemetry Readout
+        val isArabic = LocalAppLanguage.current.isArabic
+        val textColor = if (theme.themeId != null) theme.textPrimary else if (isDarkMode) TextWhite else TextCharcoal
+        val subColor = if (theme.themeId != null) theme.textSecondary else TextSlate
+
         Column(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -318,68 +322,73 @@ fun LiquidBatteryRing(
                 LivingBatteryState.DEEP_SLEEP -> Icons.Default.Bedtime
             }
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = stateIcon,
                     contentDescription = livingState.localizedTitle(isArabic),
                     tint = activePrimary,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(15.dp)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
                     text = if (status == BatteryStatus.CHARGING) {
-                        if (isArabic) "${String.format(Locale.US, "%.1f", wattageW)}W شحن" else "${String.format(Locale.US, "%.1f", wattageW)}W CHARGING"
+                        if (isArabic) "شحن نشط" else "CHARGING"
                     } else {
                         livingState.localizedTitle(isArabic).uppercase()
                     },
                     fontFamily = OutfitFontFamily,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 11.sp,
-                    letterSpacing = 0.5.sp,
+                    fontSize = 10.5.sp,
+                    letterSpacing = 0.6.sp,
                     color = activePrimary
                 )
             }
 
             Spacer(modifier = Modifier.height(2.dp))
 
-            // Percentage Readout with High-Contrast Dark Charcoal Text
-            Row(
-                verticalAlignment = Alignment.Bottom
-            ) {
+            Row(verticalAlignment = Alignment.Bottom) {
                 Text(
                     text = "$percentage",
                     fontFamily = OutfitFontFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = 54.sp,
                     lineHeight = 54.sp,
-                    letterSpacing = (-1).sp,
-                    color = if (isDarkMode) TextWhite else TextCharcoal
+                    letterSpacing = (-1.2).sp,
+                    color = textColor
                 )
                 Text(
                     text = "%",
                     fontFamily = OutfitFontFamily,
                     fontWeight = FontWeight.SemiBold,
-                    fontSize = 22.sp,
+                    fontSize = 21.sp,
                     color = activePrimary,
-                    modifier = Modifier.align(Alignment.Bottom)
+                    modifier = Modifier.padding(bottom = 7.dp)
                 )
             }
 
-            // Real-time hardware sensor status indicator (no XP display)
-            Text(
-                text = if (status == BatteryStatus.CHARGING) {
-                    if (isArabic) "${String.format(Locale.US, "%.1f", wattageW)}W • شحن نشط" else "${String.format(Locale.US, "%.1f", wattageW)}W • ACTIVE CHARGE"
-                } else {
-                    if (isArabic) "مستشعرات العتاد نشطة" else "HARDWARE SENSORS ACTIVE"
-                },
-                fontFamily = PlusJakartaSansFontFamily,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 10.sp,
-                letterSpacing = 0.5.sp,
-                color = TextSlate
-            )
+            Spacer(modifier = Modifier.height(4.dp))
+
+            val pillText = if (status == BatteryStatus.CHARGING) {
+                "${String.format(Locale.US, "%.1f", wattageW)}W • ${plugType.localizedLabel(isArabic)}"
+            } else {
+                "${String.format(Locale.US, "%.1f", wattageW)}W • ${if (isArabic) "تفريغ" else "ACTIVE"}"
+            }
+
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(activePrimary.copy(alpha = if (isDarkMode) 0.16f else 0.11f))
+                    .border(0.8.dp, activePrimary.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
+                    .padding(horizontal = 10.dp, vertical = 3.dp)
+            ) {
+                Text(
+                    text = pillText,
+                    fontFamily = PlusJakartaSansFontFamily,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 10.sp,
+                    color = if (status == BatteryStatus.CHARGING) activePrimary else subColor
+                )
+            }
         }
     }
 }
@@ -396,12 +405,12 @@ private fun DrawScope.drawNeumorphicLiquidWave(
     clipPath: Path
 ) {
     val waterLevelY = (center.y + radius) - (radius * 2f * fillRatio)
-    val waveHeight = 6.dp.toPx()
+    val waveHeight = 4.5.dp.toPx()
 
     wavePath.reset()
     wavePath.moveTo(center.x - radius, center.y + radius)
 
-    val segments = 24
+    val segments = 20
     val twoPi = (2.0 * PI).toFloat()
     for (i in 0..segments) {
         val x = (center.x - radius) + (radius * 2f * i / segments)
@@ -415,7 +424,7 @@ private fun DrawScope.drawNeumorphicLiquidWave(
 
     clipPath.reset()
     clipPath.addOval(
-        androidx.compose.ui.geometry.Rect(
+        Rect(
             center.x - radius,
             center.y - radius,
             center.x + radius,
@@ -430,8 +439,8 @@ private fun DrawScope.drawNeumorphicLiquidWave(
         path = wavePath,
         brush = Brush.verticalGradient(
             colors = listOf(
-                primaryColor.copy(alpha = if (isDarkMode) 0.32f else 0.22f),
-                secondaryColor.copy(alpha = if (isDarkMode) 0.14f else 0.08f),
+                primaryColor.copy(alpha = if (isDarkMode) 0.24f else 0.16f),
+                secondaryColor.copy(alpha = if (isDarkMode) 0.10f else 0.05f),
                 Color.Transparent
             ),
             startY = waterLevelY - waveHeight,
@@ -441,8 +450,8 @@ private fun DrawScope.drawNeumorphicLiquidWave(
 
     drawPath(
         path = wavePath,
-        color = primaryColor.copy(alpha = 0.45f),
-        style = Stroke(width = 1.5.dp.toPx())
+        color = primaryColor.copy(alpha = 0.35f),
+        style = Stroke(width = 1.2.dp.toPx())
     )
 
     drawContext.canvas.restore()
@@ -454,14 +463,14 @@ private fun DrawScope.drawDialTicks(
     accentColor: Color,
     isDarkMode: Boolean
 ) {
-    val totalTicks = 36
-    val tickColor = if (isDarkMode) Color(0x4494A3B8) else Color(0x66CBD5E1)
+    val totalTicks = 11
+    val tickColor = if (isDarkMode) Color(0x4494A3B8) else Color(0x66B0BFCF)
 
     for (i in 0 until totalTicks) {
         val angleDeg = 135f + (i * (270f / (totalTicks - 1)))
         val angleRad = Math.toRadians(angleDeg.toDouble())
-        val isMajor = i % 6 == 0
-        val tickLen = if (isMajor) 5.dp.toPx() else 2.5.dp.toPx()
+        val isMajor = i % 5 == 0
+        val tickLen = if (isMajor) 5.dp.toPx() else 3.dp.toPx()
 
         val startX = center.x + (radius - tickLen) * cos(angleRad).toFloat()
         val startY = center.y + (radius - tickLen) * sin(angleRad).toFloat()
@@ -469,10 +478,10 @@ private fun DrawScope.drawDialTicks(
         val endY = center.y + radius * sin(angleRad).toFloat()
 
         drawLine(
-            color = if (isMajor) accentColor.copy(alpha = 0.65f) else tickColor,
+            color = if (isMajor) accentColor.copy(alpha = 0.60f) else tickColor,
             start = Offset(startX, startY),
             end = Offset(endX, endY),
-            strokeWidth = if (isMajor) 1.5.dp.toPx() else 1.dp.toPx(),
+            strokeWidth = if (isMajor) 1.6.dp.toPx() else 1.1.dp.toPx(),
             cap = StrokeCap.Round
         )
     }

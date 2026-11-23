@@ -2,9 +2,12 @@ package com.example.ui.screens
 
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -18,6 +21,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -26,18 +30,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BatteryChargingFull
-import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.HealthAndSafety
-import androidx.compose.material.icons.filled.HourglassTop
-import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.Timeline
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -53,15 +51,18 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.audio.CyberHapticsEngine
 import com.example.data.BatterySohPrediction
 import com.example.data.BatteryTelemetry
-import com.example.data.CellHealthStatus
 import com.example.data.GlassThemeConfig
 import com.example.ui.components.LiquidGlassCard
-import com.example.ui.components.PulsingNeonDot
+import com.example.ui.components.VoltMetricTile
+import com.example.ui.components.VoltSectionHeader
 import com.example.ui.theme.LocalAmpereTheme
 import com.example.ui.theme.OutfitFontFamily
 import com.example.ui.theme.PlusJakartaSansFontFamily
@@ -72,12 +73,14 @@ import com.example.ui.theme.TactileRoyalBlue
 import com.example.ui.theme.TextCharcoal
 import com.example.ui.theme.TextSlate
 import com.example.ui.theme.TextWhite
+import java.util.Locale
+import kotlin.math.cos
+import kotlin.math.sin
 
 /**
- * PAGE 3: Battery SOH & Charge Cycles Predictor
- * Algorithmic State of Health (SOH) predictor using Room WAL database logs and charge cycle counts.
- * Displays medical-grade cell telemetry, degradation rate, estimated remaining lifespan in days,
- * and forecast curves.
+ * PAGE 3: Cell Health (SOH) & Lifespan Predictor
+ * Unified single hero card + interactive Sync calibration + consistent VoltMetricTile 2x2 grid
+ * + lifespan trajectory chart.
  */
 @Composable
 fun Page3BatterySohScreen(
@@ -86,17 +89,20 @@ fun Page3BatterySohScreen(
     sohPrediction: BatterySohPrediction,
     onRecalibrateSoh: (Boolean) -> Unit
 ) {
+    val context = LocalContext.current
     val scrollState = rememberScrollState()
     val isDark = themeConfig.isDarkMode
     val isArabic = themeConfig.appLanguage.isArabic
     val resolvedTheme = LocalAmpereTheme.current
+    val customTokens = resolvedTheme.themeId != null || resolvedTheme.isSimpleMode || resolvedTheme.isProMode
+
     val glow = when {
         resolvedTheme.isSimpleMode -> 0f
         resolvedTheme.isProMode -> 0.35f
         else -> themeConfig.glowIntensity
     }
-    val textColor = if (resolvedTheme.themeId != null) resolvedTheme.textPrimary else if (isDark) TextWhite else TextCharcoal
-    val subTextColor = if (resolvedTheme.themeId != null) resolvedTheme.textSecondary else if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+    val textColor = if (customTokens) resolvedTheme.textPrimary else if (isDark) TextWhite else TextCharcoal
+    val subTextColor = if (customTokens) resolvedTheme.textSecondary else if (isDark) Color(0xFF94A3B8) else TextSlate
 
     // Automatically recalibrate SOH against Room WAL & hardware registers on page entry
     LaunchedEffect(Unit) {
@@ -106,22 +112,26 @@ fun Page3BatterySohScreen(
     val statusColor = if (resolvedTheme.isSimpleMode) resolvedTheme.accent else sohPrediction.cellStatus.color
     val animatedHealthFraction by animateFloatAsState(
         targetValue = (sohPrediction.healthPercentage / 100f).coerceIn(0f, 1f),
-        animationSpec = spring(
-            dampingRatio = 0.86f,
-            stiffness = Spring.StiffnessMediumLow
-        ),
+        animationSpec = if (resolvedTheme.isSimpleMode) {
+            tween(180)
+        } else {
+            spring(
+                dampingRatio = 0.88f,
+                stiffness = Spring.StiffnessMediumLow
+            )
+        },
         label = "sohGaugeFraction"
     )
 
     val pulseAlpha: Float = if (resolvedTheme.isSimpleMode) {
-        0.85f
+        0.75f
     } else {
         val infiniteTransition = rememberInfiniteTransition(label = "sohPulse")
         val animAlpha by infiniteTransition.animateFloat(
-            initialValue = 0.50f,
-            targetValue = 1.0f,
+            initialValue = 0.45f,
+            targetValue = 0.88f,
             animationSpec = infiniteRepeatable(
-                animation = tween(1200, easing = FastOutSlowInEasing),
+                animation = tween(1400, easing = FastOutSlowInEasing),
                 repeatMode = RepeatMode.Reverse
             ),
             label = "sohPulseAlpha"
@@ -136,108 +146,121 @@ fun Page3BatterySohScreen(
             .padding(bottom = 24.dp)
             .graphicsLayer { clip = false }
     ) {
-        // 1. Header Banner Card
+        // 1. Unified Hero SOH Gauge Card
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 6.dp)
+                .padding(horizontal = 16.dp, vertical = 4.dp)
         ) {
             LiquidGlassCard(
                 modifier = Modifier.fillMaxWidth(),
                 accentColor = statusColor,
                 isDarkMode = isDark,
+                shape = RoundedCornerShape(22.dp),
                 glowIntensity = glow
             ) {
-                Column(modifier = Modifier.padding(18.dp)) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(18.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Header row inside Hero Card: Icon + Title + Chemistry + Sync Action
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
                             Box(
                                 modifier = Modifier
-                                    .size(44.dp)
+                                    .size(36.dp)
                                     .clip(CircleShape)
-                                    .background(statusColor.copy(alpha = if (isDark) 0.22f else 0.12f))
-                                    .border(1.2.dp, statusColor, CircleShape),
+                                    .background(statusColor.copy(alpha = if (isDark) 0.18f else 0.12f))
+                                    .border(1.dp, statusColor.copy(alpha = 0.45f), CircleShape),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.HealthAndSafety,
                                     contentDescription = null,
                                     tint = statusColor,
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier.size(19.dp)
                                 )
                             }
-                            Spacer(modifier = Modifier.width(12.dp))
+                            Spacer(modifier = Modifier.width(10.dp))
                             Column {
                                 Text(
-                                    text = if (isArabic) "صحة الخلية وتوقع الدورات (SOH)" else "BATTERY SOH & CYCLE PREDICTOR",
+                                    text = if (isArabic) "صحة الخلية (SOH)" else "Cell Health (SOH)",
                                     fontFamily = OutfitFontFamily,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp,
-                                    letterSpacing = 0.5.sp,
-                                    color = textColor
+                                    fontSize = 14.5.sp,
+                                    color = textColor,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = if (isArabic) "قياسات التآكل الكيميائي الدقيقة للبطارية" else "Medical-Grade Degradation Telemetry",
+                                    text = "${telemetry.technology} • NMC 811",
                                     fontFamily = PlusJakartaSansFontFamily,
-                                    fontSize = 11.sp,
-                                    color = subTextColor
+                                    fontSize = 10.5.sp,
+                                    color = subTextColor,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
-                        PulsingNeonDot(color = statusColor, sizeDp = 7.dp)
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        // Interactive Recalibrate / Sync pill with accessible touch target
+                        Box(
+                            modifier = Modifier
+                                .minimumInteractiveComponentSize()
+                                .heightIn(min = 38.dp)
+                                .clip(RoundedCornerShape(11.dp))
+                                .background(statusColor.copy(alpha = if (isDark) 0.18f else 0.12f))
+                                .border(1.dp, statusColor.copy(alpha = 0.45f), RoundedCornerShape(11.dp))
+                                .clickable {
+                                    CyberHapticsEngine.triggerTactileTick(context)
+                                    onRecalibrateSoh(true)
+                                }
+                                .padding(horizontal = 11.dp, vertical = 7.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Sync,
+                                    contentDescription = if (isArabic) "تحديث المعايرة" else "Sync Calibration",
+                                    tint = statusColor,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Text(
+                                    text = if (isArabic) "تحديث" else "Sync",
+                                    fontFamily = OutfitFontFamily,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 11.5.sp,
+                                    color = statusColor
+                                )
+                            }
+                        }
                     }
-                }
-            }
-        }
 
-        Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
-        // 2. Futuristic Medical SOH Gauge Card
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-        ) {
-            LiquidGlassCard(
-                modifier = Modifier.fillMaxWidth(),
-                accentColor = statusColor,
-                isDarkMode = isDark,
-                glowIntensity = glow
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = if (isArabic) "الحالة الصحية للخلية (SOH)" else "CELL STATE OF HEALTH (SOH)",
-                        fontFamily = OutfitFontFamily,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp,
-                        letterSpacing = 1.sp,
-                        color = subTextColor
-                    )
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    // Circular Medical SOH Gauge
+                    // Precision Circular Medical SOH Gauge
                     Box(
-                        modifier = Modifier.size(200.dp),
+                        modifier = Modifier.size(186.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Canvas(modifier = Modifier.fillMaxSize()) {
                             val w = size.width
-                            val h = size.height
-                            val strokeWidth = 14.dp.toPx()
-                            val center = Offset(w / 2f, h / 2f)
+                            val strokeWidth = 13.dp.toPx()
+                            val center = Offset(w / 2f, size.height / 2f)
                             val radius = (w - strokeWidth) / 2f
 
-                            // Background Inactive Arc
                             drawArc(
                                 color = if (isDark) Color(0xFF1E293B) else Color(0xFFCFD9E6),
                                 startAngle = 140f,
@@ -246,63 +269,62 @@ fun Page3BatterySohScreen(
                                 style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
                             )
 
-                            // Active Health Arc (smooth animated sub-second sweep)
                             val activeSweep = 260f * animatedHealthFraction
-
-                            drawArc(
-                                brush = Brush.sweepGradient(
-                                    colors = listOf(
-                                        TactileGreen,
-                                        TactileCyan,
-                                        Color(0xFF00E5FF),
-                                        TactileGreen
+                            if (activeSweep > 0f) {
+                                drawArc(
+                                    brush = Brush.sweepGradient(
+                                        colors = listOf(
+                                            TactileGreen,
+                                            TactileCyan,
+                                            statusColor,
+                                            TactileGreen
+                                        ),
+                                        center = center
                                     ),
-                                    center = center
-                                ),
-                                startAngle = 140f,
-                                sweepAngle = activeSweep,
-                                useCenter = false,
-                                style = Stroke(
-                                    width = strokeWidth + 2.dp.toPx(),
-                                    cap = StrokeCap.Round
+                                    startAngle = 140f,
+                                    sweepAngle = activeSweep,
+                                    useCenter = false,
+                                    style = Stroke(
+                                        width = strokeWidth,
+                                        cap = StrokeCap.Round
+                                    )
                                 )
-                            )
 
-                            // Medical Calibrated Tick Needle Indicator
-                            val angleRad = Math.toRadians((140f + activeSweep).toDouble())
-                            val needleX = (center.x + radius * Math.cos(angleRad)).toFloat()
-                            val needleY = (center.y + radius * Math.sin(angleRad)).toFloat()
+                                val angleRad = Math.toRadians((140f + activeSweep).toDouble())
+                                val needleX = center.x + radius * cos(angleRad).toFloat()
+                                val needleY = center.y + radius * sin(angleRad).toFloat()
 
-                            drawCircle(
-                                color = Color.White,
-                                radius = 6.dp.toPx(),
-                                center = Offset(needleX, needleY)
-                            )
-                            drawCircle(
-                                color = statusColor,
-                                radius = 3.dp.toPx(),
-                                center = Offset(needleX, needleY)
-                            )
+                                drawCircle(
+                                    color = Color.White,
+                                    radius = 5.5.dp.toPx(),
+                                    center = Offset(needleX, needleY)
+                                )
+                                drawCircle(
+                                    color = statusColor,
+                                    radius = 3.dp.toPx(),
+                                    center = Offset(needleX, needleY)
+                                )
+                            }
                         }
 
-                        // Gauge Center Texts (live sub-second precision)
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                text = String.format(java.util.Locale.US, "%.2f%%", sohPrediction.healthPercentage),
+                                text = String.format(Locale.US, "%.2f%%", sohPrediction.healthPercentage),
                                 fontFamily = OutfitFontFamily,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 36.sp,
+                                fontSize = 34.sp,
                                 color = textColor
                             )
+                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = if (isArabic) {
-                                    "العمر المتبقي المقدر: ${sohPrediction.estimatedLifespanDays} يوماً"
+                                    "متبقي ~${sohPrediction.estimatedLifespanDays} يوماً"
                                 } else {
-                                    "EST. ${sohPrediction.estimatedLifespanDays} DAYS REMAINING"
+                                    "~${sohPrediction.estimatedLifespanDays} DAYS LEFT"
                                 },
                                 fontFamily = PlusJakartaSansFontFamily,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 11.sp,
+                                fontSize = 10.5.sp,
                                 color = statusColor
                             )
                         }
@@ -310,28 +332,27 @@ fun Page3BatterySohScreen(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // Cell Status Label Banner
+                    // Crisp Verdict Strip
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(statusColor.copy(alpha = if (isDark) 0.20f else 0.12f))
-                            .border(1.2.dp, statusColor.copy(alpha = pulseAlpha), RoundedCornerShape(12.dp))
-                            .padding(horizontal = 14.dp, vertical = 10.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(statusColor.copy(alpha = if (isDark) 0.16f else 0.10f))
+                            .border(1.dp, statusColor.copy(alpha = pulseAlpha * 0.65f), RoundedCornerShape(14.dp))
+                            .padding(horizontal = 13.dp, vertical = 10.dp)
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.Verified,
-                                    contentDescription = null,
-                                    tint = statusColor,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
+                            Icon(
+                                imageVector = Icons.Default.Verified,
+                                contentDescription = null,
+                                tint = statusColor,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = sohPrediction.cellStatus.localizedLabel(isArabic),
                                     fontFamily = OutfitFontFamily,
@@ -339,33 +360,31 @@ fun Page3BatterySohScreen(
                                     fontSize = 13.sp,
                                     color = textColor
                                 )
+                                Text(
+                                    text = sohPrediction.cellStatus.localizedDescription(isArabic),
+                                    fontFamily = PlusJakartaSansFontFamily,
+                                    fontSize = 10.5.sp,
+                                    color = subTextColor,
+                                    lineHeight = 15.sp,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
-                            Text(
-                                text = if (isArabic) "بنية NMC 811" else "NMC 811 LATTICE",
-                                fontFamily = PlusJakartaSansFontFamily,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 10.sp,
-                                color = statusColor
-                            )
                         }
                     }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = sohPrediction.cellStatus.localizedDescription(isArabic),
-                        fontFamily = PlusJakartaSansFontFamily,
-                        fontSize = 11.sp,
-                        color = subTextColor,
-                        lineHeight = 15.sp
-                    )
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(14.dp))
 
-        // 3. 2x2 Telemetry Medical Cards Grid (Cycles, Usable Capacity, Impedance, Coulombic)
+        // 2. Unified 2x2 Cell Metrics Grid
+        VoltSectionHeader(
+            title = if (isArabic) "مؤشرات كفاءة الخلية" else "Cell Telemetry Breakdown",
+            isDark = isDark
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -376,20 +395,17 @@ fun Page3BatterySohScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // Effective Capacity
-                SohMetricCard(
+                VoltMetricTile(
                     modifier = Modifier.weight(1f),
-                    title = if (isArabic) "السعة الفعلية" else "EFFECTIVE CAPACITY",
+                    title = if (isArabic) "السعة الفعلية" else "Effective Capacity",
                     value = "${sohPrediction.estimatedCurrentCapacityMah} mAh",
-                    subtext = if (isArabic) "المصنعية ${sohPrediction.originalCapacityMah} mAh" else "Factory ${sohPrediction.originalCapacityMah} mAh",
+                    subtext = if (isArabic) "المصنعية ${sohPrediction.originalCapacityMah} mAh" else "Design ${sohPrediction.originalCapacityMah} mAh",
                     accentColor = statusColor,
                     isDark = isDark
                 )
-
-                // Total Cycles
-                SohMetricCard(
+                VoltMetricTile(
                     modifier = Modifier.weight(1f),
-                    title = if (isArabic) "دورات الشحن" else "CHARGE CYCLES",
+                    title = if (isArabic) "دورات الشحن" else "Charge Cycles",
                     value = if (isArabic) "${sohPrediction.totalCyclesCompleted} دورة" else "${sohPrediction.totalCyclesCompleted} Cycles",
                     subtext = if (isArabic) "متبقٍ ${sohPrediction.estimatedRemainingCycles} دورة إلى 80%" else "${sohPrediction.estimatedRemainingCycles} cycles to 80%",
                     accentColor = TactileRoyalBlue,
@@ -401,31 +417,28 @@ fun Page3BatterySohScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // Internal Impedance ESR
-                SohMetricCard(
+                VoltMetricTile(
                     modifier = Modifier.weight(1f),
-                    title = if (isArabic) "المقاومة الداخلية (ESR)" else "CELL IMPEDANCE (ESR)",
+                    title = if (isArabic) "المقاومة الداخلية (ESR)" else "Internal ESR",
                     value = "${sohPrediction.internalResistanceEstimateMilliOhms} mΩ",
-                    subtext = if (isArabic) "التوصيل المثالي < 65mΩ" else "Optimal Conductivity < 65mΩ",
+                    subtext = if (isArabic) "المثالي < 65 mΩ" else "Optimal < 65 mΩ",
                     accentColor = TactileCyan,
                     isDark = isDark
                 )
-
-                // Coulombic Efficiency
-                SohMetricCard(
+                VoltMetricTile(
                     modifier = Modifier.weight(1f),
-                    title = if (isArabic) "الكفاءة الكولومبية" else "COULOMBIC RATIO",
-                    value = String.format(java.util.Locale.US, "%.2f%%", sohPrediction.coulombicEfficiencyPercent),
-                    subtext = if (isArabic) "معدل الاحتفاظ بالشحنة" else "Electron Retention Rate",
+                    title = if (isArabic) "الكفاءة الكولومبية" else "Coulombic Ratio",
+                    value = String.format(Locale.US, "%.2f%%", sohPrediction.coulombicEfficiencyPercent),
+                    subtext = if (isArabic) "معدل الاحتفاظ بالشحنة" else "Charge retention",
                     accentColor = TactileGreen,
                     isDark = isDark
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // 4. Lifespan Forecast & Degradation Trajectory Chart
+        // 3. Lifespan Forecast & Degradation Trajectory Card
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -435,34 +448,42 @@ fun Page3BatterySohScreen(
                 modifier = Modifier.fillMaxWidth(),
                 accentColor = TactileCyan,
                 isDarkMode = isDark,
+                shape = RoundedCornerShape(20.dp),
                 glowIntensity = glow
             ) {
-                Column(modifier = Modifier.padding(18.dp)) {
+                Column(modifier = Modifier.padding(16.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = if (isArabic) "منحنى التوقع العمراني للخلية" else "LIFESPAN TRAJECTORY FORECAST",
+                            text = if (isArabic) "منحنى التوقع العمراني للخلية" else "Lifespan Trajectory Forecast",
                             fontFamily = OutfitFontFamily,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp,
-                            letterSpacing = 0.5.sp,
-                            color = textColor
+                            fontSize = 13.5.sp,
+                            color = textColor,
+                            modifier = Modifier.weight(1f)
                         )
-                        Text(
-                            text = if (isArabic) "الاستبدال المتوقع: ${sohPrediction.projectedReplacementDate}" else "PROJECTED: ${sohPrediction.projectedReplacementDate}",
-                            fontFamily = PlusJakartaSansFontFamily,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 10.sp,
-                            color = TactileCyan
-                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(TactileCyan.copy(alpha = if (isDark) 0.16f else 0.12f))
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = if (isArabic) "متوقع: ${sohPrediction.projectedReplacementDate}" else "Est. ${sohPrediction.projectedReplacementDate}",
+                                fontFamily = PlusJakartaSansFontFamily,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 10.sp,
+                                color = TactileCyan
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // Canvas Trajectory Curve
                     val trajectoryPath = remember { Path() }
                     val trajectoryFillPath = remember { Path() }
                     val trajectoryDashEffect = remember { PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f) }
@@ -470,7 +491,7 @@ fun Page3BatterySohScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(120.dp)
+                            .height(116.dp)
                     ) {
                         Canvas(modifier = Modifier.fillMaxSize()) {
                             val w = size.width
@@ -480,11 +501,11 @@ fun Page3BatterySohScreen(
                             val fillPath = trajectoryFillPath.apply { reset() }
 
                             val points = listOf(
-                                Offset(0f, h * 0.15f), // 100%
-                                Offset(w * 0.20f, h * 0.22f), // 98%
-                                Offset(w * 0.45f, h * 0.38f), // 95%
-                                Offset(w * 0.70f, h * 0.58f), // 90%
-                                Offset(w, h * 0.82f) // 80% threshold
+                                Offset(0f, h * 0.15f),
+                                Offset(w * 0.20f, h * 0.22f),
+                                Offset(w * 0.45f, h * 0.38f),
+                                Offset(w * 0.70f, h * 0.58f),
+                                Offset(w, h * 0.82f)
                             )
 
                             path.moveTo(points[0].x, points[0].y)
@@ -505,12 +526,11 @@ fun Page3BatterySohScreen(
                             fillPath.lineTo(w, h)
                             fillPath.close()
 
-                            // Fill
                             drawPath(
                                 path = fillPath,
                                 brush = Brush.verticalGradient(
                                     colors = listOf(
-                                        TactileCyan.copy(alpha = if (isDark) 0.25f else 0.15f),
+                                        TactileCyan.copy(alpha = if (isDark) 0.22f else 0.14f),
                                         Color.Transparent
                                     ),
                                     startY = 0f,
@@ -518,30 +538,28 @@ fun Page3BatterySohScreen(
                                 )
                             )
 
-                            // 80% EOL guideline
                             drawLine(
-                                color = TactileCoralRed.copy(alpha = 0.4f),
+                                color = TactileCoralRed.copy(alpha = 0.45f),
                                 start = Offset(0f, h * 0.82f),
                                 end = Offset(w, h * 0.82f),
                                 strokeWidth = 1.dp.toPx(),
                                 pathEffect = trajectoryDashEffect
                             )
 
-                            // Stroke
                             drawPath(
                                 path = path,
                                 color = TactileCyan,
-                                style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round)
+                                style = Stroke(width = 2.4.dp.toPx(), cap = StrokeCap.Round)
                             )
 
-                            // Current operating point indicator (responds live to cycle count & health %)
                             val cycleFraction = (sohPrediction.totalCyclesCompleted / 1000f).coerceIn(0f, 1f)
                             val healthDropFraction = ((100f - sohPrediction.healthPercentage) / 20f).coerceIn(0f, 1f)
                             val curX = w * cycleFraction
                             val curY = h * (0.15f + (0.67f * healthDropFraction))
+
                             drawCircle(
-                                color = statusColor.copy(alpha = 0.3f),
-                                radius = 8.dp.toPx(),
+                                color = statusColor.copy(alpha = 0.28f),
+                                radius = 7.dp.toPx(),
                                 center = Offset(curX, curY)
                             )
                             drawCircle(
@@ -564,62 +582,21 @@ fun Page3BatterySohScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = if (isArabic) "الدورة 0 (صحة 100%)" else "Cycle 0 (100% Health)",
+                            text = if (isArabic) "الدورة 0 (100%)" else "Cycle 0 (100%)",
+                            fontFamily = PlusJakartaSansFontFamily,
                             fontSize = 10.sp,
                             color = subTextColor
                         )
                         Text(
-                            text = if (isArabic) "الدورة 1000 (حد 80%)" else "Cycle 1000 (80% Health EOL)",
+                            text = if (isArabic) "الدورة 1000 (حد 80%)" else "Cycle 1000 (80% EOL)",
+                            fontFamily = PlusJakartaSansFontFamily,
+                            fontWeight = FontWeight.SemiBold,
                             fontSize = 10.sp,
                             color = TactileCoralRed
                         )
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun SohMetricCard(
-    modifier: Modifier = Modifier,
-    title: String,
-    value: String,
-    subtext: String,
-    accentColor: Color,
-    isDark: Boolean
-) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(14.dp))
-            .background(if (isDark) Color(0xFF1E293B) else Color(0xFFE7ECF3))
-            .border(1.dp, if (isDark) Color(0xFF334155) else Color(0x99BECAD8), RoundedCornerShape(14.dp))
-            .padding(14.dp)
-    ) {
-        Column {
-            Text(
-                text = title,
-                fontFamily = OutfitFontFamily,
-                fontWeight = FontWeight.Bold,
-                fontSize = 10.sp,
-                letterSpacing = 0.5.sp,
-                color = TextSlate
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = value,
-                fontFamily = OutfitFontFamily,
-                fontWeight = FontWeight.Bold,
-                fontSize = 15.sp,
-                color = accentColor
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = subtext,
-                fontFamily = PlusJakartaSansFontFamily,
-                fontSize = 10.sp,
-                color = if (isDark) Color(0xFF94A3B8) else TextSlate
-            )
         }
     }
 }

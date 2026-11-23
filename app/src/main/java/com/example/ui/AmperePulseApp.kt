@@ -18,12 +18,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -188,10 +187,10 @@ fun AmperePulseApp(viewModel: AmperePulseViewModel) {
                 LuxuryTopBar(
                     title = "VOLT CORE",
                     subtitle = when (selectedTab) {
-                        NavigationTab.BATTERY -> if (isArabic) "الصفحة 1: مصفوفة البطارية الحية" else "PAGE 1: LIVING BATTERY MATRIX"
-                        NavigationTab.BATTERY_SOH -> if (isArabic) "الصفحة 2: صحة الخلية ودورات الشحن" else "PAGE 2: BATTERY SOH & CYCLE PREDICTOR"
-                        NavigationTab.CABLE_DNA -> if (isArabic) "الصفحة 3: فحص الكابل والشاحن" else "PAGE 3: CABLE DNA & CHARGER ANALYZER"
-                        NavigationTab.MY_SPACE -> if (isArabic) "الصفحة 4: مساحة القياسات والسجل" else "PAGE 4: TELEMETRY SPACE & LOG"
+                        NavigationTab.BATTERY -> if (isArabic) "مراقبة الطاقة اللحظية" else "Real-Time Power Telemetry"
+                        NavigationTab.BATTERY_SOH -> if (isArabic) "صحة الخلية ودورات الشحن" else "Cell Health & Cycle Analytics"
+                        NavigationTab.CABLE_DNA -> if (isArabic) "فحص الكابل وبروتوكول الشحن" else "Cable & Protocol Diagnostics"
+                        NavigationTab.MY_SPACE -> if (isArabic) "وحدة القياس الحية والسجل" else "Live Oscilloscope & Logs"
                     },
                     isMenuOpen = isSettingsOpen,
                     onMenuToggle = { viewModel.toggleSettingsMenu(!isSettingsOpen) },
@@ -225,6 +224,8 @@ fun AmperePulseApp(viewModel: AmperePulseViewModel) {
                 Box(
                     modifier = Modifier
                         .weight(1f)
+                        .widthIn(max = 680.dp)
+                        .align(Alignment.CenterHorizontally)
                         .fillMaxWidth()
                         .padding(bottom = 74.dp)
                         .pointerInput(isSettingsOpen, bottomBannerExclusionPx, isRtlLayout) {
@@ -282,40 +283,33 @@ fun AmperePulseApp(viewModel: AmperePulseViewModel) {
                             targetState = selectedTab,
                             transitionSpec = {
                                 if (themeConfig.isSimpleMode) {
-                                    fadeIn(androidx.compose.animation.core.tween(130)) togetherWith
-                                        fadeOut(androidx.compose.animation.core.tween(100))
+                                    fadeIn(androidx.compose.animation.core.tween(120)) togetherWith
+                                        fadeOut(androidx.compose.animation.core.tween(90))
                                 } else {
                                     val isMovingForward = targetState.ordinal > initialState.ordinal
                                     val dirSign = if (isRtlLayout) -1 else 1
                                     (slideInHorizontally(
                                         initialOffsetX = {
-                                            (if (isMovingForward) 1 else -1) * dirSign * (it * 0.40f).toInt()
+                                            (if (isMovingForward) 1 else -1) * dirSign * (it * 0.14f).toInt()
                                         },
                                         animationSpec = spring(
-                                            dampingRatio = 0.82f,
-                                            stiffness = Spring.StiffnessMedium
-                                        )
-                                    ) + scaleIn(
-                                        initialScale = 0.96f,
-                                        animationSpec = spring(
-                                            dampingRatio = 0.82f,
-                                            stiffness = Spring.StiffnessMedium
+                                            dampingRatio = 0.94f,
+                                            stiffness = 500f
                                         )
                                     ) + fadeIn(
-                                        animationSpec = spring(stiffness = Spring.StiffnessMedium)
+                                        animationSpec = androidx.compose.animation.core.tween(200)
                                     )).togetherWith(
                                         slideOutHorizontally(
                                             targetOffsetX = {
-                                                (if (isMovingForward) -1 else 1) * dirSign * (it * 0.25f).toInt()
+                                                (if (isMovingForward) -1 else 1) * dirSign * (it * 0.10f).toInt()
                                             },
                                             animationSpec = spring(
-                                                dampingRatio = 0.85f,
-                                                stiffness = Spring.StiffnessMedium
+                                                dampingRatio = 0.94f,
+                                                stiffness = 500f
                                             )
-                                        ) + scaleOut(
-                                            targetScale = 0.97f,
-                                            animationSpec = spring(stiffness = Spring.StiffnessMedium)
-                                        ) + fadeOut()
+                                        ) + fadeOut(
+                                            animationSpec = androidx.compose.animation.core.tween(150)
+                                        )
                                     )
                                 }
                             },

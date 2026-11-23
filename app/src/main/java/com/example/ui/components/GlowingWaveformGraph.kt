@@ -205,9 +205,10 @@ fun MetricSparkline(
         sheenPhase = animSheen
     }
 
-    // Pre-allocated paths & coordinate buffers to prevent GC churn
+    // Pre-allocated paths, dash effect & coordinate buffers to prevent GC churn
     val strokePath = remember { Path() }
     val fillPath = remember { Path() }
+    val baselineDashEffect = remember { PathEffect.dashPathEffect(floatArrayOf(5f, 7f), 0f) }
     val coordBuffer = remember { Array(FluidCurveMath.DEFAULT_KNOT_COUNT) { Offset.Zero } }
 
     Box(
@@ -273,7 +274,7 @@ fun MetricSparkline(
                 start = Offset(0f, h * 0.5f),
                 end = Offset(w, h * 0.5f),
                 strokeWidth = 0.8.dp.toPx(),
-                pathEffect = PathEffect.dashPathEffect(floatArrayOf(5f, 7f), 0f)
+                pathEffect = baselineDashEffect
             )
 
             // 1. Silky vertical gradient underfill

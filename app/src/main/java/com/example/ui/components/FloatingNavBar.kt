@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -244,9 +245,10 @@ fun FloatingGlassNavBar(
 
     Box(
         modifier = modifier
+            .widthIn(max = 680.dp)
             .fillMaxWidth()
             .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(horizontal = 14.dp, vertical = 8.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
             .height(62.dp)
             .graphicsLayer { clip = false },
         contentAlignment = Alignment.Center
@@ -425,8 +427,8 @@ fun FloatingGlassNavBar(
                         }
                     }
             ) {
-                // Layer 1: Realistic Fluid Glass Droplet Canvas (draw-only invalidation)
-                if (showLiquidDroplet) {
+                // Layer 1: Realistic Fluid Glass Droplet Canvas (draw-only invalidation; bypassed cleanly in Simple Mode)
+                if (showLiquidDroplet && !isSimple) {
                     val dropletPath = remember { Path() }
                     val highlightPath = remember { Path() }
                     val leadingLensPath = remember { Path() }
@@ -459,19 +461,26 @@ fun FloatingGlassNavBar(
                         val iconColor by animateColorAsState(
                             targetValue = if (isCurrentActive) accentColor else TextSlate,
                             animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioLowBouncy,
-                                stiffness = Spring.StiffnessMediumLow
+                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                stiffness = Spring.StiffnessMedium
                             ),
                             label = "tabIconColor"
                         )
 
+                        val showStaticPill = isCurrentActive && (isSimple || !showLiquidDroplet)
                         Box(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight()
+                                .padding(horizontal = 3.dp, vertical = 4.dp)
                                 .testTag(tab.tag)
                                 .minimumInteractiveComponentSize()
-                                .clip(RoundedCornerShape(18.dp))
+                                .clip(RoundedCornerShape(20.dp))
+                                .then(
+                                    if (showStaticPill) {
+                                        Modifier.background(accentColor.copy(alpha = if (isDarkMode) 0.16f else 0.12f))
+                                    } else Modifier
+                                )
                                 .clickable(
                                     interactionSource = remember { MutableInteractionSource() },
                                     indication = null

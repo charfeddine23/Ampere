@@ -2,6 +2,9 @@ package com.example.ui.screens
 
 import android.graphics.Bitmap
 import android.util.LruCache
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -35,6 +38,7 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -59,6 +63,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import com.example.audio.CyberHapticsEngine
+import com.example.data.BatteryStatus
 import com.example.data.BatteryTelemetry
 import com.example.data.DeviceHardwareProfile
 import com.example.data.GlassThemeConfig
@@ -72,6 +77,8 @@ import com.example.data.telemetry.BatteryScienceClassifier
 import com.example.ui.components.LiquidBatteryRing
 import com.example.ui.components.LiquidGlassCard
 import com.example.ui.components.PulsingNeonDot
+import com.example.ui.components.VoltMetricTile
+import com.example.ui.components.VoltSectionHeader
 import com.example.ui.theme.LocalAmpereTheme
 import com.example.ui.theme.OutfitFontFamily
 import com.example.ui.theme.PlusJakartaSansFontFamily
@@ -85,17 +92,18 @@ import com.example.ui.theme.TextWhite
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.Locale
+import kotlin.math.abs
 
 private val appIconCache = LruCache<String, ImageBitmap>(48)
 
 /**
- * PAGE 1: Scientific Real-Time Battery Monitor
- * Structured around IEEE 1625 / JEITA / BU-808 electrochemistry:
- * 1. Compact live hardware state banner & 100% Auto Sensors indicator
- * 2. Live liquid ring gauge (SoC %, W, plug rail)
- * 3. Conditional IEEE 1625 / JEITA Thermal Stress warning (>= device ceiling)
- * 4. 2x2 Scientific Telemetry Matrix dynamically prioritized by active state
- * 5. Per-App Battery Consumption ranking (sorted highest consumer first)
+ * PAGE 1: Precision Live Battery Monitor
+ * Redesigned around minimalist Swiss Precision Telemetry:
+ * 1. Compact single-row status & sensor pill
+ * 2. Hero circular battery ring + 3-stat quick telemetry bar
+ * 3. Conditional JEITA / IEEE 1625 thermal stress notice
+ * 4. Unified 2x2 scientific telemetry matrix
+ * 5. Ranked per-app battery consumption panel
  */
 @Composable
 fun Page1LivingBatteryScreen(
@@ -110,6 +118,8 @@ fun Page1LivingBatteryScreen(
     val isArabic = themeConfig.appLanguage.isArabic
     val state = telemetry.livingState
     val resolvedTheme = LocalAmpereTheme.current
+    val customTokens = resolvedTheme.themeId != null || resolvedTheme.isSimpleMode || resolvedTheme.isProMode
+
     val primaryColor = when {
         resolvedTheme.isSimpleMode -> resolvedTheme.accent
         resolvedTheme.isProMode -> lerp(state.neonPrimary, resolvedTheme.accent, 0.55f)
@@ -121,12 +131,12 @@ fun Page1LivingBatteryScreen(
         else -> themeConfig.glowIntensity
     }
     val autoSensorsColor = when {
-        resolvedTheme.isSimpleMode -> resolvedTheme.accent
-        resolvedTheme.isProMode -> resolvedTheme.accent
+        resolvedTheme.isSimpleMode || resolvedTheme.isProMode -> resolvedTheme.accent
         else -> TactileGreen
     }
-    val textColor = if (resolvedTheme.themeId != null) resolvedTheme.textPrimary else if (isDark) TextWhite else TextCharcoal
-    val subTextColor = if (resolvedTheme.themeId != null) resolvedTheme.textSecondary else TextSlate
+    val textColor = if (customTokens) resolvedTheme.textPrimary else if (isDark) TextWhite else TextCharcoal
+    val subTextColor = if (customTokens) resolvedTheme.textSecondary else if (isDark) Color(0xFF94A3B8) else TextSlate
+    val insetBg = if (customTokens) resolvedTheme.surfaceInset else if (isDark) Color(0xFF151F30) else Color(0xFFDCE4EE)
 
     val scienceProfile = remember(telemetry, deviceProfile, isArabic) {
         BatteryScienceClassifier.buildScienceProfile(telemetry, deviceProfile, isArabic = isArabic)
@@ -146,7 +156,7 @@ fun Page1LivingBatteryScreen(
             .padding(bottom = 24.dp)
             .graphicsLayer { clip = false }
     ) {
-        // 1. Compact Real-Time Sensor State Banner
+        // 1. Compact Status & Auto-Sensors Strip Pill
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -162,7 +172,7 @@ fun Page1LivingBatteryScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 9.dp),
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -174,8 +184,8 @@ fun Page1LivingBatteryScreen(
                             modifier = Modifier
                                 .size(32.dp)
                                 .clip(CircleShape)
-                                .background(primaryColor.copy(alpha = if (isDark) 0.22f else 0.12f))
-                                .border(1.dp, primaryColor.copy(alpha = 0.5f), CircleShape),
+                                .background(primaryColor.copy(alpha = if (isDark) 0.18f else 0.12f))
+                                .border(1.dp, primaryColor.copy(alpha = 0.40f), CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
@@ -187,11 +197,11 @@ fun Page1LivingBatteryScreen(
                                 },
                                 contentDescription = state.localizedTitle(isArabic),
                                 tint = primaryColor,
-                                modifier = Modifier.size(17.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                         }
 
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(10.dp))
 
                         Column {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -204,13 +214,15 @@ fun Page1LivingBatteryScreen(
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 13.sp,
                                     letterSpacing = 0.3.sp,
-                                    color = textColor
+                                    color = textColor,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 PulsingNeonDot(color = primaryColor, sizeDp = 5.dp)
                             }
                             val syncTag = if (themeConfig.isProMode) {
-                                if (isArabic) " • 10ms محترف" else " • 10ms PRO"
+                                if (isArabic) " • 10ms" else " • 10ms PRO"
                             } else ""
                             Text(
                                 text = "${scienceProfile.phaseLabelAr} • $formattedTemp • ${String.format(Locale.US, "%.2f", scienceProfile.cRate)}C$syncTag",
@@ -228,9 +240,9 @@ fun Page1LivingBatteryScreen(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(10.dp))
-                            .background(autoSensorsColor.copy(alpha = if (isDark) 0.22f else 0.14f))
-                            .border(1.dp, autoSensorsColor.copy(alpha = 0.55f), RoundedCornerShape(10.dp))
-                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                            .background(autoSensorsColor.copy(alpha = if (isDark) 0.18f else 0.12f))
+                            .border(1.dp, autoSensorsColor.copy(alpha = 0.45f), RoundedCornerShape(10.dp))
+                            .padding(horizontal = 9.dp, vertical = 5.dp)
                             .testTag("auto_sensors_status_badge"),
                         contentAlignment = Alignment.Center
                     ) {
@@ -243,11 +255,11 @@ fun Page1LivingBatteryScreen(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = if (isArabic) "100% مستشعرات تلقائية" else "100% AUTO SENSORS",
+                                text = if (isArabic) "تلقائي" else "AUTO",
                                 fontFamily = OutfitFontFamily,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 9.sp,
-                                letterSpacing = 0.3.sp,
+                                fontSize = 9.5.sp,
+                                letterSpacing = 0.4.sp,
                                 color = autoSensorsColor
                             )
                         }
@@ -256,13 +268,13 @@ fun Page1LivingBatteryScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        // 2. Center Liquid Battery Ring
+        // 2. Hero Precision Battery Ring
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 4.dp),
+                .padding(vertical = 2.dp),
             contentAlignment = Alignment.Center
         ) {
             LiquidBatteryRing(
@@ -272,13 +284,75 @@ fun Page1LivingBatteryScreen(
                 wattageW = telemetry.wattageW,
                 livingState = state,
                 isDarkMode = isDark,
-                sizeDp = 224.dp,
+                sizeDp = 216.dp,
                 glowIntensity = glow,
                 ambientLiquidWaves = themeConfig.ambientLiquidWaves
             )
         }
 
         Spacer(modifier = Modifier.height(12.dp))
+
+        // 2b. Compact 3-Stat Quick Summary Strip under the Ring
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+        ) {
+            LiquidGlassCard(
+                modifier = Modifier.fillMaxWidth(),
+                accentColor = primaryColor,
+                isDarkMode = isDark,
+                shape = RoundedCornerShape(16.dp),
+                glowIntensity = glow * 0.65f
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val voltageLabel = if (telemetry.voltageMv > 0) {
+                        "${String.format(Locale.US, "%.2f", telemetry.voltageMv / 1000f)} V"
+                    } else "--"
+                    val currentLabel = "${if (telemetry.currentMa >= 0) "+" else ""}${telemetry.currentMa} mA"
+                    val estLabel = formatRemainingTime(
+                        minutes = telemetry.estimatedMinutesRemaining,
+                        isCharging = telemetry.status == BatteryStatus.CHARGING,
+                        isArabic = isArabic
+                    )
+
+                    QuickTelemetryStatItem(
+                        label = if (isArabic) "الجهد" else "Voltage",
+                        value = voltageLabel,
+                        accent = primaryColor,
+                        textColor = textColor,
+                        subTextColor = subTextColor,
+                        modifier = Modifier.weight(1f)
+                    )
+                    QuickStripDivider(color = subTextColor.copy(alpha = 0.22f))
+                    QuickTelemetryStatItem(
+                        label = if (isArabic) "التيار" else "Current",
+                        value = currentLabel,
+                        accent = primaryColor,
+                        textColor = textColor,
+                        subTextColor = subTextColor,
+                        modifier = Modifier.weight(1f)
+                    )
+                    QuickStripDivider(color = subTextColor.copy(alpha = 0.22f))
+                    QuickTelemetryStatItem(
+                        label = if (isArabic) "المتبقي" else "Est. Time",
+                        value = estLabel,
+                        accent = primaryColor,
+                        textColor = textColor,
+                        subTextColor = subTextColor,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
 
         // 3. Conditional JEITA / IEEE 1625 Thermal Stress Notice
         if (state == LivingBatteryState.OVERDRIVE_HEATING) {
@@ -291,6 +365,7 @@ fun Page1LivingBatteryScreen(
                     modifier = Modifier.fillMaxWidth(),
                     accentColor = TactileCoralRed,
                     isDarkMode = isDark,
+                    shape = RoundedCornerShape(18.dp),
                     glowIntensity = glow,
                     testTag = "thermal_stress_warning_card"
                 ) {
@@ -312,7 +387,7 @@ fun Page1LivingBatteryScreen(
                                 fontFamily = OutfitFontFamily,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 12.sp,
-                                letterSpacing = 0.4.sp,
+                                letterSpacing = 0.3.sp,
                                 color = TactileCoralRed
                             )
                         }
@@ -326,15 +401,21 @@ fun Page1LivingBatteryScreen(
                             fontFamily = PlusJakartaSansFontFamily,
                             fontSize = 11.sp,
                             color = subTextColor,
-                            lineHeight = 15.sp
+                            lineHeight = 16.sp
                         )
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(14.dp))
         }
 
-        // 4. Restructured 2x2 Scientific Telemetry Matrix (All 4 hardware sensors prioritized by IEEE/JEITA/BU-808)
+        // 4. Unified 2x2 Scientific Telemetry Matrix
+        VoltSectionHeader(
+            title = if (isArabic) "القياسات الهندسية الحية" else "Live Hardware Telemetry",
+            isDark = isDark
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
         val metrics = scienceProfile.orderedMetrics
         val firstRow = metrics.take(2)
         val secondRow = metrics.drop(2).take(2)
@@ -376,15 +457,16 @@ fun Page1LivingBatteryScreen(
                                 metric.standardRangeAr
                             }
 
-                            ScientificMetricTile(
+                            VoltMetricTile(
                                 modifier = Modifier.weight(1f),
-                                label = "#${priorityIdx + 1} ${metric.titleAr}",
+                                title = metric.titleAr,
                                 value = displayValue,
-                                color = metricColor,
-                                isDarkMode = isDark,
-                                textColor = textColor,
-                                subTextColor = subTextColor,
                                 subtext = displaySubtext,
+                                accentColor = metricColor,
+                                isDark = isDark,
+                                highlightBadge = if (priorityIdx == 0) {
+                                    if (isArabic) "أولوية" else "PRIMARY"
+                                } else null,
                                 testTag = "scientific_metric_${metric.type.name.lowercase(Locale.US)}"
                             )
                         }
@@ -393,14 +475,17 @@ fun Page1LivingBatteryScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // 5. Per-App Battery Consumption Section (Directly below telemetry matrix)
+        // 5. Per-App Battery Consumption Panel
         AppBatteryConsumptionSection(
             snapshot = appUsageSnapshot,
             accentColor = primaryColor,
             isDarkMode = isDark,
             glowIntensity = glow,
+            insetBg = insetBg,
+            textColor = textColor,
+            subTextColor = subTextColor,
             isArabic = isArabic,
             onRefresh = onRefreshAppUsage
         )
@@ -408,73 +493,68 @@ fun Page1LivingBatteryScreen(
 }
 
 @Composable
-private fun ScientificMetricTile(
-    modifier: Modifier = Modifier,
+private fun QuickTelemetryStatItem(
     label: String,
     value: String,
-    color: Color,
-    isDarkMode: Boolean,
+    accent: Color,
     textColor: Color,
     subTextColor: Color,
-    subtext: String,
-    testTag: String
+    modifier: Modifier = Modifier
 ) {
-    LiquidGlassCard(
-        modifier = modifier,
-        accentColor = color,
-        isDarkMode = isDarkMode,
-        shape = RoundedCornerShape(16.dp),
-        testTag = testTag
+    Column(
+        modifier = modifier.padding(horizontal = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 11.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = label,
-                    fontFamily = PlusJakartaSansFontFamily,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 10.sp,
-                    color = subTextColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Box(
-                    modifier = Modifier
-                        .size(6.dp)
-                        .clip(CircleShape)
-                        .background(color)
-                )
-            }
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = value,
-                fontFamily = OutfitFontFamily,
-                fontWeight = FontWeight.Bold,
-                fontSize = 15.5.sp,
-                color = textColor,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(modifier = Modifier.height(3.dp))
-            Text(
-                text = subtext,
-                fontFamily = PlusJakartaSansFontFamily,
-                fontWeight = FontWeight.Medium,
-                fontSize = 9.sp,
-                color = color,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+        Text(
+            text = label,
+            fontFamily = PlusJakartaSansFontFamily,
+            fontWeight = FontWeight.Medium,
+            fontSize = 10.sp,
+            color = subTextColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = value,
+            fontFamily = OutfitFontFamily,
+            fontWeight = FontWeight.Bold,
+            fontSize = 13.sp,
+            color = textColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun QuickStripDivider(color: Color) {
+    Box(
+        modifier = Modifier
+            .width(1.dp)
+            .height(24.dp)
+            .background(color)
+    )
+}
+
+private fun formatRemainingTime(
+    minutes: Int,
+    isCharging: Boolean,
+    isArabic: Boolean
+): String {
+    if (minutes <= 0) {
+        return if (isCharging) {
+            if (isArabic) "قريب الامتلاء" else "Soon"
+        } else {
+            "--"
         }
+    }
+    val hrs = minutes / 60
+    val mins = minutes % 60
+    return if (isArabic) {
+        if (hrs > 0) "${hrs}س ${mins}د" else "${mins}د"
+    } else {
+        if (hrs > 0) "${hrs}h ${mins}m" else "${mins}m"
     }
 }
 
@@ -484,15 +564,13 @@ private fun AppBatteryConsumptionSection(
     accentColor: Color,
     isDarkMode: Boolean,
     glowIntensity: Float,
+    insetBg: Color,
+    textColor: Color,
+    subTextColor: Color,
     isArabic: Boolean,
     onRefresh: () -> Unit
 ) {
     val context = LocalContext.current
-    val resolvedTheme = LocalAmpereTheme.current
-    val textColor = if (resolvedTheme.themeId != null) resolvedTheme.textPrimary else if (isDarkMode) TextWhite else TextCharcoal
-    val subTextColor = if (resolvedTheme.themeId != null) resolvedTheme.textSecondary else TextSlate
-    val insetBg = if (resolvedTheme.themeId != null) resolvedTheme.surfaceInset else if (isDarkMode) Color(0xFF151F30) else Color(0xFFD2DBE6)
-
     var showAllApps by remember { mutableStateOf(false) }
 
     Box(
@@ -501,10 +579,17 @@ private fun AppBatteryConsumptionSection(
             .padding(horizontal = 16.dp)
     ) {
         LiquidGlassCard(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .animateContentSize(
+                    animationSpec = spring(
+                        dampingRatio = 0.88f,
+                        stiffness = Spring.StiffnessMediumLow
+                    )
+                ),
             accentColor = accentColor,
             isDarkMode = isDarkMode,
-            shape = RoundedCornerShape(22.dp),
+            shape = RoundedCornerShape(20.dp),
             glowIntensity = glowIntensity,
             testTag = "app_battery_consumption_card"
         ) {
@@ -525,17 +610,17 @@ private fun AppBatteryConsumptionSection(
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(36.dp)
-                                .clip(RoundedCornerShape(11.dp))
-                                .background(accentColor.copy(alpha = if (isDarkMode) 0.22f else 0.13f))
-                                .border(1.dp, accentColor.copy(alpha = 0.45f), RoundedCornerShape(11.dp)),
+                                .size(34.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(accentColor.copy(alpha = if (isDarkMode) 0.18f else 0.12f))
+                                .border(1.dp, accentColor.copy(alpha = 0.35f), RoundedCornerShape(10.dp)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Apps,
                                 contentDescription = null,
                                 tint = accentColor,
-                                modifier = Modifier.size(19.dp)
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                         Spacer(modifier = Modifier.width(10.dp))
@@ -550,12 +635,12 @@ private fun AppBatteryConsumptionSection(
                             Text(
                                 text = if (snapshot.hasPermission) {
                                     if (isArabic) {
-                                        "مرتبة من الأعلى استهلاكاً • آخر ${snapshot.scanWindowHours} ساعة (${snapshot.totalTrackedMah} mAh)"
+                                        "الأعلى استهلاكاً • آخر ${snapshot.scanWindowHours} ساعة (${snapshot.totalTrackedMah} mAh)"
                                     } else {
-                                        "Highest drain first • Last ${snapshot.scanWindowHours}h (${snapshot.totalTrackedMah} mAh)"
+                                        "Top drain first • Last ${snapshot.scanWindowHours}h (${snapshot.totalTrackedMah} mAh)"
                                     }
                                 } else {
-                                    if (isArabic) "يتطلب صلاحية مراقبة استخدام التطبيقات" else "Requires App Usage Access permission"
+                                    if (isArabic) "يتطلب صلاحية مراقبة استخدام التطبيقات" else "Requires App Usage Access"
                                 },
                                 fontFamily = PlusJakartaSansFontFamily,
                                 fontSize = 10.5.sp,
@@ -568,6 +653,7 @@ private fun AppBatteryConsumptionSection(
 
                     Box(
                         modifier = Modifier
+                            .minimumInteractiveComponentSize()
                             .size(48.dp)
                             .clip(CircleShape)
                             .background(insetBg.copy(alpha = 0.7f))
@@ -616,8 +702,8 @@ private fun AppBatteryConsumptionSection(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(16.dp))
-                                .background(insetBg.copy(alpha = 0.75f))
-                                .border(1.dp, TactileAmber.copy(alpha = 0.45f), RoundedCornerShape(16.dp))
+                                .background(insetBg.copy(alpha = 0.72f))
+                                .border(1.dp, TactileAmber.copy(alpha = 0.42f), RoundedCornerShape(16.dp))
                                 .padding(12.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
@@ -728,8 +814,8 @@ private fun AppBatteryConsumptionSection(
                                         .fillMaxWidth()
                                         .heightIn(min = 48.dp)
                                         .clip(RoundedCornerShape(12.dp))
-                                        .background(insetBg.copy(alpha = 0.72f))
-                                        .border(1.dp, accentColor.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
+                                        .background(insetBg.copy(alpha = 0.70f))
+                                        .border(1.dp, accentColor.copy(alpha = 0.32f), RoundedCornerShape(12.dp))
                                         .clickable {
                                             CyberHapticsEngine.triggerTactileTick(context)
                                             showAllApps = !showAllApps
@@ -799,12 +885,12 @@ private fun AppConsumptionRowItem(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 58.dp)
-            .clip(RoundedCornerShape(15.dp))
-            .background(insetBg.copy(alpha = if (isDarkMode) 0.58f else 0.68f))
+            .clip(RoundedCornerShape(14.dp))
+            .background(insetBg.copy(alpha = if (isDarkMode) 0.52f else 0.62f))
             .border(
-                width = if (app.rank == 1) 1.1.dp else 0.7.dp,
-                color = if (app.rank == 1) rankColor.copy(alpha = 0.55f) else rankColor.copy(alpha = 0.20f),
-                shape = RoundedCornerShape(15.dp)
+                width = if (app.rank == 1) 1.dp else 0.7.dp,
+                color = if (app.rank == 1) rankColor.copy(alpha = 0.45f) else rankColor.copy(alpha = 0.16f),
+                shape = RoundedCornerShape(14.dp)
             )
             .clickable(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 9.dp)
@@ -823,7 +909,7 @@ private fun AppConsumptionRowItem(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
-                        .background(rankColor.copy(alpha = if (isDarkMode) 0.24f else 0.14f))
+                        .background(rankColor.copy(alpha = if (isDarkMode) 0.22f else 0.14f))
                         .padding(horizontal = 6.dp, vertical = 3.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -927,14 +1013,14 @@ private fun AppConsumptionRowItem(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(5.dp)
+                .height(4.dp)
                 .clip(CircleShape)
                 .background(if (isDarkMode) Color(0x33475569) else Color(0x4D94A3B8))
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth(relativeFill)
-                    .height(5.dp)
+                    .height(4.dp)
                     .clip(CircleShape)
                     .background(
                         Brush.horizontalGradient(
