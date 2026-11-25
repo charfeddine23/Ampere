@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -34,6 +36,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.window.Dialog
 import androidx.compose.runtime.getValue
@@ -77,6 +80,8 @@ fun CyberSkinVaultDialog(
     onEquipSkin: (CyberSkin) -> Unit
 ) {
     if (!isOpen) return
+
+    BackHandler { onClose() }
 
     val resolvedTheme = LocalAmpereTheme.current
     val isDark = resolvedTheme.isDark
@@ -407,10 +412,12 @@ private fun CyberSkinItemCard(
             if (isEquipped) {
                 Box(
                     modifier = Modifier
+                        .heightIn(min = 48.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .background(TactileGreen.copy(alpha = 0.2f))
                         .border(1.dp, TactileGreen.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    contentAlignment = Alignment.Center
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
@@ -432,6 +439,9 @@ private fun CyberSkinItemCard(
             } else {
                 Button(
                     onClick = onEquip,
+                    modifier = Modifier
+                        .heightIn(min = 48.dp)
+                        .minimumInteractiveComponentSize(),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = skin.primaryColor

@@ -465,8 +465,9 @@ fun FloatingGlassNavBar(
                     NavigationTab.entries.forEachIndexed { index, tab ->
                         val isCurrentActive = if (isDragging) index == activeHoveredIndex else tab == selectedTab
 
+                        val inactiveIconColor = if (theme.themeId != null) theme.textSecondary else TextSlate
                         val iconColor by animateColorAsState(
-                            targetValue = if (isCurrentActive) accentColor else TextSlate,
+                            targetValue = if (isCurrentActive) accentColor else inactiveIconColor,
                             animationSpec = spring(
                                 dampingRatio = Spring.DampingRatioNoBouncy,
                                 stiffness = Spring.StiffnessMedium

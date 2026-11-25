@@ -138,8 +138,13 @@ fun Page1LivingBatteryScreen(
     val subTextColor = if (customTokens) resolvedTheme.textSecondary else if (isDark) Color(0xFF94A3B8) else TextSlate
     val insetBg = if (customTokens) resolvedTheme.surfaceInset else if (isDark) Color(0xFF151F30) else Color(0xFFDCE4EE)
 
-    val scienceProfile = remember(telemetry, deviceProfile, isArabic) {
-        BatteryScienceClassifier.buildScienceProfile(telemetry, deviceProfile, isArabic = isArabic)
+    val scienceProfile = remember(telemetry, deviceProfile, isArabic, themeConfig.temperatureUnit) {
+        BatteryScienceClassifier.buildScienceProfile(
+            telemetry = telemetry,
+            deviceProfile = deviceProfile,
+            isArabic = isArabic,
+            temperatureUnit = themeConfig.temperatureUnit
+        )
     }
 
     val displayTemp = if (themeConfig.temperatureUnit == TemperatureUnit.FAHRENHEIT) {

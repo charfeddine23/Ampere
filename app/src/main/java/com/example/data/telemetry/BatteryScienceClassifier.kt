@@ -7,6 +7,7 @@ import com.example.data.ChargePlug
 import com.example.data.DeviceHardwareProfile
 import com.example.data.LivingBatteryState
 import com.example.data.MetricType
+import com.example.data.TemperatureUnit
 import java.util.Locale
 import kotlin.math.abs
 
@@ -177,9 +178,12 @@ object BatteryScienceClassifier {
     fun buildScienceProfile(
         telemetry: BatteryTelemetry,
         deviceProfile: DeviceHardwareProfile,
-        isArabic: Boolean = true
+        isArabic: Boolean = true,
+        temperatureUnit: TemperatureUnit = TemperatureUnit.CELSIUS
     ): LivingStateScienceProfile {
-        val isCharging = telemetry.status == BatteryStatus.CHARGING || telemetry.plugType != ChargePlug.NONE
+        val isCharging = telemetry.status == BatteryStatus.CHARGING ||
+            telemetry.status == BatteryStatus.FULL ||
+            (telemetry.plugType != ChargePlug.NONE && telemetry.currentMa > 0)
         val thermal = assessThermalZone(telemetry.temperatureC, isCharging, isArabic)
         val designMah = deviceProfile.nominalDesignCapacityMah.coerceAtLeast(3000)
         val cRate = (abs(telemetry.currentMa).toFloat() / designMah.toFloat())
@@ -208,11 +212,16 @@ object BatteryScienceClassifier {
             },
             isPriorityWarning = cRate > 1.35f
         )
+        val formattedTemp = temperatureUnit.format(telemetry.temperatureC, decimals = 1)
+        val optMinStr = temperatureUnit.format(TEMP_OPTIMAL_MIN_C, decimals = 0)
+        val optMaxStr = temperatureUnit.format(TEMP_OPTIMAL_MAX_C, decimals = 0)
+        val stressCeilingDisplay = temperatureUnit.format(TEMP_THERMAL_STRESS_C, decimals = 0)
+        val deviceCeilingDisplay = temperatureUnit.format(deviceProfile.safeThermalCeilingC, decimals = 1)
         val tempMetric = ModeOrderedMetric(
             type = MetricType.TEMPERATURE,
             titleAr = if (isArabic) "حرارة القلب" else "Core Temperature",
-            formattedValue = "${telemetry.temperatureC} °C",
-            standardRangeAr = if (isArabic) "مثالي 20–35°C • إجهاد ≥42°C" else "Optimal 20–35°C • Stress ≥42°C",
+            formattedValue = formattedTemp,
+            standardRangeAr = if (isArabic) "مثالي $optMinStr–$optMaxStr • إجهاد ≥$stressCeilingDisplay" else "Optimal $optMinStr–$optMaxStr • Stress ≥$stressCeilingDisplay",
             isPriorityWarning = thermal.severityLevel >= 3
         )
         val wattageMetric = ModeOrderedMetric(
@@ -230,16 +239,16 @@ object BatteryScienceClassifier {
         val (reasonAr, phaseAr, ordered, reference) = when (telemetry.livingState) {
             LivingBatteryState.OVERDRIVE_HEATING -> QuadData(
                 reason = if (isArabic) {
-                    "تجاوز الحرارة العتبة العلمية للإجهاد (${deviceProfile.safeThermalCeilingC}°C) أو حمل C-Rate حراري مرتفع."
+                    "تجاوز الحرارة العتبة العلمية للإجهاد ($deviceCeilingDisplay) أو حمل C-Rate حراري مرتفع."
                 } else {
-                    "Temperature exceeded the scientific stress threshold (${deviceProfile.safeThermalCeilingC}°C) or high thermal C-rate load."
+                    "Temperature exceeded the scientific stress threshold ($deviceCeilingDisplay) or high thermal C-rate load."
                 },
                 phase = if (isArabic) "الإجهاد الحراري (حماية JEITA)" else "Thermal Stress (JEITA Guard)",
                 ordered = listOf(tempMetric, currentMetric, wattageMetric, voltageMetric),
                 reference = if (isArabic) {
-                    "IEEE 1625 & JEITA: فوق 42°C يتسارع تحلل SEI ويلزم خفض التيار"
+                    "IEEE 1625 & JEITA: فوق $stressCeilingDisplay يتسارع تحلل SEI ويلزم خفض التيار"
                 } else {
-                    "IEEE 1625 & JEITA: Above 42°C SEI breakdown accelerates and current throttling applies"
+                    "IEEE 1625 & JEITA: Above $stressCeilingDisplay SEI breakdown accelerates and current throttling applies"
                 }
             )
             LivingBatteryState.ENERGY_STORING -> QuadData(
@@ -247,13 +256,13 @@ object BatteryScienceClassifier {
                     if (telemetry.percentage >= 80) {
                         "مرحلة الجهد الثابت (CV Taper): تيار مضبوط آلياً لحماية الكاثود قرب الامتلاء."
                     } else {
-                        "شحن نشط ضمن نافذة JEITA الآمنة (${telemetry.temperatureC}°C) بتدفق تيار مستقر."
+                        "شحن نشط ضمن نافذة JEITA الآمنة ($formattedTemp) بتدفق تيار مستقر."
                     }
                 } else {
                     if (telemetry.percentage >= 80) {
                         "Constant-Voltage Taper (CV): current is stepped down cleanly to protect the cathode near full charge."
                     } else {
-                        "Active charging inside JEITA safe thermal window (${telemetry.temperatureC}°C) with steady current."
+                        "Active charging inside JEITA safe thermal window ($formattedTemp) with steady current."
                     }
                 },
                 phase = if (isArabic) {

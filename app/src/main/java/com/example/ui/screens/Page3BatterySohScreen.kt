@@ -201,8 +201,13 @@ fun Page3BatterySohScreen(
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
+                                val techDisplay = if (telemetry.technology.contains("li", ignoreCase = true)) {
+                                    telemetry.technology
+                                } else {
+                                    "${telemetry.technology} • Li-Ion"
+                                }
                                 Text(
-                                    text = "${telemetry.technology} • Li-Ion",
+                                    text = techDisplay,
                                     fontFamily = PlusJakartaSansFontFamily,
                                     fontSize = 10.5.sp,
                                     color = subTextColor,

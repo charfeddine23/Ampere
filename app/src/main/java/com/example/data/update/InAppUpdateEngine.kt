@@ -51,15 +51,14 @@ data class InAppUpdateUiState(
     val downloadedApkPath: String? = null,
     val statusBadgeText: String = "تحديث جديد",
     val headlineText: String = "تحديث جديد متاح",
-    val descriptionText: String = "يتوفر تحديث جديد للتطبيق جاهز للتنزيل والتثبيت المباشر من الداخل.",
+    val descriptionText: String = "تتوفر نسخة جديدة عبر قناة التحديث الموثقة (Google Play أو صفحة الإصدارات الرسمية).",
     val lastCheckSummary: String = "الإصدار الحالي v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})",
     val hasPlayUpdatePayload: Boolean = false
 )
 
 /**
- * Fully In-App Update Engine wired to GitHub Releases
- * (https://github.com/charfeddine23/Ampere) with native OkHttp streaming download,
- * FileProvider local PackageInstaller launch (no external browser), and Play Core support.
+ * Dual-Source Update Engine wired to GitHub Releases
+ * (https://github.com/charfeddine23/Ampere) and Google Play In-App Updates API.
  */
 class InAppUpdateEngine(private val context: Context) {
 
@@ -105,12 +104,12 @@ class InAppUpdateEngine(private val context: Context) {
         com.example.data.local.SettingsPreferencesManager(appContext).loadThemeConfig().appLanguage.isArabic
 
     private fun buildDefaultUiState(isAr: Boolean): InAppUpdateUiState = InAppUpdateUiState(
-        statusBadgeText = if (isAr) "تحديث جديد" else "Update",
-        headlineText = if (isAr) "تحديث جديد متاح" else "Update Available",
+        statusBadgeText = if (isAr) "التحديثات" else "Updates",
+        headlineText = if (isAr) "فحص التحديثات" else "Check for Updates",
         descriptionText = if (isAr) {
-            "يتوفر تحديث جديد للتطبيق جاهز للتنزيل والتثبيت المباشر من الداخل."
+            "التحقق من أحدث إصدار عبر Google Play وصفحة الإصدارات الرسمية الموثقة."
         } else {
-            "A new version of Volt Core is ready for direct in-app download and installation."
+            "Check for the latest release via Google Play or the verified official releases page."
         },
         lastCheckSummary = if (isAr) {
             "الإصدار الحالي v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})"
@@ -133,21 +132,13 @@ class InAppUpdateEngine(private val context: Context) {
             cur.isDownloading -> cur.copy(
                 headlineText = if (isAr) "جاري تحميل التحديث..." else "Downloading Update...",
                 statusBadgeText = if (isAr) "جاري التنزيل • $pct%" else "Downloading • $pct%",
-                descriptionText = if (isAr) "يتم تحميل التحديث داخل التطبيق مباشرة بدون تطبيقات خارجية..." else "Downloading the update directly inside the app...",
-                lastCheckSummary = if (isAr) "جاري التنزيل داخل التطبيق ($pct%)" else "Downloading in-app ($pct%)"
+                descriptionText = if (isAr) "يتم تنزيل التحديث عبر Google Play..." else "Downloading the update via Google Play...",
+                lastCheckSummary = if (isAr) "جاري التنزيل ($pct%)" else "Downloading ($pct%)"
             )
             cur.isDownloadedReadyToInstall -> cur.copy(
                 headlineText = if (isAr) "اكتمل تنزيل التحديث" else "Update Downloaded",
-                statusBadgeText = if (cur.needsInstallPermission) {
-                    if (isAr) "يتطلب إذن التثبيت" else "Permission Required"
-                } else {
-                    if (isAr) "جاهز للتثبيت" else "Ready to Install"
-                },
-                descriptionText = if (cur.needsInstallPermission) {
-                    if (isAr) "تم التحميل بنجاح. فعّل خيار السماح بالتثبيت من هذا المصدر لإكمال التحديث." else "Download complete. Allow installing packages from this source to finish updating."
-                } else {
-                    if (isAr) "تم التحميل داخل التطبيق بنجاح وجاهز للتثبيت المباشر فوق النسخة الحالية." else "Downloaded in-app and ready to install over the current build."
-                },
+                statusBadgeText = if (isAr) "جاهز للتثبيت" else "Ready to Install",
+                descriptionText = if (isAr) "التحديث جاهز للتثبيت المباشر فوق النسخة الحالية." else "The update is ready to install over the current build.",
                 lastCheckSummary = if (isAr) "اكتمل التنزيل • جاهز للتثبيت" else "Downloaded • Ready to install"
             )
             cur.isChecking -> cur.copy(
@@ -156,7 +147,11 @@ class InAppUpdateEngine(private val context: Context) {
             cur.updateAvailable -> cur.copy(
                 statusBadgeText = if (isAr) "تحديث جديد • v$targetLabel" else "New Update • v$targetLabel",
                 headlineText = if (isAr) "تحديث جديد متاح" else "Update Available",
-                descriptionText = if (isAr) "الإصدار v$targetLabel جاهز للتنزيل والتثبيت مباشرة داخل التطبيق." else "Version v$targetLabel is ready for direct in-app download and installation.",
+                descriptionText = if (cur.hasPlayUpdatePayload) {
+                    if (isAr) "يتوفر تحديث جديد عبر Google Play وجاهز للبدء." else "A new update is available via Google Play."
+                } else {
+                    if (isAr) "الإصدار v$targetLabel متاح الآن عبر صفحة الإصدارات الرسمية الموثقة." else "Version v$targetLabel is available on the verified official releases page."
+                },
                 lastCheckSummary = if (isAr) "يتوفر تحديث: v$targetLabel" else "Update available: v$targetLabel"
             )
             else -> cur.copy(
@@ -222,7 +217,7 @@ class InAppUpdateEngine(private val context: Context) {
     }
 
     init {
-        cleanupOldCachedApks()
+        // Clean up any legacy pre-migration cache files if present
     }
 
     fun attachLauncher(launcher: ActivityResultLauncher<IntentSenderRequest>) {
@@ -293,34 +288,18 @@ class InAppUpdateEngine(private val context: Context) {
                     )
                     return@launch
                 } else {
-                    _uiState.value = _uiState.value.copy(
-                        isChecking = false,
-                        updateAvailable = false,
-                        availableVersionName = githubResult.versionName,
-                        downloadUrl = githubResult.downloadUrl,
-                        apkFileName = githubResult.apkFileName,
-                        apkSizeMb = githubResult.apkSizeMb,
-                        hasPlayUpdatePayload = false,
-                        isDialogVisible = openDialogImmediatelyOnManual,
-                        statusBadgeText = if (ar) "محدّث • v${BuildConfig.VERSION_NAME}" else "Up to date • v${BuildConfig.VERSION_NAME}",
-                        headlineText = if (openDialogImmediatelyOnManual) {
-                            if (ar) "أنت على أحدث إصدار" else "You're Up to Date"
-                        } else {
-                            if (ar) "تحديث جديد متاح" else "Update Available"
-                        },
-                        descriptionText = if (openDialogImmediatelyOnManual) {
-                            if (ar) "أنت تستخدم أحدث إصدار متاح من Volt Core (v${BuildConfig.VERSION_NAME})." else "You are running the latest version of Volt Core (v${BuildConfig.VERSION_NAME})."
-                        } else {
-                            if (ar) "تحديث جديد متاح" else "Update Available"
-                        },
-                        lastCheckSummary = if (ar) "أنت على أحدث إصدار (v${githubResult.versionName})" else "Up to date (v${githubResult.versionName})"
+                    // GitHub is up-to-date; still check Google Play In-App Updates as a secondary source
+                    checkPlayInAppUpdateFallback(
+                        autoShowOnAvailable = autoShowOnAvailable,
+                        openDialogImmediatelyOnManual = openDialogImmediatelyOnManual,
+                        githubVerifiedVersion = githubResult.versionName
                     )
                     return@launch
                 }
             }
 
             // Secondary fallback: Google Play In-App Updates API
-            checkPlayInAppUpdateFallback(autoShowOnAvailable, openDialogImmediatelyOnManual)
+            checkPlayInAppUpdateFallback(autoShowOnAvailable, openDialogImmediatelyOnManual, githubVerifiedVersion = null)
         }
     }
 
@@ -376,7 +355,7 @@ class InAppUpdateEngine(private val context: Context) {
 
                 GithubReleaseInfo(
                     versionName = versionName,
-                    downloadUrl = apkDownloadUrl ?: htmlUrl,
+                    downloadUrl = htmlUrl,
                     apkFileName = apkName,
                     apkSizeMb = apkSizeMb
                 )
@@ -388,7 +367,8 @@ class InAppUpdateEngine(private val context: Context) {
 
     private fun checkPlayInAppUpdateFallback(
         autoShowOnAvailable: Boolean,
-        openDialogImmediatelyOnManual: Boolean
+        openDialogImmediatelyOnManual: Boolean,
+        githubVerifiedVersion: String? = null
     ) {
         try {
             appUpdateManager.appUpdateInfo
@@ -449,16 +429,31 @@ class InAppUpdateEngine(private val context: Context) {
                 .addOnFailureListener {
                     cachedAppUpdateInfo = null
                     val isAr = isArabicLanguage
-                    _uiState.value = _uiState.value.copy(
-                        isChecking = false,
-                        hasPlayUpdatePayload = false,
-                        downloadUrl = GITHUB_LATEST_RELEASE_URL,
-                        isDialogVisible = openDialogImmediatelyOnManual,
-                        statusBadgeText = "v${BuildConfig.VERSION_NAME} • GitHub Releases",
-                        headlineText = if (isAr) "التحديث التلقائي" else "Auto Update",
-                        descriptionText = if (isAr) "تعذر الاتصال بخادم التحديثات الآن. تأكد من الاتصال بالإنترنت وأعد المحاولة." else "Unable to reach update server right now. Check your connection and try again.",
-                        lastCheckSummary = if (isAr) "تعذر الاتصال • الإصدار الحالي v${BuildConfig.VERSION_NAME}" else "Connection failed • Current v${BuildConfig.VERSION_NAME}"
-                    )
+                    if (githubVerifiedVersion != null) {
+                        _uiState.value = _uiState.value.copy(
+                            isChecking = false,
+                            updateAvailable = false,
+                            availableVersionName = githubVerifiedVersion,
+                            hasPlayUpdatePayload = false,
+                            downloadUrl = GITHUB_LATEST_RELEASE_URL,
+                            isDialogVisible = openDialogImmediatelyOnManual,
+                            statusBadgeText = if (isAr) "محدّث • v${BuildConfig.VERSION_NAME}" else "Up to date • v${BuildConfig.VERSION_NAME}",
+                            headlineText = if (isAr) "أنت على أحدث إصدار" else "You're Up to Date",
+                            descriptionText = if (isAr) "أنت تستخدم أحدث إصدار متاح من Volt Core (v${BuildConfig.VERSION_NAME})." else "You are running the latest version of Volt Core (v${BuildConfig.VERSION_NAME}).",
+                            lastCheckSummary = if (isAr) "أنت على أحدث إصدار (v$githubVerifiedVersion)" else "Up to date (v$githubVerifiedVersion)"
+                        )
+                    } else {
+                        _uiState.value = _uiState.value.copy(
+                            isChecking = false,
+                            hasPlayUpdatePayload = false,
+                            downloadUrl = GITHUB_LATEST_RELEASE_URL,
+                            isDialogVisible = openDialogImmediatelyOnManual,
+                            statusBadgeText = "v${BuildConfig.VERSION_NAME} • GitHub Releases",
+                            headlineText = if (isAr) "التحديث التلقائي" else "Auto Update",
+                            descriptionText = if (isAr) "تعذر الاتصال بخادم التحديثات الآن. تأكد من الاتصال بالإنترنت وأعد المحاولة." else "Unable to reach update server right now. Check your connection and try again.",
+                            lastCheckSummary = if (isAr) "تعذر الاتصال • الإصدار الحالي v${BuildConfig.VERSION_NAME}" else "Connection failed • Current v${BuildConfig.VERSION_NAME}"
+                        )
+                    }
                 }
         } catch (_: Exception) {
             _uiState.value = _uiState.value.copy(
@@ -479,17 +474,18 @@ class InAppUpdateEngine(private val context: Context) {
                 current.isDownloadedReadyToInstall -> if (isAr) "جاهز للتثبيت" else "Ready to Install"
                 current.isDownloading -> if (isAr) "جاري التنزيل • ${(current.downloadProgress * 100).toInt()}%" else "Downloading • ${(current.downloadProgress * 100).toInt()}%"
                 current.updateAvailable -> if (isAr) "تحديث جديد • v$targetLabel" else "New Update • v$targetLabel"
-                else -> if (isAr) "تحديث جديد • v$targetLabel" else "Update • v$targetLabel"
+                else -> if (isAr) "الإصدار الحالي • v$targetLabel" else "Current • v$targetLabel"
             },
             headlineText = when {
                 current.isDownloadedReadyToInstall -> if (isAr) "اكتمل تنزيل التحديث" else "Update Downloaded"
                 current.updateAvailable -> if (isAr) "تحديث جديد متاح" else "Update Available"
-                else -> if (isAr) "تحديث جديد متاح" else "Check for Updates"
+                else -> if (isAr) "فحص التحديثات" else "Check for Updates"
             },
             descriptionText = when {
-                current.isDownloadedReadyToInstall -> if (isAr) "تم التنزيل داخل التطبيق بنجاح وجاهز للتثبيت المباشر." else "Downloaded inside the app and ready to install directly."
-                current.updateAvailable -> if (isAr) "الإصدار v$targetLabel جاهز للتنزيل والتثبيت مباشرة داخل التطبيق." else "Version v$targetLabel is ready to download and install inside the app."
-                else -> if (isAr) "اضغط تحديث لفحص وتحميل أحدث نسخة مباشرة داخل التطبيق دون مغادرته." else "Tap Update to check and download the latest release directly inside the app."
+                current.isDownloadedReadyToInstall -> if (isAr) "التحديث جاهز للتثبيت المباشر فوق النسخة الحالية." else "Ready to install over the current build."
+                current.updateAvailable && current.hasPlayUpdatePayload -> if (isAr) "الإصدار الجديد جاهز للتحديث عبر Google Play." else "The new version is ready to update via Google Play."
+                current.updateAvailable -> if (isAr) "الإصدار v$targetLabel متاح الآن عبر صفحة الإصدارات الرسمية الموثقة." else "Version v$targetLabel is available on the verified official releases page."
+                else -> if (isAr) "اضغط لفحص أحدث إصدار عبر Google Play أو صفحة الإصدارات الرسمية." else "Tap to check for the latest release via Google Play or official releases."
             }
         )
     }

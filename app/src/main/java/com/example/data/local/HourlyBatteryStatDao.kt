@@ -21,6 +21,9 @@ interface HourlyBatteryStatDao {
     @Query("SELECT * FROM hourly_battery_stats WHERE hourTimestamp >= :startOfDayTimestamp ORDER BY hourTimestamp ASC")
     fun getTodayHourlyStats(startOfDayTimestamp: Long): Flow<List<HourlyBatteryStatEntity>>
 
+    @Query("SELECT * FROM hourly_battery_stats WHERE hourTimestamp = :hourTimestamp LIMIT 1")
+    suspend fun getStatForHour(hourTimestamp: Long): HourlyBatteryStatEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertHourlyStat(stat: HourlyBatteryStatEntity): Long
 

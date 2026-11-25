@@ -61,7 +61,15 @@ enum class ChargePlug(val label: String, val labelAr: String) {
 
 enum class TemperatureUnit(val symbol: String) {
     CELSIUS("°C"),
-    FAHRENHEIT("°F")
+    FAHRENHEIT("°F");
+
+    fun convert(tempC: Float): Float =
+        if (this == FAHRENHEIT) (tempC * 9f / 5f) + 32f else tempC
+
+    fun format(tempC: Float, decimals: Int = 1): String {
+        val value = convert(tempC)
+        return String.format(java.util.Locale.US, "%.${decimals}f%s", value, symbol)
+    }
 }
 
 enum class MetricType(val title: String, val titleAr: String, val unit: String) {

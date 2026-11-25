@@ -1778,8 +1778,9 @@ fun LuxurySettingsDrawer(
                                 textColor = textColor,
                                 subTextColor = subTextColor
                             )
+                            val thresholdLabel = themeConfig.temperatureUnit.format(themeConfig.highTempThresholdC, decimals = 0)
                             DrawerToggleRow(
-                                title = if (isArabic) "تحذير الحرارة المرتفعة (>42°C)" else "Thermal Stress Warning (>42°C)",
+                                title = if (isArabic) "تحذير الحرارة المرتفعة (>$thresholdLabel)" else "Thermal Stress Warning (>$thresholdLabel)",
                                 subtitle = if (isArabic) "تنبيه فوري عند ارتفاع حرارة المستشعر" else "Immediate alert when cell exceeds JEITA ceiling",
                                 checked = themeConfig.alertOnHighTemp,
                                 onCheckedChange = { onConfigChange(themeConfig.copy(alertOnHighTemp = it)) },
@@ -2543,8 +2544,7 @@ private fun LuxuriousAutoUpdateStatusCard(
     val context = LocalContext.current
 
     val targetStatusColor = when {
-        updateUiState.isDownloadedReadyToInstall && !updateUiState.needsInstallPermission -> TactileGreen
-        updateUiState.needsInstallPermission -> TactileAmber
+        updateUiState.isDownloadedReadyToInstall -> TactileGreen
         updateUiState.isDownloading -> accentColor
         updateUiState.isChecking -> TactileCyan
         updateUiState.updateAvailable -> TactileAmber
@@ -2723,19 +2723,21 @@ private fun LuxuriousAutoUpdateStatusCard(
                         Text(
                             text = if (isArabic) {
                                 when {
-                                    updateUiState.isDownloading -> "تنزيل مباشر داخل التطبيق"
+                                    updateUiState.isDownloading -> "تنزيل عبر Google Play"
                                     updateUiState.isDownloadedReadyToInstall -> "الحزمة جاهزة للتثبيت الفوري"
                                     updateUiState.isChecking -> "جاري الفحص السحابي..."
-                                    updateUiState.updateAvailable -> "تحديث جديد متوفر للتحميل"
-                                    else -> "تحديث سحابي آمن ومباشر"
+                                    updateUiState.updateAvailable && updateUiState.hasPlayUpdatePayload -> "تحديث متوفر عبر Google Play"
+                                    updateUiState.updateAvailable -> "إصدار جديد متاح على GitHub"
+                                    else -> "قناة تحديثات موثقة وآمنة"
                                 }
                             } else {
                                 when {
-                                    updateUiState.isDownloading -> "Direct in-app download"
+                                    updateUiState.isDownloading -> "Google Play download"
                                     updateUiState.isDownloadedReadyToInstall -> "Package ready to install"
                                     updateUiState.isChecking -> "Checking cloud release..."
-                                    updateUiState.updateAvailable -> "New update ready to download"
-                                    else -> "Secure direct OTA engine"
+                                    updateUiState.updateAvailable && updateUiState.hasPlayUpdatePayload -> "Update ready via Google Play"
+                                    updateUiState.updateAvailable -> "New GitHub release available"
+                                    else -> "Verified Play & GitHub updater"
                                 }
                             },
                             fontFamily = PlusJakartaSansFontFamily,
@@ -2757,6 +2759,7 @@ private fun LuxuriousAutoUpdateStatusCard(
                     // Compact Auto-Update Toggle Pill
                     Box(
                         modifier = Modifier
+                            .minimumInteractiveComponentSize()
                             .clip(RoundedCornerShape(10.dp))
                             .background(
                                 if (autoUpdateEnabled) {
@@ -2771,7 +2774,8 @@ private fun LuxuriousAutoUpdateStatusCard(
                                 RoundedCornerShape(10.dp)
                             )
                             .clickable { onToggleAutoUpdate(!autoUpdateEnabled) }
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = if (autoUpdateEnabled) (if (isArabic) "تلقائي" else "Auto") else (if (isArabic) "يدوي" else "Manual"),
@@ -2882,20 +2886,20 @@ private fun LuxuriousAutoUpdateStatusCard(
             ) {
                 val primaryLabel = if (isArabic) {
                     when {
-                        updateUiState.needsInstallPermission -> "منح الإذن والتثبيت"
                         updateUiState.isDownloadedReadyToInstall -> "تثبيت الآن"
                         updateUiState.isDownloading -> "إلغاء التنزيل"
                         updateUiState.isChecking -> "جاري الفحص..."
-                        updateUiState.updateAvailable -> "تحديث داخلي"
+                        updateUiState.updateAvailable && updateUiState.hasPlayUpdatePayload -> "تحديث عبر المتجر"
+                        updateUiState.updateAvailable -> "عرض صفحة التحديث"
                         else -> "فحص التحديثات"
                     }
                 } else {
                     when {
-                        updateUiState.needsInstallPermission -> "Allow & Install"
                         updateUiState.isDownloadedReadyToInstall -> "Install Now"
                         updateUiState.isDownloading -> "Cancel Download"
                         updateUiState.isChecking -> "Checking..."
-                        updateUiState.updateAvailable -> "Update Now"
+                        updateUiState.updateAvailable && updateUiState.hasPlayUpdatePayload -> "Update via Play"
+                        updateUiState.updateAvailable -> "Open Release"
                         else -> "Check Updates"
                     }
                 }
@@ -3254,6 +3258,8 @@ fun UnsupportedModeDialog(
     onDismiss: () -> Unit
 ) {
     if (alert == null) return
+
+    BackHandler { onDismiss() }
 
     val context = LocalContext.current
     val resolvedTheme = LocalAmpereTheme.current

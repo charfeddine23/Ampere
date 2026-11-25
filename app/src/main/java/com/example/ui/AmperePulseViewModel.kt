@@ -87,14 +87,19 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     init {
-        if (deviceProfile.value.isLowEndDevice && _themeConfig.value.graphicsMode != GraphicsMode.SIMPLE) {
-            val forcedSimple = _themeConfig.value.copy(
-                graphicsMode = GraphicsMode.SIMPLE,
-                samplingIntervalMs = 1000L,
-                ambientLiquidWaves = false
-            )
-            _themeConfig.value = forcedSimple
-            prefsManager.saveThemeConfig(forcedSimple)
+        viewModelScope.launch {
+            deviceProfile.collect { profile ->
+                if (profile.isLowEndDevice && _themeConfig.value.graphicsMode != GraphicsMode.SIMPLE) {
+                    val forcedSimple = _themeConfig.value.copy(
+                        graphicsMode = GraphicsMode.SIMPLE,
+                        samplingIntervalMs = 1000L,
+                        ambientLiquidWaves = false
+                    )
+                    _themeConfig.value = forcedSimple
+                    prefsManager.saveThemeConfig(forcedSimple)
+                    repository.setProModeActive(false)
+                }
+            }
         }
         // Apply persisted sound & haptic preferences on startup
         com.example.audio.CyberSoundscapeEngine.isEnabled = _themeConfig.value.soundEffectsEnabled
@@ -250,12 +255,19 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
             multiplier = sanitized.currentMultiplier,
             zeroOffsetMa = sanitized.currentZeroOffsetMa
         )
-        if (sanitized.backgroundServiceEnabled) {
+        val bgChanged = sanitized.backgroundServiceEnabled != prev.backgroundServiceEnabled
+        val bgMetaChanged = sanitized.appLanguage != prev.appLanguage ||
+            sanitized.temperatureUnit != prev.temperatureUnit
+        if (bgChanged) {
+            if (sanitized.backgroundServiceEnabled) {
+                com.example.service.TelemetryForegroundService.startService(getApplication())
+                com.example.service.AlarmScheduler.scheduleNextAlarm(getApplication())
+            } else {
+                com.example.service.TelemetryForegroundService.stopService(getApplication())
+                com.example.service.AlarmScheduler.cancelAlarm(getApplication())
+            }
+        } else if (sanitized.backgroundServiceEnabled && bgMetaChanged) {
             com.example.service.TelemetryForegroundService.startService(getApplication())
-            com.example.service.AlarmScheduler.scheduleNextAlarm(getApplication())
-        } else {
-            com.example.service.TelemetryForegroundService.stopService(getApplication())
-            com.example.service.AlarmScheduler.cancelAlarm(getApplication())
         }
     }
 

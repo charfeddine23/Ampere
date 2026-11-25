@@ -89,6 +89,7 @@ class TelemetryForegroundService : Service() {
         )
 
         if (!initialConfig.backgroundServiceEnabled) {
+            ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
             stopSelf()
             return
         }
@@ -160,6 +161,7 @@ class TelemetryForegroundService : Service() {
                 }
                 val config = cachedConfig
                 if (!config.backgroundServiceEnabled) {
+                    ServiceCompat.stopForeground(this@TelemetryForegroundService, ServiceCompat.STOP_FOREGROUND_REMOVE)
                     stopSelf()
                     break
                 }
@@ -234,8 +236,22 @@ class TelemetryForegroundService : Service() {
                 isCharging = isCharging
             )
 
-            // Throttle notification updates to prevent Android notification rate-limit warnings
             val now = System.currentTimeMillis()
+            BatteryMonitorRepository.evaluateAndNotifyAlerts(
+                context = applicationContext,
+                percent = pct,
+                isCharging = isCharging,
+                temperatureC = tempC,
+                now = now,
+                alertOn80PercentEnabled = config.alertOn80Percent,
+                alertOnHighTempEnabled = config.alertOnHighTemp,
+                highTempThresholdC = config.highTempThresholdC,
+                temperatureUnit = config.temperatureUnit,
+                isArabic = config.appLanguage.isArabic,
+                isAppInForeground = false
+            )
+
+            // Throttle notification updates to prevent Android notification rate-limit warnings
             val shouldUpdateNotification = pct != lastNotifiedPct ||
                 stateString != lastNotifiedState ||
                 (now - lastNotificationUpdateMs >= 60_000L)
@@ -246,7 +262,8 @@ class TelemetryForegroundService : Service() {
                 lastNotificationUpdateMs = now
                 val isAr = config.appLanguage.isArabic
                 val currentText = if (currentMa >= 0) "+$currentMa" else "$currentMa"
-                val notificationText = "${pct}% • ${voltageMv}mV • ${currentText}mA • ${String.format(Locale.US, "%.1f", tempC)}°C"
+                val tempLabel = config.temperatureUnit.format(tempC, decimals = 1)
+                val notificationText = "${pct}% • ${voltageMv}mV • ${currentText}mA • $tempLabel"
                 val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
                 notificationManager?.notify(
                     NOTIFICATION_ID,
@@ -277,18 +294,37 @@ class TelemetryForegroundService : Service() {
         val hourStart = cal.timeInMillis
         if (activeHourKey != hourStart) {
             activeHourKey = hourStart
-            hourSamples = 0
-            hourVoltageSum = 0L
-            hourMinVoltage = Int.MAX_VALUE
-            hourMaxVoltage = 0
-            hourCurrentSum = 0L
-            hourMinCurrent = Int.MAX_VALUE
-            hourMaxCurrent = Int.MIN_VALUE
-            hourTempSum = 0.0
-            hourMaxTemp = -99f
-            hourWattSum = 0.0
-            hourStartPct = pct
-            hourLastSaveMs = 0L
+            val existing = runCatching {
+                database.hourlyBatteryStatDao().getStatForHour(hourStart)
+            }.getOrNull()
+            if (existing != null && existing.sampleCount > 0) {
+                val count = existing.sampleCount
+                hourSamples = count
+                hourVoltageSum = existing.avgVoltageMv.toLong() * count
+                hourMinVoltage = existing.minVoltageMv
+                hourMaxVoltage = existing.maxVoltageMv
+                hourCurrentSum = existing.avgCurrentMa.toLong() * count
+                hourMinCurrent = existing.minCurrentMa
+                hourMaxCurrent = existing.maxCurrentMa
+                hourTempSum = existing.avgTemperatureC.toDouble() * count
+                hourMaxTemp = existing.maxTemperatureC
+                hourWattSum = existing.avgWattageW.toDouble() * count
+                hourStartPct = existing.startBatteryPct
+                hourLastSaveMs = 0L
+            } else {
+                hourSamples = 0
+                hourVoltageSum = 0L
+                hourMinVoltage = Int.MAX_VALUE
+                hourMaxVoltage = 0
+                hourCurrentSum = 0L
+                hourMinCurrent = Int.MAX_VALUE
+                hourMaxCurrent = Int.MIN_VALUE
+                hourTempSum = 0.0
+                hourMaxTemp = -99f
+                hourWattSum = 0.0
+                hourStartPct = pct
+                hourLastSaveMs = 0L
+            }
         }
 
         hourSamples++

@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -101,11 +102,12 @@ fun LiquidGlassCard(
             .drawBehind {
                 if (!isSimple) {
                     val shadowOffset = if (isPro) 2.dp.toPx() else 3.5.dp.toPx()
+                    val cornerPx = (shape as? CornerBasedShape)?.topStart?.toPx(size, this) ?: 20.dp.toPx()
                     drawRoundRect(
                         color = shadowColor,
                         topLeft = Offset(0f, shadowOffset),
                         size = size,
-                        cornerRadius = CornerRadius(20.dp.toPx(), 20.dp.toPx())
+                        cornerRadius = CornerRadius(cornerPx, cornerPx)
                     )
                 }
             }

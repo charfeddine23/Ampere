@@ -136,13 +136,25 @@ fun MetricSparkline(
     var isMorphing by remember { mutableStateOf(false) }
     var animTick by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(targetKnots) {
-        if (!targetKnots.contentEquals(renderedKnots)) {
+    LaunchedEffect(targetKnots, isSimple) {
+        if (isSimple) {
+            isMorphing = false
+            if (!targetKnots.contentEquals(renderedKnots)) {
+                for (i in renderedKnots.indices) {
+                    renderedKnots[i] = targetKnots[i]
+                }
+                animTick++
+            }
+        } else if (!targetKnots.contentEquals(renderedKnots)) {
             isMorphing = true
         }
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(isSimple) {
+        if (isSimple) {
+            isMorphing = false
+            return@LaunchedEffect
+        }
         snapshotFlow { isMorphing }.collect { active ->
             if (!active) return@collect
             var lastFrameNs = 0L

@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -85,6 +86,8 @@ fun ThemeEngineDialog(
     onResetDefault: () -> Unit
 ) {
     if (!isOpen) return
+
+    BackHandler { onClose() }
 
     val context = LocalContext.current
     val resolvedTheme = LocalAmpereTheme.current

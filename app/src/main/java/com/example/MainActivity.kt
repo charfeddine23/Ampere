@@ -45,7 +45,7 @@ class MainActivity : ComponentActivity() {
 
     private fun requestNotificationPermissionIfNeeded() {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            val config = SettingsPreferencesManager(applicationContext).loadThemeConfig()
+            val config = viewModel.themeConfig.value
             val needsNotifications = config.backgroundServiceEnabled ||
                 config.alertOn80Percent ||
                 config.alertOnHighTemp
@@ -82,9 +82,7 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         viewModel.setAppInForeground(true)
-        val bgEnabled = SettingsPreferencesManager(applicationContext)
-            .loadThemeConfig()
-            .backgroundServiceEnabled
+        val bgEnabled = viewModel.themeConfig.value.backgroundServiceEnabled
         if (bgEnabled) {
             TelemetryForegroundService.startService(applicationContext)
             AlarmScheduler.scheduleNextAlarm(applicationContext)

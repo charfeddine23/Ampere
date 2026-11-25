@@ -330,12 +330,15 @@ fun LiquidBatteryRing(
                     modifier = Modifier.size(15.dp)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
+                val topStatusLabel = when {
+                    status == BatteryStatus.FULL -> if (isArabic) "مكتمل الشحن" else "FULLY CHARGED"
+                    status == BatteryStatus.CHARGING -> if (isArabic) "شحن نشط" else "CHARGING"
+                    status == BatteryStatus.NOT_CHARGING && plugType != ChargePlug.NONE ->
+                        if (isArabic) "موصول • متوقف" else "PLUGGED • PAUSED"
+                    else -> livingState.localizedTitle(isArabic).uppercase()
+                }
                 Text(
-                    text = if (status == BatteryStatus.CHARGING) {
-                        if (isArabic) "شحن نشط" else "CHARGING"
-                    } else {
-                        livingState.localizedTitle(isArabic).uppercase()
-                    },
+                    text = topStatusLabel,
                     fontFamily = OutfitFontFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = 10.5.sp,
@@ -368,10 +371,16 @@ fun LiquidBatteryRing(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            val pillText = if (status == BatteryStatus.CHARGING) {
-                "${String.format(Locale.US, "%.1f", wattageW)}W • ${plugType.localizedLabel(isArabic)}"
-            } else {
-                "${String.format(Locale.US, "%.1f", wattageW)}W • ${if (isArabic) "تفريغ" else "ACTIVE"}"
+            val isPluggedActive = status == BatteryStatus.CHARGING || status == BatteryStatus.FULL
+            val pillText = when {
+                status == BatteryStatus.FULL ->
+                    "${if (isArabic) "مكتمل" else "FULL"} • ${plugType.localizedLabel(isArabic)}"
+                status == BatteryStatus.CHARGING ->
+                    "${String.format(Locale.US, "%.1f", wattageW)}W • ${plugType.localizedLabel(isArabic)}"
+                status == BatteryStatus.NOT_CHARGING && plugType != ChargePlug.NONE ->
+                    "${String.format(Locale.US, "%.1f", wattageW)}W • ${if (isArabic) "متوقف مؤقتاً" else "PAUSED"}"
+                else ->
+                    "${String.format(Locale.US, "%.1f", wattageW)}W • ${if (isArabic) "تفريغ" else "ACTIVE"}"
             }
 
             Box(
@@ -386,7 +395,7 @@ fun LiquidBatteryRing(
                     fontFamily = PlusJakartaSansFontFamily,
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 10.sp,
-                    color = if (status == BatteryStatus.CHARGING) activePrimary else subColor
+                    color = if (isPluggedActive) activePrimary else subColor
                 )
             }
         }

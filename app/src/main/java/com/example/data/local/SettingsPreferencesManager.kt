@@ -106,6 +106,18 @@ class SettingsPreferencesManager(context: Context) {
         prefs.edit().putString(KEY_OWNER_NAME, cleaned).apply()
     }
 
+    fun isAlert80Triggered(): Boolean = prefs.getBoolean(KEY_ALERT_80_TRIGGERED, false)
+
+    fun setAlert80Triggered(triggered: Boolean) {
+        prefs.edit().putBoolean(KEY_ALERT_80_TRIGGERED, triggered).apply()
+    }
+
+    fun getLastHighTempAlertMs(): Long = prefs.getLong(KEY_LAST_HIGH_TEMP_ALERT_MS, 0L)
+
+    fun setLastHighTempAlertMs(timestampMs: Long) {
+        prefs.edit().putLong(KEY_LAST_HIGH_TEMP_ALERT_MS, timestampMs).apply()
+    }
+
     private fun saveThemeConfigInternal(config: GlassThemeConfig, synchronous: Boolean) {
         prefs.edit().apply {
             putBoolean(KEY_IS_DARK_MODE, config.isDarkMode)
@@ -186,5 +198,7 @@ class SettingsPreferencesManager(context: Context) {
         private const val KEY_DROPLET_DRAG_NAV = "droplet_drag_nav"
         private const val KEY_APP_LANGUAGE = "app_language"
         private const val KEY_OWNER_NAME = "owner_name"
+        private const val KEY_ALERT_80_TRIGGERED = "alert_80_triggered"
+        private const val KEY_LAST_HIGH_TEMP_ALERT_MS = "last_high_temp_alert_ms"
     }
 }
