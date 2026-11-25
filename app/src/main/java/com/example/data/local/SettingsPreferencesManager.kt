@@ -97,6 +97,15 @@ class SettingsPreferencesManager(context: Context) {
         saveThemeConfigInternal(config, synchronous = true)
     }
 
+    fun loadOwnerName(): String {
+        return prefs.getString(KEY_OWNER_NAME, "Charfeddine")?.trim()?.ifBlank { "Charfeddine" } ?: "Charfeddine"
+    }
+
+    fun saveOwnerName(name: String) {
+        val cleaned = name.trim().ifBlank { "Charfeddine" }
+        prefs.edit().putString(KEY_OWNER_NAME, cleaned).apply()
+    }
+
     private fun saveThemeConfigInternal(config: GlassThemeConfig, synchronous: Boolean) {
         prefs.edit().apply {
             putBoolean(KEY_IS_DARK_MODE, config.isDarkMode)
@@ -176,5 +185,6 @@ class SettingsPreferencesManager(context: Context) {
         private const val KEY_GRAPHICS_MODE = "graphics_mode"
         private const val KEY_DROPLET_DRAG_NAV = "droplet_drag_nav"
         private const val KEY_APP_LANGUAGE = "app_language"
+        private const val KEY_OWNER_NAME = "owner_name"
     }
 }

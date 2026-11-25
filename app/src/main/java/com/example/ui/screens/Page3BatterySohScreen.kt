@@ -202,7 +202,7 @@ fun Page3BatterySohScreen(
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = "${telemetry.technology} • NMC 811",
+                                    text = "${telemetry.technology} • Li-Ion",
                                     fontFamily = PlusJakartaSansFontFamily,
                                     fontSize = 10.5.sp,
                                     color = subTextColor,
@@ -217,8 +217,7 @@ fun Page3BatterySohScreen(
                         // Interactive Recalibrate / Sync pill with accessible touch target
                         Box(
                             modifier = Modifier
-                                .minimumInteractiveComponentSize()
-                                .heightIn(min = 38.dp)
+                                .heightIn(min = 48.dp)
                                 .clip(RoundedCornerShape(11.dp))
                                 .background(statusColor.copy(alpha = if (isDark) 0.18f else 0.12f))
                                 .border(1.dp, statusColor.copy(alpha = 0.45f), RoundedCornerShape(11.dp))
@@ -552,10 +551,42 @@ fun Page3BatterySohScreen(
                                 style = Stroke(width = 2.4.dp.toPx(), cap = StrokeCap.Round)
                             )
 
-                            val cycleFraction = (sohPrediction.totalCyclesCompleted / 1000f).coerceIn(0f, 1f)
                             val healthDropFraction = ((100f - sohPrediction.healthPercentage) / 20f).coerceIn(0f, 1f)
-                            val curX = w * cycleFraction
-                            val curY = h * (0.15f + (0.67f * healthDropFraction))
+                            val cycleFraction = if (sohPrediction.totalCyclesCompleted > 0) {
+                                (sohPrediction.totalCyclesCompleted / 1000f).coerceIn(0f, 1f)
+                            } else {
+                                healthDropFraction
+                            }
+                            val curX = (w * cycleFraction).coerceIn(0f, w)
+                            val curY = run {
+                                var segIdx = 0
+                                for (i in 1 until points.size) {
+                                    if (curX <= points[i].x || i == points.lastIndex) {
+                                        segIdx = i
+                                        break
+                                    }
+                                }
+                                val p0 = points[segIdx - 1]
+                                val p1 = points[segIdx]
+                                val midX = p0.x + (p1.x - p0.x) / 2f
+                                var lo = 0f
+                                var hi = 1f
+                                repeat(10) {
+                                    val t = (lo + hi) * 0.5f
+                                    val mt = 1f - t
+                                    val bx = (mt * mt * mt) * p0.x +
+                                        (3f * mt * mt * t) * midX +
+                                        (3f * mt * t * t) * midX +
+                                        (t * t * t) * p1.x
+                                    if (bx < curX) lo = t else hi = t
+                                }
+                                val t = (lo + hi) * 0.5f
+                                val mt = 1f - t
+                                (mt * mt * mt) * p0.y +
+                                    (3f * mt * mt * t) * p0.y +
+                                    (3f * mt * t * t) * p1.y +
+                                    (t * t * t) * p1.y
+                            }
 
                             drawCircle(
                                 color = statusColor.copy(alpha = 0.28f),

@@ -1,13 +1,19 @@
 package com.example.data
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.os.BatteryManager
 import android.os.Build
 import android.os.PowerManager
+import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import com.example.MainActivity
 import com.example.data.telemetry.BatteryScienceClassifier
 import com.example.data.telemetry.CableDnaStandardsEngine
 import com.example.data.telemetry.CurrentCalibrationEngine
@@ -22,6 +28,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -34,6 +41,10 @@ class BatteryMonitorRepository(
     private val scope: CoroutineScope
 ) {
     companion object {
+        private const val ALERT_CHANNEL_ID = "volt_core_alerts_channel"
+        private const val ALERT_NOTIFICATION_80_ID = 2001
+        private const val ALERT_NOTIFICATION_TEMP_ID = 2002
+
         fun normalizeVoltageMv(rawVoltage: Long): Int {
             return when {
                 rawVoltage > 20_000L -> (rawVoltage / 1000L).toInt()
@@ -50,7 +61,11 @@ class BatteryMonitorRepository(
     val currentCalibrationEngine = CurrentCalibrationEngine(context)
 
     @Volatile
-    private var previousTempC: Float = 25.0f
+    private var previousWindowTempC: Float? = null
+    @Volatile
+    private var previousWindowTempMs: Long = 0L
+    @Volatile
+    private var lastTempDropRate: Float = 0.0f
 
     private val _telemetry = MutableStateFlow(BatteryTelemetry())
     val telemetry: StateFlow<BatteryTelemetry> = _telemetry.asStateFlow()
@@ -98,6 +113,8 @@ class BatteryMonitorRepository(
     private var smoothedDynamicImpedanceMohm: Int? = null
     @Volatile
     private var smoothedRipplePercent: Float = 0.0f
+    @Volatile
+    private var smoothedSohPct: Float? = null
 
     @Volatile
     private var isAppInForeground: Boolean = true
@@ -119,6 +136,16 @@ class BatteryMonitorRepository(
 
     @Volatile
     private var currentLanguage: AppLanguage = AppLanguage.ARABIC
+    @Volatile
+    private var alertOn80PercentEnabled: Boolean = true
+    @Volatile
+    private var alertOnHighTempEnabled: Boolean = true
+    @Volatile
+    private var highTempThresholdC: Float = 42.0f
+    @Volatile
+    private var hasAlerted80ThisCharge: Boolean = false
+    @Volatile
+    private var lastHighTempAlertMs: Long = 0L
 
     @Volatile
     private var cachedBatteryStatus: Intent? = null
@@ -134,11 +161,27 @@ class BatteryMonitorRepository(
     }
 
     init {
-        currentLanguage = com.example.data.local.SettingsPreferencesManager(context).loadThemeConfig().appLanguage
+        val prefsMgr = com.example.data.local.SettingsPreferencesManager(context)
+        val initialCfg = prefsMgr.loadThemeConfig()
+        currentLanguage = initialCfg.appLanguage
+        alertOn80PercentEnabled = initialCfg.alertOn80Percent
+        alertOnHighTempEnabled = initialCfg.alertOnHighTemp
+        highTempThresholdC = initialCfg.highTempThresholdC
+        val savedOwner = prefsMgr.loadOwnerName()
+        _userAccount.value = _userAccount.value.copy(
+            ownerName = savedOwner,
+            avatarInitials = savedOwner.take(2).uppercase()
+        )
         initSessionLogsSeed()
         refreshWalLogCountAsync()
         registerForegroundBatteryReceiver()
         startPolling()
+    }
+
+    fun updateAlertConfig(config: GlassThemeConfig) {
+        alertOn80PercentEnabled = config.alertOn80Percent
+        alertOnHighTempEnabled = config.alertOnHighTemp
+        highTempThresholdC = config.highTempThresholdC
     }
 
     fun setLanguage(language: AppLanguage) {
@@ -297,12 +340,12 @@ class BatteryMonitorRepository(
     @Volatile
     private var sysfsVoltagePath: String? = null
     @Volatile
-    private var sysfsVoltageChecked: Boolean = false
+    private var sysfsVoltageFailureCount: Int = 0
     @Volatile
     private var lastWidgetSyncMs: Long = 0L
 
     private fun readSysfsVoltageMv(): Int {
-        if (sysfsVoltageChecked && sysfsVoltagePath == null) return 0
+        if (sysfsVoltageFailureCount >= 5 && sysfsVoltagePath == null) return 0
         val candidates = sysfsVoltagePath?.let { listOf(it) } ?: listOf(
             "/sys/class/power_supply/battery/voltage_now",
             "/sys/class/power_supply/bms/voltage_now"
@@ -314,14 +357,16 @@ class BatteryMonitorRepository(
                 val mv = normalizeVoltageMv(rawVal)
                 if (mv in 2500..12000) {
                     sysfsVoltagePath = path
-                    sysfsVoltageChecked = true
+                    sysfsVoltageFailureCount = 0
                     return mv
                 }
             } catch (_: Exception) {
             }
         }
-        sysfsVoltageChecked = true
-        sysfsVoltagePath = null
+        sysfsVoltageFailureCount++
+        if (sysfsVoltageFailureCount >= 5) {
+            sysfsVoltagePath = null
+        }
         return 0
     }
 
@@ -339,10 +384,16 @@ class BatteryMonitorRepository(
                 val isInteractive = powerManager?.isInteractive ?: true
                 val proActive = isProModeActive && isAppInForeground && isInteractive && !isPowerSave
 
-                val stickyRefreshMs = if (proActive) 250L else 1_500L
-                if (cachedBatteryStatus == null || (!receiverRegistered && now - lastIntentPollMs >= stickyRefreshMs)) {
+                val stickyRefreshMs = if (proActive) 120L else 1_500L
+                if (cachedBatteryStatus == null ||
+                    proActive && (now - lastIntentPollMs >= stickyRefreshMs) ||
+                    (!receiverRegistered && now - lastIntentPollMs >= stickyRefreshMs)
+                ) {
                     val ifilter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
-                    cachedBatteryStatus = context.registerReceiver(null, ifilter)
+                    val refreshed = context.registerReceiver(null, ifilter)
+                    if (refreshed != null) {
+                        cachedBatteryStatus = refreshed
+                    }
                     lastIntentPollMs = now
                 }
 
@@ -350,7 +401,8 @@ class BatteryMonitorRepository(
                     refreshWalLogCountAsync()
                 }
 
-                readBatteryState(cachedBatteryStatus, now = now, proActive = proActive)
+                val sysfsMv = withContext(Dispatchers.IO) { readSysfsVoltageMv() }
+                readBatteryState(cachedBatteryStatus, sysfsMv = sysfsMv, now = now, proActive = proActive)
 
                 subTick++
                 val delayMs = when {
@@ -366,6 +418,7 @@ class BatteryMonitorRepository(
 
     private fun readBatteryState(
         batteryStatus: Intent?,
+        sysfsMv: Int = 0,
         now: Long = System.currentTimeMillis(),
         proActive: Boolean = isProModeActive
     ) {
@@ -400,7 +453,6 @@ class BatteryMonitorRepository(
 
         val rawVoltage = batteryStatus?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, -1) ?: -1
         val extraVoltageMv = normalizeVoltageMv(rawVoltage.toLong())
-        val sysfsMv = readSysfsVoltageMv()
         val resolvedVoltageMv = when {
             sysfsMv > 0 && extraVoltageMv <= 0 -> sysfsMv
             sysfsMv > 0 && extraVoltageMv > 0 && abs(sysfsMv - extraVoltageMv) <= (extraVoltageMv * 0.25f) -> sysfsMv
@@ -422,18 +474,32 @@ class BatteryMonitorRepository(
             25.0f
         }
 
+        val isFull = status == BatteryStatus.FULL
         val currentMa = currentCalibrationEngine.sampleCurrentMa(
             batteryManager = batteryManager,
             isCharging = isCharging,
-            voltageMv = voltageMv
+            voltageMv = voltageMv,
+            isFull = isFull
         )
 
         // Real instantaneous electrical power P = V * I (W)
         val wattageW = (voltageMv / 1000.0f) * (abs(currentMa) / 1000.0f)
 
         val isScreenInteractive = powerManager?.isInteractive ?: true
-        val tempDropRate = previousTempC - temperatureC
-        previousTempC = temperatureC
+        val prevWinTemp = previousWindowTempC
+        if (prevWinTemp == null || previousWindowTempMs == 0L) {
+            previousWindowTempC = temperatureC
+            previousWindowTempMs = now
+            lastTempDropRate = 0.0f
+        } else {
+            val dtMs = now - previousWindowTempMs
+            if (dtMs >= 5_000L) {
+                lastTempDropRate = (prevWinTemp - temperatureC) / (dtMs / 10_000.0f)
+                previousWindowTempC = temperatureC
+                previousWindowTempMs = now
+            }
+        }
+        val tempDropRate = lastTempDropRate
 
         if (voltageMv > 6000 && !_deviceProfile.value.isDualCellSuspected) {
             _deviceProfile.value = DeviceHardwareProfiler.collectProfile(context, voltageMv)
@@ -483,6 +549,7 @@ class BatteryMonitorRepository(
 
         // Physical Coulomb-based remaining charge / discharge time estimate (minutes)
         val estimatedMin = computeRemainingTimeMinutes(
+            status = status,
             isCharging = isCharging,
             percent = percent,
             currentMa = currentMa,
@@ -617,14 +684,118 @@ class BatteryMonitorRepository(
                 }
             }
         }
+        evaluateBatteryAlerts(
+            percent = percent,
+            isCharging = isCharging,
+            temperatureC = temperatureC,
+            now = now
+        )
+    }
+
+    private fun evaluateBatteryAlerts(
+        percent: Int,
+        isCharging: Boolean,
+        temperatureC: Float,
+        now: Long
+    ) {
+        if (!isCharging || percent < 77) {
+            hasAlerted80ThisCharge = false
+        }
+        if (alertOn80PercentEnabled && isCharging && percent >= 80 && !hasAlerted80ThisCharge) {
+            hasAlerted80ThisCharge = true
+            val isAr = currentLanguage.isArabic
+            val title = if (isAr) "تنبيه حماية البطارية 80%" else "80% Charge Protection Alert"
+            val body = if (isAr) {
+                "وصلت البطارية إلى $percent% — يُنصح بفصل الشاحن لإطالة عمر خلايا الليثيوم."
+            } else {
+                "Battery reached $percent% — unplugging now helps extend lithium cell lifespan."
+            }
+            addManualSessionLog(
+                title = title,
+                desc = body,
+                statTag = "$percent%",
+                type = "charge"
+            )
+            if (isAppInForeground) {
+                com.example.audio.CyberHapticsEngine.triggerBenchmarkSuccess(context)
+                com.example.audio.CyberSoundscapeEngine.playElectricSpark()
+            }
+            postAlertNotification(ALERT_NOTIFICATION_80_ID, title, body)
+        }
+
+        if (alertOnHighTempEnabled &&
+            temperatureC >= highTempThresholdC &&
+            (now - lastHighTempAlertMs) >= 5 * 60_000L
+        ) {
+            lastHighTempAlertMs = now
+            val isAr = currentLanguage.isArabic
+            val title = if (isAr) "تحذير حرارة مرتفعة" else "High Temperature Warning"
+            val body = if (isAr) {
+                "بلغت حرارة البطارية ${String.format(Locale.US, "%.1f", temperatureC)}°C (تجاوزت الحد ${highTempThresholdC}°C)."
+            } else {
+                "Battery temperature reached ${String.format(Locale.US, "%.1f", temperatureC)}°C (above ${highTempThresholdC}°C threshold)."
+            }
+            addManualSessionLog(
+                title = title,
+                desc = body,
+                statTag = "${String.format(Locale.US, "%.1f", temperatureC)}°C",
+                type = "temp"
+            )
+            if (isAppInForeground) {
+                com.example.audio.CyberHapticsEngine.triggerThermalWarning(context)
+                com.example.audio.CyberSoundscapeEngine.playThermalAlert()
+            }
+            postAlertNotification(ALERT_NOTIFICATION_TEMP_ID, title, body)
+        }
+    }
+
+    private fun postAlertNotification(notificationId: Int, title: String, body: String) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        runCatching {
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val ch = NotificationChannel(
+                    ALERT_CHANNEL_ID,
+                    if (currentLanguage.isArabic) "تنبيهات صحة البطارية" else "Battery Health Alerts",
+                    NotificationManager.IMPORTANCE_DEFAULT
+                )
+                nm.createNotificationChannel(ch)
+            }
+            val launchIntent = Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
+            }
+            val pendingIntent = PendingIntent.getActivity(
+                context,
+                notificationId,
+                launchIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            val notification = NotificationCompat.Builder(context, ALERT_CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.ic_lock_idle_charging)
+                .setContentTitle(title)
+                .setContentText(body)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+                .setAutoCancel(true)
+                .setContentIntent(pendingIntent)
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .build()
+            nm.notify(notificationId, notification)
+        }
     }
 
     private fun computeRemainingTimeMinutes(
+        status: BatteryStatus,
         isCharging: Boolean,
         percent: Int,
         currentMa: Int,
         designCapMah: Int
     ): Int {
+        if (status == BatteryStatus.FULL && percent >= 100) return 0
         if (isCharging) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 val osChargeTimeMs = try {
@@ -636,14 +807,15 @@ class BatteryMonitorRepository(
                     return (osChargeTimeMs / 60_000L).toInt().coerceAtLeast(1)
                 }
             }
-            if (currentMa <= 50) return 0
+            if (percent >= 95 && currentMa in 0..150) return 0
+            if (currentMa <= 50) return -1
             val missingMah = ((100 - percent).coerceAtLeast(0) / 100f) * designCapMah
-            return ((missingMah / currentMa.toFloat()) * 60f).roundToInt().coerceAtLeast(0)
+            return ((missingMah / currentMa.toFloat()) * 60f).roundToInt().coerceAtLeast(1)
         } else {
             val drawMa = abs(currentMa)
-            if (drawMa < 20) return 0
+            if (drawMa < 20) return -1
             val remainingMah = (percent.coerceAtLeast(0) / 100f) * designCapMah
-            return ((remainingMah / drawMa.toFloat()) * 60f).roundToInt().coerceAtLeast(0)
+            return ((remainingMah / drawMa.toFloat()) * 60f).roundToInt().coerceAtLeast(1)
         }
     }
 
@@ -665,7 +837,7 @@ class BatteryMonitorRepository(
             _wattageHistory.value = append(_wattageHistory.value, t.wattageW)
         }
 
-        val voltageChanged = t.voltageMv > 0 && abs(t.voltageMv - lastSlowHistoryVoltageMv) >= 1
+        val voltageChanged = t.voltageMv > 0 && abs(t.voltageMv - lastSlowHistoryVoltageMv) >= 2 && (now - lastSlowHistoryAppendMs >= 500L)
         if (_voltageHistory.value.isEmpty() || (now - lastSlowHistoryAppendMs >= 1000L) || voltageChanged) {
             lastSlowHistoryAppendMs = now
             lastSlowHistoryVoltageMv = t.voltageMv
@@ -692,6 +864,7 @@ class BatteryMonitorRepository(
         if (name.isNotBlank()) {
             val trimmed = name.trim()
             val initials = trimmed.take(2).uppercase()
+            com.example.data.local.SettingsPreferencesManager(context).saveOwnerName(trimmed)
             _userAccount.value = _userAccount.value.copy(
                 ownerName = trimmed,
                 avatarInitials = initials
@@ -701,8 +874,9 @@ class BatteryMonitorRepository(
 
     fun runCableDiagnosticSweep(tierOverride: CableDnaTier? = null) {
         val isAr = currentLanguage.isArabic
+        val currentTelemetry = _telemetry.value
         val result = CableDnaStandardsEngine.evaluate(
-            telemetry = _telemetry.value,
+            telemetry = currentTelemetry,
             deviceProfile = _deviceProfile.value,
             observedBaselineOcvMv = observedBaselineOcvMv,
             dynamicDeltaImpedanceMilliOhms = smoothedDynamicImpedanceMohm,
@@ -712,18 +886,26 @@ class BatteryMonitorRepository(
         )
         _cableResult.value = result
 
+        val isStandby = currentTelemetry.plugType == ChargePlug.NONE &&
+            currentTelemetry.status != BatteryStatus.CHARGING &&
+            currentTelemetry.status != BatteryStatus.FULL &&
+            tierOverride == null
         addManualSessionLog(
-            title = if (isAr) {
+            title = if (isStandby) {
+                if (isAr) "فحص الكابل: وضع الاستعداد" else "Cable DNA: Standby"
+            } else if (isAr) {
                 "فحص الكابل: ${result.tier.localizedTitle(true)}"
             } else {
                 "Cable DNA Audit: ${result.tier.localizedTitle(false)}"
             },
-            desc = if (isAr) {
+            desc = if (isStandby) {
+                if (isAr) "الشاحن غير موصول حالياً — وصّل الكابل لإجراء الفحص." else "Charger unplugged — connect cable to run diagnostic sweep."
+            } else if (isAr) {
                 "المقاومة ${result.resistanceMilliOhms}mΩ (${result.estimatedAwg}) • الهبوط -${result.voltageDropMv}mV • ${result.standardCompliance}."
             } else {
                 "Resistance ${result.resistanceMilliOhms}mΩ (${result.estimatedAwg}), Drop -${result.voltageDropMv}mV, ${result.standardCompliance}."
             },
-            statTag = result.tier.localizedGrade(isAr),
+            statTag = if (isStandby) (if (isAr) "استعداد" else "STANDBY") else result.tier.localizedGrade(isAr),
             type = if (result.tier.isDangerous) "warning" else "check"
         )
     }
@@ -768,7 +950,13 @@ class BatteryMonitorRepository(
             cycleBasedHealth
         }
 
-        val liveHealthPct = (rawSoh.coerceIn(55f, 100f) * 100f).roundToInt() / 100f
+        val clampedRawSoh = rawSoh.coerceIn(55f, 100f)
+        val filteredSoh = smoothedSohPct?.let { prev ->
+            (prev * 0.85f) + (clampedRawSoh * 0.15f)
+        } ?: clampedRawSoh
+        smoothedSohPct = filteredSoh
+
+        val liveHealthPct = (filteredSoh.coerceIn(55f, 100f) * 100f).roundToInt() / 100f
         val effectiveCapacityMah = (designCapMah * (liveHealthPct / 100f)).roundToInt()
 
         // Physical Cell ESR (mΩ): prefer measured dynamic ΔV/ΔI, otherwise Arrhenius temperature + cycle model
@@ -791,7 +979,7 @@ class BatteryMonitorRepository(
         } else {
             ((liveHealthPct - 80f).coerceAtLeast(0f) / 0.02f).roundToInt()
         }
-        val lifespanDays = (remainingCycles * 0.95f).roundToInt().coerceAtLeast(30)
+        val lifespanDays = (remainingCycles * 0.95f).roundToInt().coerceAtLeast(0)
 
         val cal = Calendar.getInstance()
         cal.add(Calendar.DAY_OF_YEAR, lifespanDays)

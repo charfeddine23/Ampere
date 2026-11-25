@@ -414,8 +414,7 @@ fun LuxuryTopBar(
 
             Box(
                 modifier = Modifier
-                    .minimumInteractiveComponentSize()
-                    .heightIn(min = 38.dp)
+                    .heightIn(min = 48.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .background(
                         if (resolvedTheme.themeId != null) resolvedTheme.surface
@@ -514,13 +513,12 @@ fun LuxuryHamburgerButton(
     Box(
         modifier = modifier
             .testTag("luxury_hamburger_button")
-            .minimumInteractiveComponentSize()
-            .size(40.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .size(48.dp)
+            .clip(RoundedCornerShape(14.dp))
             .background(buttonBg)
-            .border(1.dp, borderColor, RoundedCornerShape(12.dp))
+            .border(1.dp, borderColor, RoundedCornerShape(14.dp))
             .clickable(onClick = onClick)
-            .padding(9.dp),
+            .padding(13.dp),
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -1680,6 +1678,24 @@ fun LuxurySettingsDrawer(
                                 textColor = textColor,
                                 subTextColor = subTextColor,
                                 testTag = "fps_120_toggle_row"
+                            )
+
+                            DrawerToggleRow(
+                                title = if (isArabic) "مؤشر معدل الإطارات (FPS)" else "Live FPS Badge",
+                                subtitle = if (isArabic) {
+                                    "عرض شارة معدل الإطارات الحي في الوضع العادي والاحترافي"
+                                } else {
+                                    "Show live frame-rate badge in Normal and Pro modes"
+                                },
+                                checked = themeConfig.showFpsOverlay,
+                                onCheckedChange = {
+                                    CyberHapticsEngine.triggerTactileTick(context)
+                                    onConfigChange(themeConfig.copy(showFpsOverlay = it))
+                                },
+                                accentColor = accentColor,
+                                textColor = textColor,
+                                subTextColor = subTextColor,
+                                testTag = "fps_overlay_toggle_row"
                             )
                         }
                     }

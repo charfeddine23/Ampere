@@ -318,7 +318,8 @@ fun Page1LivingBatteryScreen(
                     val currentLabel = "${if (telemetry.currentMa >= 0) "+" else ""}${telemetry.currentMa} mA"
                     val estLabel = formatRemainingTime(
                         minutes = telemetry.estimatedMinutesRemaining,
-                        isCharging = telemetry.status == BatteryStatus.CHARGING,
+                        status = telemetry.status,
+                        percent = telemetry.percentage,
                         isArabic = isArabic
                     )
 
@@ -539,14 +540,19 @@ private fun QuickStripDivider(color: Color) {
 
 private fun formatRemainingTime(
     minutes: Int,
-    isCharging: Boolean,
+    status: BatteryStatus,
+    percent: Int,
     isArabic: Boolean
 ): String {
+    if (status == BatteryStatus.FULL && percent >= 100) {
+        return if (isArabic) "مكتمل" else "Full"
+    }
     if (minutes <= 0) {
-        return if (isCharging) {
-            if (isArabic) "قريب الامتلاء" else "Soon"
-        } else {
-            "--"
+        val isCharging = status == BatteryStatus.CHARGING || status == BatteryStatus.FULL
+        return when {
+            isCharging && percent >= 95 -> if (isArabic) "قريب الامتلاء" else "Soon"
+            isCharging -> if (isArabic) "جاري الحساب" else "Calculating"
+            else -> "--"
         }
     }
     val hrs = minutes / 60

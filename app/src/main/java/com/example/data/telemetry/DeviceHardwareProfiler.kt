@@ -184,7 +184,7 @@ object DeviceHardwareProfiler {
     ): OemChargingSpec {
         return when {
             "samsung" in oemKey -> {
-                val watts = if (formFactor == DeviceFormFactor.TABLET) 45 else 45
+                val watts = if (formFactor == DeviceFormFactor.TABLET || isDualCell) 45 else 25
                 OemChargingSpec(
                     ecosystemAr = "Samsung Super Fast Charging 2.0 (USB-PD 3.0 + PPS)",
                     ecosystemEn = "Samsung SFC 2.0 • USB-PD PPS",
@@ -307,15 +307,27 @@ object DeviceHardwareProfiler {
         formFactor: DeviceFormFactor,
         isDualCell: Boolean
     ): Int {
-        // Attempt private PowerProfile reflection gracefully before falling back to hardware class heuristics
-        val reflected = runCatching {
-            val powerProfileClass = Class.forName("com.android.internal.os.PowerProfile")
-            val ctor = powerProfileClass.getConstructor(Context::class.java)
-            val instance = ctor.newInstance(context.applicationContext)
-            val method = powerProfileClass.getMethod("getBatteryCapacity")
-            val cap = (method.invoke(instance) as? Double)?.roundToInt() ?: 0
-            if (cap in 1800..15000) cap else 0
+        val sysfsCapacity = runCatching {
+            val file = java.io.File("/sys/class/power_supply/battery/charge_full_design")
+            if (file.canRead()) {
+                val raw = file.readText().trim().toLongOrNull() ?: 0L
+                val mah = if (raw > 100_000L) (raw / 1000L).toInt() else raw.toInt()
+                if (mah in 1800..15000) mah else 0
+            } else 0
         }.getOrDefault(0)
+        if (sysfsCapacity > 0) return sysfsCapacity
+
+        // Only attempt private PowerProfile reflection on pre-Android 9 devices without hidden API blocks
+        val reflected = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+            runCatching {
+                val powerProfileClass = Class.forName("com.android.internal.os.PowerProfile")
+                val ctor = powerProfileClass.getConstructor(Context::class.java)
+                val instance = ctor.newInstance(context.applicationContext)
+                val method = powerProfileClass.getMethod("getBatteryCapacity")
+                val cap = (method.invoke(instance) as? Double)?.roundToInt() ?: 0
+                if (cap in 1800..15000) cap else 0
+            }.getOrDefault(0)
+        } else 0
 
         if (reflected > 0) return reflected
 
@@ -334,10 +346,11 @@ object DeviceHardwareProfiler {
     }
 
     private fun cleanModelName(manufacturer: String, rawModel: String): String {
-        return if (rawModel.startsWith(manufacturer, ignoreCase = true)) {
-            rawModel
+        val trimmedModel = rawModel.trim()
+        return if (trimmedModel.startsWith(manufacturer, ignoreCase = true)) {
+            trimmedModel.substring(manufacturer.length).trim().ifBlank { trimmedModel }
         } else {
-            rawModel
+            trimmedModel
         }
     }
 

@@ -226,8 +226,7 @@ fun Page4CableDnaScreen(
 
                         Box(
                             modifier = Modifier
-                                .minimumInteractiveComponentSize()
-                                .heightIn(min = 38.dp)
+                                .heightIn(min = 48.dp)
                                 .clip(RoundedCornerShape(11.dp))
                                 .background(tierColor.copy(alpha = if (isDark) 0.18f else 0.12f))
                                 .border(1.dp, tierColor.copy(alpha = 0.45f), RoundedCornerShape(11.dp))

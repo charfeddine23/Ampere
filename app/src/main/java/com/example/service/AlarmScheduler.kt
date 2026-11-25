@@ -103,24 +103,25 @@ class AlarmReceiver : BroadcastReceiver() {
             try {
                 val db = AmpereDatabase.getInstance(appContext)
                 val ifilter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
-                val bStatus = appContext.registerReceiver(null, ifilter)
+                val bStatus = appContext.registerReceiver(null, ifilter) ?: return@launch
 
-                val rawLevel = bStatus?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
-                val scale = bStatus?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
-                val pct = if (rawLevel >= 0 && scale > 0) ((rawLevel / scale.toFloat()) * 100).toInt().coerceIn(0, 100) else 84
+                val rawLevel = bStatus.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+                val scale = bStatus.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+                if (rawLevel < 0 || scale <= 0) return@launch
+                val pct = ((rawLevel / scale.toFloat()) * 100).toInt().coerceIn(0, 100)
 
-                val rawVoltage = bStatus?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 4150) ?: 4150
-                val voltageMv = BatteryMonitorRepository.normalizeVoltageMv(rawVoltage.toLong()).let {
-                    if (it > 0) it else 4150
-                }
+                val rawVoltage = bStatus.getIntExtra(BatteryManager.EXTRA_VOLTAGE, -1)
+                val voltageMv = BatteryMonitorRepository.normalizeVoltageMv(rawVoltage.toLong())
+                if (voltageMv <= 0) return@launch
 
-                val rawTemp = bStatus?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 285) ?: 285
-                val tempC = rawTemp / 10.0f
+                val rawTemp = bStatus.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, Int.MIN_VALUE)
+                if (rawTemp == Int.MIN_VALUE) return@launch
+                val tempC = (rawTemp / 10.0f).coerceIn(-30.0f, 90.0f)
 
                 val bm = appContext.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
-                val statusInt = bStatus?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
-                val isCharging = statusInt == BatteryManager.BATTERY_STATUS_CHARGING ||
-                    statusInt == BatteryManager.BATTERY_STATUS_FULL
+                val statusInt = bStatus.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
+                val isFull = statusInt == BatteryManager.BATTERY_STATUS_FULL
+                val isCharging = statusInt == BatteryManager.BATTERY_STATUS_CHARGING || isFull
 
                 val engine = CurrentCalibrationEngine(
                     context = appContext,
@@ -130,13 +131,14 @@ class AlarmReceiver : BroadcastReceiver() {
                 val currentMa = engine.sampleCurrentMa(
                     batteryManager = bm,
                     isCharging = isCharging,
-                    voltageMv = voltageMv
+                    voltageMv = voltageMv,
+                    isFull = isFull
                 )
 
                 val state = when {
-                    tempC > 38f -> "HEATING"
+                    tempC >= config.highTempThresholdC -> "HEATING"
                     isCharging -> "STORING"
-                    tempC < 30f -> "COOLING"
+                    tempC < 15.0f -> "COOLING"
                     else -> "SLEEP"
                 }
 

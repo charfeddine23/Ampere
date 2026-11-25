@@ -1,6 +1,9 @@
 package com.example.widget
 
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.BatteryManager
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -31,7 +34,10 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import com.example.MainActivity
+import com.example.data.BatteryMonitorRepository
+import com.example.data.telemetry.CurrentCalibrationEngine
 import java.util.Locale
+import kotlin.math.roundToInt
 
 /**
  * High-Fidelity Liquid Glass Home Screen Widget for Volt Core.
@@ -42,18 +48,53 @@ class LivingBatteryGlanceWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val prefs = context.getSharedPreferences("ampere_pulse_widget_prefs", Context.MODE_PRIVATE)
-        val pct = prefs.getInt("battery_pct", 84)
-        val tempC = prefs.getFloat("battery_temp", 28.5f)
-        val voltageMv = prefs.getInt("battery_voltage", 4182)
-        val currentMa = prefs.getInt("battery_current", 2340)
-        val stateName = prefs.getString("battery_state", "ENERGY_STORING") ?: "ENERGY_STORING"
+        val hasStoredData = prefs.contains("battery_pct")
+        var pct = if (hasStoredData) prefs.getInt("battery_pct", -1) else -1
+        var tempC = if (hasStoredData) prefs.getFloat("battery_temp", Float.NaN) else Float.NaN
+        var voltageMv = if (hasStoredData) prefs.getInt("battery_voltage", 0) else 0
+        var currentMa = if (hasStoredData) prefs.getInt("battery_current", 0) else 0
+        var stateName = prefs.getString("battery_state", null)
+
+        if (!hasStoredData || pct < 0 || voltageMv <= 0 || tempC.isNaN()) {
+            val sticky = runCatching {
+                context.applicationContext.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+            }.getOrNull()
+            if (sticky != null) {
+                val lvl = sticky.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+                val scale = sticky.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+                if (lvl >= 0 && scale > 0) {
+                    pct = ((lvl / scale.toFloat()) * 100f).roundToInt().coerceIn(0, 100)
+                }
+                val rawV = sticky.getIntExtra(BatteryManager.EXTRA_VOLTAGE, -1)
+                voltageMv = BatteryMonitorRepository.normalizeVoltageMv(rawV.toLong())
+                val rawT = sticky.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, Int.MIN_VALUE)
+                if (rawT != Int.MIN_VALUE) tempC = (rawT / 10f).coerceIn(-30f, 90f)
+                val statusInt = sticky.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
+                val isFull = statusInt == BatteryManager.BATTERY_STATUS_FULL
+                val isCharging = statusInt == BatteryManager.BATTERY_STATUS_CHARGING || isFull
+                val bm = context.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
+                val cfg = com.example.data.local.SettingsPreferencesManager(context).loadThemeConfig()
+                currentMa = CurrentCalibrationEngine(
+                    context = context,
+                    initialMultiplier = cfg.currentMultiplier,
+                    initialOffsetMa = cfg.currentZeroOffsetMa
+                ).sampleCurrentMa(bm, isCharging, voltageMv, isFull)
+                stateName = when {
+                    !tempC.isNaN() && tempC >= cfg.highTempThresholdC -> "OVERDRIVE_HEATING"
+                    isCharging -> "ENERGY_STORING"
+                    !tempC.isNaN() && tempC < 15.0f -> "COOLING"
+                    else -> "DEEP_SLEEP"
+                }
+            }
+        }
+        val resolvedStateName = stateName ?: "DEEP_SLEEP"
         val isArabic = if (prefs.contains("is_arabic")) {
             prefs.getBoolean("is_arabic", true)
         } else {
             com.example.data.local.SettingsPreferencesManager(context).loadThemeConfig().appLanguage.isArabic
         }
 
-        val (accentColor, stateTitle, stateSubtitle) = when (stateName) {
+        val (accentColor, stateTitle, stateSubtitle) = when (resolvedStateName) {
             "OVERDRIVE_HEATING" -> Triple(
                 Color(0xFFFF3D00),
                 if (isArabic) "إجهاد حراري" else "THERMAL STRESS",
@@ -117,12 +158,18 @@ class LivingBatteryGlanceWidget : GlanceAppWidget() {
                         Spacer(modifier = GlanceModifier.height(6.dp))
 
                         // Percentage & Live Stats
+                        val displayPct = pct.coerceIn(0, 100)
+                        val pctText = if (pct >= 0) "$displayPct%" else "--"
+                        val tempLabel = if (!tempC.isNaN()) "${String.format(Locale.US, "%.1f", tempC)}°C" else "--°C"
+                        val voltLabel = if (voltageMv > 0) "${voltageMv}mV" else "--mV"
+                        val currLabel = "${if (currentMa >= 0) "+$currentMa" else "$currentMa"}mA"
+
                         Row(
                             modifier = GlanceModifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "$pct%",
+                                text = pctText,
                                 style = TextStyle(
                                     color = androidx.glance.unit.ColorProvider(Color.White),
                                     fontSize = 30.sp,
@@ -140,7 +187,7 @@ class LivingBatteryGlanceWidget : GlanceAppWidget() {
                                     )
                                 )
                                 Text(
-                                    text = "${String.format(Locale.US, "%.1f", tempC)}°C • ${voltageMv}mV • ${if (currentMa >= 0) "+$currentMa" else "$currentMa"}mA",
+                                    text = "$tempLabel • $voltLabel • $currLabel",
                                     style = TextStyle(
                                         color = androidx.glance.unit.ColorProvider(Color(0xFFCBD5E1)),
                                         fontSize = 10.sp
@@ -151,21 +198,27 @@ class LivingBatteryGlanceWidget : GlanceAppWidget() {
 
                         Spacer(modifier = GlanceModifier.height(8.dp))
 
-                        // Ambient glowing state track bar
-                        Box(
+                        // Ambient glowing state track bar scaled to live battery percentage
+                        val litSegments = if (pct < 0) 0 else ((displayPct + 5) / 10).coerceIn(0, 10)
+                        Row(
                             modifier = GlanceModifier
                                 .fillMaxWidth()
                                 .height(4.dp)
-                                .cornerRadius(2.dp)
-                                .background(Color(0xFF334155))
                         ) {
-                            Box(
-                                modifier = GlanceModifier
-                                    .fillMaxWidth()
-                                    .height(4.dp)
-                                    .cornerRadius(2.dp)
-                                    .background(accentColor)
-                            ) {}
+                            for (segmentIndex in 0 until 10) {
+                                Box(
+                                    modifier = GlanceModifier
+                                        .defaultWeight()
+                                        .height(4.dp)
+                                        .cornerRadius(2.dp)
+                                        .background(
+                                            if (segmentIndex < litSegments) accentColor else Color(0xFF334155)
+                                        )
+                                ) {}
+                                if (segmentIndex < 9) {
+                                    Spacer(modifier = GlanceModifier.width(2.dp))
+                                }
+                            }
                         }
                     }
                 }

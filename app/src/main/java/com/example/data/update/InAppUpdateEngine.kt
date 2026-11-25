@@ -2,14 +2,9 @@ package com.example.data.update
 
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.content.pm.Signature
 import android.net.Uri
-import android.os.Build
-import android.provider.Settings
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.IntentSenderRequest
-import androidx.core.content.FileProvider
 import com.example.BuildConfig
 import com.google.android.play.core.appupdate.AppUpdateInfo
 import com.google.android.play.core.appupdate.AppUpdateManager
@@ -23,19 +18,16 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
 import java.io.File
-import java.io.FileOutputStream
 import java.net.URI
-import java.security.MessageDigest
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
@@ -249,10 +241,15 @@ class InAppUpdateEngine(private val context: Context) {
         } catch (_: Exception) {}
     }
 
+    fun release() {
+        unregisterListener()
+        activeDownloadJob?.cancel()
+        activeDownloadJob = null
+        scope.cancel()
+    }
+
     /**
-     * Checks GitHub Latest Release API for newer signed APK builds.
-     * When [autoDownloadIfFound] is true and a newer direct .apk asset exists,
-     * begins downloading inside the app automatically with no external apps.
+     * Checks Play Store In-App Updates and GitHub Latest Release API for newer signed builds.
      */
     fun checkForUpdates(
         autoShowOnAvailable: Boolean = true,
@@ -262,20 +259,6 @@ class InAppUpdateEngine(private val context: Context) {
         if (_uiState.value.isChecking || _uiState.value.isDownloading) return
 
         val isAr = isArabicLanguage
-        val existingApkPath = _uiState.value.downloadedApkPath
-        if (_uiState.value.isDownloadedReadyToInstall && existingApkPath != null && File(existingApkPath).exists()) {
-            val canInstall = canInstallPackages()
-            _uiState.value = _uiState.value.copy(
-                needsInstallPermission = !canInstall,
-                lastCheckSummary = if (canInstall) {
-                    if (isAr) "جاهز للتثبيت المباشر" else "Ready to install"
-                } else {
-                    if (isAr) "فعّل إذن التثبيت لإكمال التحديث" else "Enable install permission to continue"
-                }
-            )
-            return
-        }
-
         _uiState.value = _uiState.value.copy(
             isChecking = true,
             lastCheckSummary = if (isAr) "جاري البحث عن تحديثات..." else "Checking for updates..."
@@ -302,21 +285,12 @@ class InAppUpdateEngine(private val context: Context) {
                         statusBadgeText = if (ar) "تحديث جديد • v${githubResult.versionName}" else "New Update • v${githubResult.versionName}",
                         headlineText = if (ar) "تحديث جديد متاح" else "Update Available",
                         descriptionText = if (ar) {
-                            "الإصدار v${githubResult.versionName}$sizeLabel متاح للتنزيل والتثبيت المباشر داخل التطبيق."
+                            "الإصدار v${githubResult.versionName}$sizeLabel متاح الآن عبر صفحة الإصدارات الرسمية الموثقة."
                         } else {
-                            "Version v${githubResult.versionName}$sizeLabel is ready for direct in-app download and installation."
+                            "Version v${githubResult.versionName}$sizeLabel is available on the verified official releases page."
                         },
                         lastCheckSummary = if (ar) "يتوفر تحديث: v${githubResult.versionName}$sizeLabel" else "Update available: v${githubResult.versionName}$sizeLabel"
                     )
-
-                    if (autoDownloadIfFound && githubResult.downloadUrl.contains(".apk", ignoreCase = true)) {
-                        startInAppApkDownload(
-                            url = githubResult.downloadUrl,
-                            fileName = githubResult.apkFileName ?: "Volt.Core.v${githubResult.versionName}.apk",
-                            expectedSizeMb = githubResult.apkSizeMb,
-                            hostContext = appContext
-                        )
-                    }
                     return@launch
                 } else {
                     _uiState.value = _uiState.value.copy(
@@ -528,17 +502,7 @@ class InAppUpdateEngine(private val context: Context) {
         val current = _uiState.value
         if (current.isDownloading) return
 
-        // 1. Ready to install locally downloaded APK
-        val apkPath = current.downloadedApkPath
-        if (current.isDownloadedReadyToInstall && apkPath != null) {
-            val apkFile = File(apkPath)
-            if (apkFile.exists()) {
-                launchLocalApkInstaller(hostContext, apkFile)
-                return
-            }
-        }
-
-        // 2. Ready to complete Play Core flexible update
+        // 1. Ready to complete Play Core flexible update
         if (current.isDownloadedReadyToInstall && current.hasPlayUpdatePayload) {
             try {
                 appUpdateManager.completeUpdate()
@@ -546,7 +510,7 @@ class InAppUpdateEngine(private val context: Context) {
             return
         }
 
-        // 3. Play Store Update flow
+        // 2. Play Store Update flow
         val info = cachedAppUpdateInfo
         if (current.hasPlayUpdatePayload && info != null && info.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE) {
             val updateType = when {
@@ -557,184 +521,23 @@ class InAppUpdateEngine(private val context: Context) {
             if (launchPlayUpdateFlow(info, updateType)) return
         }
 
-        // 4. Direct In-App APK download from GitHub Releases (no external apps/browser!)
-        if (current.updateAvailable &&
-            isTrustedUpdateUrl(current.downloadUrl) &&
-            current.downloadUrl.contains(".apk", ignoreCase = true)
-        ) {
-            val targetName = current.apkFileName ?: "Volt.Core.v${current.availableVersionName ?: "latest"}.apk"
-            startInAppApkDownload(
-                url = current.downloadUrl,
-                fileName = targetName,
-                expectedSizeMb = current.apkSizeMb,
-                hostContext = hostContext
-            )
+        // 3. Verified HTTPS Official Release Page
+        if (current.updateAvailable && isTrustedUpdateUrl(current.downloadUrl)) {
+            runCatching {
+                val releaseIntent = Intent(Intent.ACTION_VIEW, Uri.parse(current.downloadUrl)).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                hostContext.startActivity(releaseIntent)
+            }
             return
         }
 
-        // 5. Otherwise run a live check & auto-download inside the app if found
+        // 4. Otherwise run a live update check
         checkForUpdates(
             autoShowOnAvailable = true,
             openDialogImmediatelyOnManual = true,
-            autoDownloadIfFound = true
+            autoDownloadIfFound = false
         )
-    }
-
-    private fun startInAppApkDownload(
-        url: String,
-        fileName: String,
-        expectedSizeMb: Float?,
-        hostContext: Context
-    ) {
-        if (!isTrustedUpdateUrl(url)) return
-        activeDownloadJob?.cancel()
-        activeDownloadJob = scope.launch {
-            val updatesDir = File(appContext.cacheDir, "updates").apply { mkdirs() }
-            val safeFileName = sanitizeApkFileName(fileName)
-            val targetFile = File(updatesDir, safeFileName)
-            val tempFile = File(updatesDir, "$safeFileName.part")
-            val updatesCanonical = updatesDir.canonicalPath + File.separator
-            if (!targetFile.canonicalPath.startsWith(updatesCanonical) ||
-                !tempFile.canonicalPath.startsWith(updatesCanonical)
-            ) {
-                return@launch
-            }
-
-            val isArStart = isArabicLanguage
-            _uiState.value = _uiState.value.copy(
-                isDownloading = true,
-                isDownloadedReadyToInstall = false,
-                needsInstallPermission = false,
-                downloadProgress = 0f,
-                downloadedMb = 0f,
-                totalMb = expectedSizeMb ?: 0f,
-                headlineText = if (isArStart) "جاري تحميل التحديث..." else "Downloading Update...",
-                statusBadgeText = if (isArStart) "تنزيل داخلي • 0%" else "In-App Download • 0%",
-                descriptionText = if (isArStart) "يتم تحميل التحديث داخل التطبيق مباشرة بدون تطبيقات خارجية..." else "Downloading update directly inside the app...",
-                lastCheckSummary = if (isArStart) "جاري التنزيل داخل التطبيق (0%)" else "Downloading in-app (0%)"
-            )
-
-            try {
-                val request = Request.Builder()
-                    .url(url)
-                    .header("User-Agent", "VoltCore-Android/${BuildConfig.VERSION_NAME}")
-                    .build()
-
-                httpClient.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) {
-                        throw IllegalStateException("HTTP ${response.code}")
-                    }
-                    if (!isTrustedUpdateUrl(response.request.url.toString())) {
-                        throw SecurityException("Untrusted final download origin")
-                    }
-                    val body = response.body ?: throw IllegalStateException("Empty body")
-                    val contentLength = body.contentLength()
-                    if (contentLength > MAX_APK_BYTES) {
-                        throw SecurityException("APK exceeds maximum allowed size")
-                    }
-                    val totalBytes = contentLength.let { len ->
-                        if (len > 0L) len else ((expectedSizeMb ?: 0f) * 1024f * 1024f).toLong()
-                    }
-                    val totalMbVal = if (totalBytes > 0L) totalBytes / (1024f * 1024f) else (expectedSizeMb ?: 0f)
-
-                    body.byteStream().use { input ->
-                        FileOutputStream(tempFile).use { output ->
-                            val buffer = ByteArray(16 * 1024)
-                            var bytesReadTotal = 0L
-                            var lastUiEmitTime = 0L
-
-                            while (isActive) {
-                                val read = input.read(buffer)
-                                if (read == -1) break
-                                bytesReadTotal += read
-                                if (bytesReadTotal > MAX_APK_BYTES) {
-                                    throw SecurityException("Streamed APK exceeds safety cap")
-                                }
-                                output.write(buffer, 0, read)
-
-                                val now = System.currentTimeMillis()
-                                if (now - lastUiEmitTime >= 80L) {
-                                    lastUiEmitTime = now
-                                    val fraction = if (totalBytes > 0L) {
-                                        (bytesReadTotal.toFloat() / totalBytes.toFloat()).coerceIn(0f, 1f)
-                                    } else 0.5f
-                                    val downloadedMbVal = bytesReadTotal / (1024f * 1024f)
-                                    val pct = (fraction * 100).toInt()
-                                    val arLoop = isArabicLanguage
-                                    _uiState.value = _uiState.value.copy(
-                                        downloadProgress = fraction,
-                                        downloadedMb = downloadedMbVal,
-                                        totalMb = totalMbVal,
-                                        statusBadgeText = if (arLoop) "تنزيل داخلي • $pct%" else "In-App Download • $pct%",
-                                        lastCheckSummary = if (arLoop) {
-                                            "جاري التحميل داخلياً: $pct% (${String.format(Locale.US, "%.1f", downloadedMbVal)} MB)"
-                                        } else {
-                                            "Downloading: $pct% (${String.format(Locale.US, "%.1f", downloadedMbVal)} MB)"
-                                        }
-                                    )
-                                }
-                            }
-                            output.flush()
-                        }
-                    }
-                }
-
-                if (targetFile.exists()) targetFile.delete()
-                if (!tempFile.renameTo(targetFile)) {
-                    tempFile.copyTo(targetFile, overwrite = true)
-                    tempFile.delete()
-                }
-
-                if (!verifyDownloadedApkIntegrity(targetFile)) {
-                    runCatching { targetFile.delete() }
-                    throw SecurityException("APK signature or package verification failed")
-                }
-
-                val canInstall = canInstallPackages()
-                val arDone = isArabicLanguage
-                _uiState.value = _uiState.value.copy(
-                    isDownloading = false,
-                    isDownloadedReadyToInstall = true,
-                    needsInstallPermission = !canInstall,
-                    downloadProgress = 1f,
-                    downloadedApkPath = targetFile.absolutePath,
-                    headlineText = if (arDone) "اكتمل تنزيل التحديث" else "Update Downloaded",
-                    statusBadgeText = if (canInstall) {
-                        if (arDone) "جاهز للتثبيت المباشر" else "Ready to Install"
-                    } else {
-                        if (arDone) "يتطلب إذن التثبيت" else "Permission Required"
-                    },
-                    descriptionText = if (canInstall) {
-                        if (arDone) "تم تحميل التحديث داخل التطبيق بنجاح وجاهز للتثبيت مباشرة فوق النسخة الحالية." else "Update downloaded in-app and ready to install directly over the current version."
-                    } else {
-                        if (arDone) "تم التحميل بنجاح. فعّل خيار السماح بالتثبيت من هذا المصدر لإكمال التحديث." else "Download complete. Allow installing packages from this source to finish."
-                    },
-                    lastCheckSummary = if (canInstall) {
-                        if (arDone) "اكتمل التنزيل • جاهز للتثبيت المباشر" else "Downloaded • Ready to install"
-                    } else {
-                        if (arDone) "تم التنزيل • فعّل إذن التثبيت" else "Downloaded • Enable install permission"
-                    }
-                )
-
-                withContext(Dispatchers.Main) {
-                    launchLocalApkInstaller(hostContext, targetFile)
-                }
-            } catch (ce: kotlinx.coroutines.CancellationException) {
-                runCatching { tempFile.delete() }
-                throw ce
-            } catch (_: Exception) {
-                runCatching { tempFile.delete() }
-                val arErr = isArabicLanguage
-                _uiState.value = _uiState.value.copy(
-                    isDownloading = false,
-                    downloadProgress = 0f,
-                    headlineText = if (arErr) "تعذر تحميل التحديث" else "Download Failed",
-                    statusBadgeText = if (arErr) "فشل التنزيل" else "Failed",
-                    descriptionText = if (arErr) "تعذر تنزيل الحزمة داخل التطبيق الآن. تأكد من استقرار الشبكة وحاول مرة أخرى." else "Could not download the package inside the app. Check your network connection and retry.",
-                    lastCheckSummary = if (arErr) "تعذر تنزيل التحديث • أعد المحاولة" else "Download failed • Retry"
-                )
-            }
-        }
     }
 
     fun cancelInAppDownload() {
@@ -746,111 +549,9 @@ class InAppUpdateEngine(private val context: Context) {
             downloadProgress = 0f,
             headlineText = if (isAr) "تحديث جديد متاح" else "Update Available",
             statusBadgeText = if (isAr) "تحديث جديد" else "Update",
-            descriptionText = if (isAr) "تم إيقاف التنزيل مؤقتاً. يمكنك استئنافه في أي وقت." else "Download paused. You can resume at any time.",
-            lastCheckSummary = if (isAr) "تم إلغاء التنزيل" else "Download canceled"
+            descriptionText = if (isAr) "تم إيقاف الفحص مؤقتاً. يمكنك المحاولة في أي وقت." else "Paused. You can check again anytime.",
+            lastCheckSummary = if (isAr) "تم الإلغاء" else "Canceled"
         )
-    }
-
-    private fun canInstallPackages(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            try {
-                appContext.packageManager.canRequestPackageInstalls()
-            } catch (_: Exception) {
-                true
-            }
-        } else {
-            true
-        }
-    }
-
-    private fun launchLocalApkInstaller(hostContext: Context, apkFile: File) {
-        if (!apkFile.exists()) return
-        val updatesDir = File(appContext.cacheDir, "updates")
-        val insideUpdates = runCatching {
-            apkFile.canonicalPath.startsWith(updatesDir.canonicalPath + File.separator)
-        }.getOrDefault(false)
-        if (!insideUpdates || !verifyDownloadedApkIntegrity(apkFile)) {
-            runCatching { apkFile.delete() }
-            return
-        }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !canInstallPackages()) {
-            _uiState.value = _uiState.value.copy(needsInstallPermission = true)
-            try {
-                val permIntent = Intent(
-                    Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                    Uri.parse("package:${appContext.packageName}")
-                ).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                hostContext.startActivity(permIntent)
-            } catch (_: Exception) {}
-            return
-        }
-
-        try {
-            val contentUri = FileProvider.getUriForFile(
-                appContext,
-                "${appContext.packageName}.fileprovider",
-                apkFile
-            )
-            val installIntent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(contentUri, "application/vnd.android.package-archive")
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-            hostContext.startActivity(installIntent)
-        } catch (_: Exception) {}
-    }
-
-    /**
-     * Verifies that the downloaded APK belongs to the same packageName, does not downgrade
-     * VERSION_CODE, and shares at least one SHA-256 signing certificate with the running app.
-     */
-    @Suppress("DEPRECATION")
-    private fun verifyDownloadedApkIntegrity(apkFile: File): Boolean {
-        return runCatching {
-            if (!apkFile.isFile || apkFile.length() !in 1L..MAX_APK_BYTES) return@runCatching false
-            val pm = appContext.packageManager
-            val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                PackageManager.GET_SIGNING_CERTIFICATES
-            } else {
-                PackageManager.GET_SIGNATURES
-            }
-            val archiveInfo = pm.getPackageArchiveInfo(apkFile.absolutePath, flags) ?: return@runCatching false
-            if (archiveInfo.packageName != appContext.packageName) return@runCatching false
-            val archiveVersionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                archiveInfo.longVersionCode
-            } else {
-                archiveInfo.versionCode.toLong()
-            }
-            if (archiveVersionCode < BuildConfig.VERSION_CODE.toLong()) return@runCatching false
-
-            val installedInfo = pm.getPackageInfo(appContext.packageName, flags) ?: return@runCatching false
-            val installedDigests = extractSigningDigests(installedInfo)
-            val archiveDigests = extractSigningDigests(archiveInfo)
-            if (installedDigests.isEmpty() || archiveDigests.isEmpty()) return@runCatching false
-            installedDigests.any { it in archiveDigests }
-        }.getOrDefault(false)
-    }
-
-    @Suppress("DEPRECATION")
-    private fun extractSigningDigests(packageInfo: android.content.pm.PackageInfo): Set<String> {
-        val signatures: Array<Signature> = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            val signingInfo = packageInfo.signingInfo ?: return emptySet()
-            if (signingInfo.hasMultipleSigners()) {
-                signingInfo.apkContentsSigners
-            } else {
-                signingInfo.signingCertificateHistory
-            }
-        } else {
-            packageInfo.signatures ?: emptyArray()
-        }
-        val md = MessageDigest.getInstance("SHA-256")
-        return signatures.map { sig ->
-            md.reset()
-            md.digest(sig.toByteArray()).joinToString("") { b -> "%02x".format(b) }
-        }.toSet()
     }
 
     private fun cleanupOldCachedApks() {

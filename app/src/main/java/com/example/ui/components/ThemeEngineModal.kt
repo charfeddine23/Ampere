@@ -260,7 +260,7 @@ fun ThemeEngineDialog(
                     if (searchQuery.isNotEmpty()) {
                         Box(
                             modifier = Modifier
-                                .size(36.dp)
+                                .size(48.dp)
                                 .clip(CircleShape)
                                 .clickable { searchQuery = "" },
                             contentAlignment = Alignment.Center

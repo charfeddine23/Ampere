@@ -10,12 +10,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -44,6 +46,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -52,6 +55,7 @@ import androidx.compose.ui.window.DialogProperties
 import com.example.data.CyberSkin
 import com.example.data.CyberSkinVaultCatalog
 import com.example.data.GlassThemeConfig
+import com.example.ui.theme.LocalAmpereTheme
 import com.example.ui.theme.OutfitFontFamily
 import com.example.ui.theme.PlusJakartaSansFontFamily
 import com.example.ui.theme.TactileGreen
@@ -74,11 +78,13 @@ fun CyberSkinVaultDialog(
 ) {
     if (!isOpen) return
 
-    val isDark = themeConfig.isDarkMode
+    val resolvedTheme = LocalAmpereTheme.current
+    val isDark = resolvedTheme.isDark
     val isArabic = themeConfig.appLanguage.isArabic
-    val textColor = if (isDark) TextWhite else TextCharcoal
-    val subTextColor = if (isDark) Color(0xFF94A3B8) else TextSlate
-    val dialogBg = if (isDark) Color(0xF20F172A) else Color(0xF8E1E8F1)
+    val textColor = if (resolvedTheme.themeId != null) resolvedTheme.textPrimary else if (isDark) TextWhite else TextCharcoal
+    val subTextColor = if (resolvedTheme.themeId != null) resolvedTheme.textSecondary else if (isDark) Color(0xFF94A3B8) else TextSlate
+    val dialogBg = if (resolvedTheme.themeId != null) resolvedTheme.background else if (isDark) Color(0xF20F172A) else Color(0xF8E1E8F1)
+    val closeBtnBg = if (resolvedTheme.themeId != null) resolvedTheme.surface else if (isDark) Color(0xFF1E293B) else Color(0xFFD2DBE6)
     val activeSkin = CyberSkinVaultCatalog.getSkinById(themeConfig.activeSkinId)
 
     Dialog(
@@ -88,7 +94,8 @@ fun CyberSkinVaultDialog(
         Box(
             modifier = Modifier
                 .fillMaxWidth(0.94f)
-                .height(680.dp)
+                .widthIn(max = 520.dp)
+                .fillMaxHeight(0.87f)
                 .testTag("cyber_skin_vault_dialog"),
             contentAlignment = Alignment.Center
         ) {
@@ -165,7 +172,7 @@ fun CyberSkinVaultDialog(
                             modifier = Modifier
                                 .size(48.dp)
                                 .clip(CircleShape)
-                                .background(if (isDark) Color(0xFF1E293B) else Color(0xFFD2DBE6))
+                                .background(closeBtnBg)
                                 .clickable { onClose() },
                             contentAlignment = Alignment.Center
                         ) {
@@ -288,9 +295,10 @@ private fun CyberSkinItemCard(
     isArabic: Boolean,
     onEquip: () -> Unit
 ) {
-    val cardBg = if (isDarkMode) Color(0xFF1E293B) else Color(0xFFECF0F6)
-    val textColor = if (isDarkMode) TextWhite else TextCharcoal
-    val subTextColor = if (isDarkMode) Color(0xFF94A3B8) else TextSlate
+    val resolvedTheme = LocalAmpereTheme.current
+    val cardBg = if (resolvedTheme.themeId != null) resolvedTheme.surface else if (isDarkMode) Color(0xFF1E293B) else Color(0xFFECF0F6)
+    val textColor = if (resolvedTheme.themeId != null) resolvedTheme.textPrimary else if (isDarkMode) TextWhite else TextCharcoal
+    val subTextColor = if (resolvedTheme.themeId != null) resolvedTheme.textSecondary else if (isDarkMode) Color(0xFF94A3B8) else TextSlate
 
     Box(
         modifier = Modifier
@@ -435,7 +443,7 @@ private fun CyberSkinItemCard(
                         fontFamily = OutfitFontFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 11.sp,
-                        color = Color.Black
+                        color = if (skin.primaryColor.luminance() > 0.52f) Color.Black else Color.White
                     )
                 }
             }

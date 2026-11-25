@@ -18,6 +18,7 @@ import com.example.MainActivity
 import com.example.data.BatteryMonitorRepository
 import com.example.data.GlassThemeConfig
 import com.example.data.local.AmpereDatabase
+import com.example.data.local.HourlyBatteryStatEntity
 import com.example.data.local.SettingsPreferencesManager
 import com.example.data.local.TelemetryLogEntity
 import com.example.data.telemetry.CurrentCalibrationEngine
@@ -28,7 +29,10 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Locale
+import kotlin.math.abs
 
 /**
  * Persistent Foreground Service ensuring background telemetry tracking
@@ -49,8 +53,23 @@ class TelemetryForegroundService : Service() {
     private var cachedConfig: GlassThemeConfig = GlassThemeConfig()
     private var lastConfigReloadMs: Long = 0L
 
+    private var activeHourKey: Long = -1L
+    private var hourSamples: Int = 0
+    private var hourVoltageSum: Long = 0L
+    private var hourMinVoltage: Int = Int.MAX_VALUE
+    private var hourMaxVoltage: Int = 0
+    private var hourCurrentSum: Long = 0L
+    private var hourMinCurrent: Int = Int.MAX_VALUE
+    private var hourMaxCurrent: Int = Int.MIN_VALUE
+    private var hourTempSum: Double = 0.0
+    private var hourMaxTemp: Float = -99f
+    private var hourWattSum: Double = 0.0
+    private var hourStartPct: Int = -1
+    private var hourLastSaveMs: Long = 0L
+
     override fun onCreate() {
         super.onCreate()
+        isServiceRunning = true
         database = AmpereDatabase.getInstance(applicationContext)
         prefsManager = SettingsPreferencesManager(applicationContext)
         val initialConfig = prefsManager.loadThemeConfig()
@@ -109,6 +128,7 @@ class TelemetryForegroundService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        isServiceRunning = false
         serviceScope.cancel()
     }
 
@@ -157,28 +177,31 @@ class TelemetryForegroundService : Service() {
     private suspend fun sampleAndPersistTelemetry(config: GlassThemeConfig) {
         try {
             val ifilter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
-            val bStatus: Intent? = registerReceiver(null, ifilter)
+            val bStatus = registerReceiver(null, ifilter) ?: return
 
-            val rawLevel = bStatus?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
-            val scale = bStatus?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
-            val pct = if (rawLevel >= 0 && scale > 0) ((rawLevel / scale.toFloat()) * 100).toInt().coerceIn(0, 100) else 84
+            val rawLevel = bStatus.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+            val scale = bStatus.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+            if (rawLevel < 0 || scale <= 0) return
+            val pct = ((rawLevel / scale.toFloat()) * 100).toInt().coerceIn(0, 100)
 
-            val rawVoltage = bStatus?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 4150) ?: 4150
-            val voltageMv = BatteryMonitorRepository.normalizeVoltageMv(rawVoltage.toLong()).let {
-                if (it > 0) it else 4150
-            }
+            val rawVoltage = bStatus.getIntExtra(BatteryManager.EXTRA_VOLTAGE, -1)
+            val voltageMv = BatteryMonitorRepository.normalizeVoltageMv(rawVoltage.toLong())
+            if (voltageMv <= 0) return
 
-            val rawTemp = bStatus?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 285) ?: 285
-            val tempC = rawTemp / 10.0f
+            val rawTemp = bStatus.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, Int.MIN_VALUE)
+            if (rawTemp == Int.MIN_VALUE) return
+            val tempC = (rawTemp / 10.0f).coerceIn(-30.0f, 90.0f)
 
             val bm = getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
-            val statusInt = bStatus?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
-            val isCharging = statusInt == BatteryManager.BATTERY_STATUS_CHARGING || statusInt == BatteryManager.BATTERY_STATUS_FULL
+            val statusInt = bStatus.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
+            val isFull = statusInt == BatteryManager.BATTERY_STATUS_FULL
+            val isCharging = statusInt == BatteryManager.BATTERY_STATUS_CHARGING || isFull
 
             val currentMa = calibrationEngine.sampleCurrentMa(
                 batteryManager = bm,
                 isCharging = isCharging,
-                voltageMv = voltageMv
+                voltageMv = voltageMv,
+                isFull = isFull
             )
 
             val stateString = when {
@@ -201,6 +224,15 @@ class TelemetryForegroundService : Service() {
                 insertCountSinceTrim = 0
                 database.telemetryLogDao().trimOldLogs(2000)
             }
+
+            recordHourlyStat(
+                pct = pct,
+                voltageMv = voltageMv,
+                currentMa = currentMa,
+                tempC = tempC,
+                stateString = stateString,
+                isCharging = isCharging
+            )
 
             // Throttle notification updates to prevent Android notification rate-limit warnings
             val now = System.currentTimeMillis()
@@ -226,6 +258,82 @@ class TelemetryForegroundService : Service() {
             }
         } catch (_: Exception) {
             // Guard against background receiver quirks
+        }
+    }
+
+    private suspend fun recordHourlyStat(
+        pct: Int,
+        voltageMv: Int,
+        currentMa: Int,
+        tempC: Float,
+        stateString: String,
+        isCharging: Boolean
+    ) {
+        val cal = Calendar.getInstance().apply {
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val hourStart = cal.timeInMillis
+        if (activeHourKey != hourStart) {
+            activeHourKey = hourStart
+            hourSamples = 0
+            hourVoltageSum = 0L
+            hourMinVoltage = Int.MAX_VALUE
+            hourMaxVoltage = 0
+            hourCurrentSum = 0L
+            hourMinCurrent = Int.MAX_VALUE
+            hourMaxCurrent = Int.MIN_VALUE
+            hourTempSum = 0.0
+            hourMaxTemp = -99f
+            hourWattSum = 0.0
+            hourStartPct = pct
+            hourLastSaveMs = 0L
+        }
+
+        hourSamples++
+        hourVoltageSum += voltageMv
+        if (voltageMv < hourMinVoltage) hourMinVoltage = voltageMv
+        if (voltageMv > hourMaxVoltage) hourMaxVoltage = voltageMv
+        hourCurrentSum += currentMa
+        if (currentMa < hourMinCurrent) hourMinCurrent = currentMa
+        if (currentMa > hourMaxCurrent) hourMaxCurrent = currentMa
+        hourTempSum += tempC
+        if (tempC > hourMaxTemp) hourMaxTemp = tempC
+        hourWattSum += (voltageMv / 1000.0) * (abs(currentMa) / 1000.0)
+
+        val now = System.currentTimeMillis()
+        if (hourLastSaveMs == 0L || (now - hourLastSaveMs) >= 180_000L) {
+            hourLastSaveMs = now
+            val timeFmt = SimpleDateFormat("HH:mm", Locale.US).format(cal.time)
+            val dateFmt = SimpleDateFormat("MMM d", Locale.US).format(cal.time)
+            val avgI = (hourCurrentSum / hourSamples).toInt()
+            val netMah = ((avgI * hourSamples * 20.0) / 3600.0).toInt()
+            database.hourlyBatteryStatDao().insertHourlyStat(
+                HourlyBatteryStatEntity(
+                    id = hourStart,
+                    hourTimestamp = hourStart,
+                    formattedTime = timeFmt,
+                    formattedDate = dateFmt,
+                    avgVoltageMv = (hourVoltageSum / hourSamples).toInt(),
+                    minVoltageMv = hourMinVoltage,
+                    maxVoltageMv = hourMaxVoltage,
+                    avgCurrentMa = avgI,
+                    minCurrentMa = hourMinCurrent,
+                    maxCurrentMa = hourMaxCurrent,
+                    avgTemperatureC = (hourTempSum / hourSamples).toFloat(),
+                    maxTemperatureC = hourMaxTemp,
+                    avgWattageW = (hourWattSum / hourSamples).toFloat(),
+                    startBatteryPct = hourStartPct,
+                    endBatteryPct = pct,
+                    netMahFlow = netMah,
+                    dominantState = stateString,
+                    dominantStateLabel = stateString,
+                    sampleCount = hourSamples,
+                    isChargingHour = isCharging,
+                    screenOnDurationMinutes = 0
+                )
+            )
         }
     }
 
@@ -277,6 +385,9 @@ class TelemetryForegroundService : Service() {
     companion object {
         const val CHANNEL_ID = "ampere_pulse_telemetry_channel_v2"
         const val NOTIFICATION_ID = 1001
+        @Volatile
+        var isServiceRunning: Boolean = false
+            private set
 
         fun startService(context: Context) {
             try {

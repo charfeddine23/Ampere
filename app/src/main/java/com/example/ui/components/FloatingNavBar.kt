@@ -42,6 +42,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -329,11 +330,14 @@ fun FloatingGlassNavBar(
                 }
             }
 
+            val currentSelectedTab by rememberUpdatedState(selectedTab)
+            val currentOnTabSelected by rememberUpdatedState(onTabSelected)
+
             // Interactive Continuous Pointer Gesture Handler
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .pointerInput(barWidthPx, isRtl, dropletDragNavigationEnabled, selectedTab) {
+                    .pointerInput(barWidthPx, isRtl, dropletDragNavigationEnabled) {
                         val touchSlopPx = viewConfiguration.touchSlop
                         coroutineScope {
                             while (isActive) {
@@ -347,7 +351,7 @@ fun FloatingGlassNavBar(
                                     val initialIndex = xToTabIndex(initialClampedX)
 
                                     var didDrag = false
-                                    var lastHapticHoveredIndex = selectedTab.ordinal
+                                    var lastHapticHoveredIndex = currentSelectedTab.ordinal
 
                                     if (dropletDragNavigationEnabled) {
                                         isDragging = true
@@ -357,50 +361,53 @@ fun FloatingGlassNavBar(
                                         activeHoveredIndex = initialIndex
                                     }
 
-                                    while (true) {
-                                        val event = awaitPointerEvent(PointerEventPass.Initial)
-                                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                                        if (!change.pressed) break
+                                    try {
+                                        while (true) {
+                                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                            if (!change.pressed) break
 
-                                        val currentX = change.position.x
-                                        if (!didDrag && abs(currentX - startX) > touchSlopPx) {
-                                            didDrag = true
-                                            if (!isDragging) {
-                                                isDragging = true
-                                                physicsEpoch++
-                                                physics.triggerSurfaceRipple(-1.05f)
-                                            }
-                                        }
-
-                                        if (didDrag || dropletDragNavigationEnabled) {
-                                            val clampedX = currentX.coerceIn(tabWidthPx * 0.32f, barWidthPx - tabWidthPx * 0.32f)
-                                            physics.targetHeadX = clampedX
-
-                                            val hoveredIndex = xToTabIndex(clampedX)
-                                            if (dropletDragNavigationEnabled) {
-                                                if (hoveredIndex != activeHoveredIndex) {
-                                                    activeHoveredIndex = hoveredIndex
-                                                    CyberHapticsEngine.triggerTactileTick(context)
-                                                    physics.triggerSurfaceRipple(0.95f)
-                                                    onTabSelected(NavigationTab.entries[hoveredIndex])
-                                                }
-                                            } else {
-                                                // Droplet slides freely across the banner WITHOUT changing active page
-                                                if (hoveredIndex != lastHapticHoveredIndex) {
-                                                    lastHapticHoveredIndex = hoveredIndex
-                                                    CyberHapticsEngine.triggerTactileTick(context)
-                                                    physics.triggerSurfaceRipple(0.75f)
+                                            val currentX = change.position.x
+                                            if (!didDrag && abs(currentX - startX) > touchSlopPx) {
+                                                didDrag = true
+                                                if (!isDragging) {
+                                                    isDragging = true
+                                                    physicsEpoch++
+                                                    physics.triggerSurfaceRipple(-1.05f)
                                                 }
                                             }
 
-                                            if (didDrag) {
-                                                change.consume()
+                                            if (didDrag || dropletDragNavigationEnabled) {
+                                                val clampedX = currentX.coerceIn(tabWidthPx * 0.32f, barWidthPx - tabWidthPx * 0.32f)
+                                                physics.targetHeadX = clampedX
+
+                                                val hoveredIndex = xToTabIndex(clampedX)
+                                                if (dropletDragNavigationEnabled) {
+                                                    if (hoveredIndex != activeHoveredIndex) {
+                                                        activeHoveredIndex = hoveredIndex
+                                                        CyberHapticsEngine.triggerTactileTick(context)
+                                                        physics.triggerSurfaceRipple(0.95f)
+                                                        currentOnTabSelected(NavigationTab.entries[hoveredIndex])
+                                                    }
+                                                } else {
+                                                    // Droplet slides freely across the banner WITHOUT changing active page
+                                                    if (hoveredIndex != lastHapticHoveredIndex) {
+                                                        lastHapticHoveredIndex = hoveredIndex
+                                                        CyberHapticsEngine.triggerTactileTick(context)
+                                                        physics.triggerSurfaceRipple(0.75f)
+                                                    }
+                                                }
+
+                                                if (didDrag) {
+                                                    change.consume()
+                                                }
                                             }
                                         }
+                                    } finally {
+                                        isDragging = false
                                     }
 
                                     // Finger released
-                                    isDragging = false
                                     if (dropletDragNavigationEnabled) {
                                         val finalIndex = activeHoveredIndex
                                         val finalTab = NavigationTab.entries[finalIndex]
@@ -408,10 +415,10 @@ fun FloatingGlassNavBar(
                                         physics.triggerSurfaceRipple(1.45f)
                                         physicsEpoch++
                                         CyberHapticsEngine.triggerTactileTick(context)
-                                        onTabSelected(finalTab)
+                                        currentOnTabSelected(finalTab)
                                     } else if (didDrag) {
                                         // Dragging droplet does NOT switch pages: return droplet smoothly to active tab
-                                        val currentTabIndex = selectedTab.ordinal
+                                        val currentTabIndex = currentSelectedTab.ordinal
                                         activeHoveredIndex = currentTabIndex
                                         physics.targetHeadX = tabCenterX(currentTabIndex)
                                         physics.triggerSurfaceRipple(1.25f)

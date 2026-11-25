@@ -24,10 +24,15 @@ class MainActivity : ComponentActivity() {
         viewModel.onUpdateFlowResult(result.resultCode)
     }
 
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { /* Permission result handled gracefully; alerts and foreground notifications respect OS state */ }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         viewModel.attachUpdateLauncher(inAppUpdateLauncher)
+        requestNotificationPermissionIfNeeded()
 
         setContent {
             val themeConfig by viewModel.themeConfig.collectAsStateWithLifecycle()
@@ -35,6 +40,23 @@ class MainActivity : ComponentActivity() {
                 applyDisplayRefreshRatePreference(enableHighRefresh = themeConfig.target120FpsMode)
             }
             AmperePulseApp(viewModel = viewModel)
+        }
+    }
+
+    private fun requestNotificationPermissionIfNeeded() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            val config = SettingsPreferencesManager(applicationContext).loadThemeConfig()
+            val needsNotifications = config.backgroundServiceEnabled ||
+                config.alertOn80Percent ||
+                config.alertOnHighTemp
+            if (needsNotifications &&
+                androidx.core.content.ContextCompat.checkSelfPermission(
+                    this,
+                    android.Manifest.permission.POST_NOTIFICATIONS
+                ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+            }
         }
     }
 

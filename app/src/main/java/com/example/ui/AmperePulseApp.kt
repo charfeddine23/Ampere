@@ -35,11 +35,29 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import com.example.audio.CyberHapticsEngine
 import com.example.data.GraphicsMode
+import com.example.ui.theme.OutfitFontFamily
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.isActive
 import kotlin.math.abs
+import kotlin.math.roundToInt
 import com.example.ui.components.CyberSkinVaultDialog
 import com.example.ui.components.FloatingGlassNavBar
 import com.example.ui.components.InAppUpdateDialog
@@ -217,7 +235,7 @@ fun AmperePulseApp(viewModel: AmperePulseViewModel) {
                 // Right-half swipe-left sensor (excludes bottom FloatingGlassNavBar & nav insets cleanly)
                 val density = LocalDensity.current
                 val navBarsBottomPx = WindowInsets.navigationBars.getBottom(density).toFloat()
-                val bottomBannerExclusionPx = with(density) { 44.dp.toPx() } + navBarsBottomPx
+                val bottomBannerExclusionPx = with(density) { 86.dp.toPx() } + navBarsBottomPx
                 val swipeTriggerPx = with(density) { 30.dp.toPx() }
 
                 val isRtlLayout = themeConfig.appLanguage.isArabic
@@ -354,6 +372,16 @@ fun AmperePulseApp(viewModel: AmperePulseViewModel) {
                                 )
                         }
                     }
+
+                    if (themeConfig.showFpsOverlay && !themeConfig.isSimpleMode) {
+                        FpsOverlayBadge(
+                            accentColor = activeAccent,
+                            isDarkMode = isDark,
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(top = 6.dp, end = 12.dp)
+                        )
+                    }
                 }
             }
 
@@ -435,5 +463,62 @@ fun AmperePulseApp(viewModel: AmperePulseViewModel) {
                 onDismiss = { viewModel.dismissUnsupportedModeAlert() }
             )
         }
+    }
+}
+
+@Composable
+private fun FpsOverlayBadge(
+    accentColor: Color,
+    isDarkMode: Boolean,
+    modifier: Modifier = Modifier
+) {
+    var displayedFps by remember { mutableIntStateOf(60) }
+
+    LaunchedEffect(Unit) {
+        var frameCount = 0
+        var windowStartNanos = 0L
+        while (isActive) {
+            withFrameNanos { frameNanos ->
+                if (windowStartNanos == 0L) {
+                    windowStartNanos = frameNanos
+                } else {
+                    frameCount++
+                    val elapsedNanos = frameNanos - windowStartNanos
+                    if (elapsedNanos >= 500_000_000L) {
+                        val fps = ((frameCount * 1_000_000_000.0) / elapsedNanos).roundToInt().coerceIn(1, 240)
+                        displayedFps = fps
+                        frameCount = 0
+                        windowStartNanos = frameNanos
+                    }
+                }
+            }
+        }
+    }
+
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(
+                if (isDarkMode) Color(0xCC0F172A) else Color(0xDDEEF2F7)
+            )
+            .border(1.dp, accentColor.copy(alpha = 0.45f), RoundedCornerShape(10.dp))
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(6.dp)
+                .clip(CircleShape)
+                .background(accentColor)
+        )
+        Spacer(modifier = Modifier.width(5.dp))
+        Text(
+            text = "$displayedFps FPS",
+            fontFamily = OutfitFontFamily,
+            fontWeight = FontWeight.Bold,
+            fontSize = 10.sp,
+            color = accentColor
+        )
     }
 }

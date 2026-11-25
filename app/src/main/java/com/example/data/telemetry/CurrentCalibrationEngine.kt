@@ -34,6 +34,39 @@ class CurrentCalibrationEngine(
         private const val DEFAULT_ALPHA_STEADY = 0.18f // Ultra-smooth for 90Hz telemetry rendering
         private const val DEFAULT_ALPHA_FAST = 0.65f   // Fast tracking on sudden current surges/drops
         private const val SLEW_THRESHOLD_MA = 150f     // Slew step triggering fast EMA response
+        /**
+         * Normalizes raw integer hardware current property into milliamperes (mA),
+         * handling OEM microampere vs milliampere scaling without flipping discharge signs at 100% FULL.
+         */
+        fun normalizeHardwareCurrentMa(
+            rawVal: Int,
+            isCharging: Boolean,
+            isFull: Boolean = false
+        ): Float {
+            if (rawVal == 0 || rawVal == Int.MIN_VALUE) return 0f
+            val absVal = abs(rawVal)
+
+            var ma = if (absVal >= 10_000) {
+                rawVal / 1000.0f
+            } else {
+                rawVal.toFloat()
+            }
+
+            if (abs(ma) > 15_000f) {
+                ma /= 1000.0f
+                if (abs(ma) > 15_000f) {
+                    return 0f
+                }
+            }
+
+            if (isCharging && !isFull) {
+                if (ma < 0f) ma = -ma
+            } else if (!isCharging) {
+                if (ma > 0f) ma = -ma
+            }
+
+            return ma
+        }
     }
 
     // Configurable Calibration parameters
@@ -73,9 +106,10 @@ class CurrentCalibrationEngine(
     fun sampleCurrentMa(
         batteryManager: BatteryManager?,
         isCharging: Boolean,
-        voltageMv: Int = 4180
+        voltageMv: Int = 4180,
+        isFull: Boolean = false
     ): Int {
-        val rawMa = queryRawHardwareCurrentMa(batteryManager, isCharging)
+        val rawMa = queryRawHardwareCurrentMa(batteryManager, isCharging, isFull)
         rawLastCurrentMa = rawMa
 
         // If hardware returned 0 / unsupported, preserve genuine 0 reading without inventing current
@@ -93,7 +127,11 @@ class CurrentCalibrationEngine(
      * Reads the current directly from [BatteryManager.BATTERY_PROPERTY_CURRENT_NOW]
      * and normalizes unit discrepancies across OEMs.
      */
-    private fun queryRawHardwareCurrentMa(batteryManager: BatteryManager?, isCharging: Boolean): Float {
+    private fun queryRawHardwareCurrentMa(
+        batteryManager: BatteryManager?,
+        isCharging: Boolean,
+        isFull: Boolean
+    ): Float {
         if (batteryManager == null) {
             return 0f
         }
@@ -115,42 +153,13 @@ class CurrentCalibrationEngine(
             }
 
             if (avgProperty != Int.MIN_VALUE && avgProperty != 0) {
-                return normalizeCurrentValue(avgProperty, isCharging)
+                return normalizeHardwareCurrentMa(avgProperty, isCharging, isFull)
             }
 
             return 0f
         }
 
-        return normalizeCurrentValue(rawProperty, isCharging)
-    }
-
-    /**
-     * Normalizes the integer property value into milliamperes (mA), resolving uA vs mA scaling
-     * and OEM polarity conventions relative to [isCharging].
-     */
-    private fun normalizeCurrentValue(rawVal: Int, isCharging: Boolean): Float {
-        val absVal = abs(rawVal)
-
-        var ma = if (absVal >= 10000) {
-            rawVal / 1000.0f
-        } else {
-            rawVal.toFloat()
-        }
-
-        if (abs(ma) > 15000f) {
-            ma = if (rawVal < 0) -rawVal / 1000f else rawVal / 1000f
-            if (abs(ma) > 15000f) {
-                return 0f
-            }
-        }
-
-        if (isCharging) {
-            if (ma < 0) ma = -ma
-        } else {
-            if (ma > 0) ma = -ma
-        }
-
-        return ma
+        return normalizeHardwareCurrentMa(rawProperty, isCharging, isFull)
     }
 
     /**

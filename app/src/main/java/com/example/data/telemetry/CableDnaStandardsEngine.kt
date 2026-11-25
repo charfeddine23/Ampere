@@ -37,7 +37,8 @@ object CableDnaStandardsEngine {
         val rawCurrentI = abs(telemetry.currentMa)
         val isPlugged = telemetry.plugType != ChargePlug.NONE ||
             telemetry.status == BatteryStatus.CHARGING ||
-            rawCurrentI > 180
+            telemetry.status == BatteryStatus.FULL ||
+            telemetry.currentMa > 180
 
         val isDualCell = currentV > 6000 || deviceProfile.isDualCellSuspected
         val topologyLabel = if (isArabic) {

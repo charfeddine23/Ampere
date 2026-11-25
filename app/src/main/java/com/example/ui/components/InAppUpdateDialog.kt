@@ -120,8 +120,7 @@ fun InAppUpdateDialog(
 
     val statusTint by animateColorAsState(
         targetValue = when {
-            state.isDownloadedReadyToInstall && !state.needsInstallPermission -> TactileGreen
-            state.needsInstallPermission -> TactileAmber
+            state.isDownloadedReadyToInstall -> TactileGreen
             state.isDownloading -> accentColor
             else -> accentColor
         },
@@ -694,11 +693,11 @@ fun InAppUpdateDialog(
 
                     // Primary Breathing Action CTA Pill
                     val buttonLabel = when {
-                        state.needsInstallPermission -> if (isArabic) "منح إذن التثبيت والمتابعة" else "Grant Install Permission"
-                        state.isDownloadedReadyToInstall -> if (isArabic) "تثبيت الآن" else "Install Now"
-                        state.isDownloading -> if (isArabic) "جاري التنزيل داخل التطبيق..." else "Downloading In-App..."
+                        state.isDownloadedReadyToInstall && state.hasPlayUpdatePayload -> if (isArabic) "تثبيت التحديث" else "Install Update"
+                        state.updateAvailable && !state.hasPlayUpdatePayload -> if (isArabic) "عرض صفحة التحديث" else "Open Release Page"
+                        state.isDownloading -> if (isArabic) "جاري التنزيل..." else "Downloading..."
                         state.isChecking -> if (isArabic) "جاري الفحص..." else "Checking..."
-                        else -> if (isArabic) "تحديث" else "Update Now"
+                        else -> if (isArabic) "فحص وتحديث" else "Check for Updates"
                     }
 
                     val ctaScale = if (!state.isDownloading && !state.isChecking) {

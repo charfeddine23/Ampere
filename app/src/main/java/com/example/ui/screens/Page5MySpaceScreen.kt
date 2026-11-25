@@ -514,8 +514,7 @@ fun Page5MySpaceScreen(
                 trailing = {
                     Box(
                         modifier = Modifier
-                            .minimumInteractiveComponentSize()
-                            .heightIn(min = 38.dp)
+                            .heightIn(min = 48.dp)
                             .clip(RoundedCornerShape(10.dp))
                             .background(animatedAmbientColor.copy(alpha = if (isDark) 0.18f else 0.12f))
                             .border(1.dp, animatedAmbientColor.copy(alpha = 0.50f), RoundedCornerShape(10.dp))
@@ -983,8 +982,7 @@ private fun SelectedMetricTelemetryConsole(
                     Spacer(modifier = Modifier.width(8.dp))
                     Box(
                         modifier = Modifier
-                            .minimumInteractiveComponentSize()
-                            .heightIn(min = 36.dp)
+                            .heightIn(min = 48.dp)
                             .clip(RoundedCornerShape(10.dp))
                             .background(accentColor.copy(alpha = if (isDarkMode) 0.18f else 0.12f))
                             .border(1.dp, accentColor.copy(alpha = 0.45f), RoundedCornerShape(10.dp))
@@ -1247,9 +1245,9 @@ fun UserProfileEditDialog(
                             )
                             Text(
                                 text = if (isArabic) {
-                                    "البيانات مخزنة ومحمية محلياً في جهازك (Room WAL)"
+                                    "محفوظة محلياً داخل مساحة التطبيق الخاصة (Room WAL)"
                                 } else {
-                                    "Stored locally & encrypted on your device (Room WAL)"
+                                    "Stored privately on your device (Room WAL)"
                                 },
                                 fontFamily = PlusJakartaSansFontFamily,
                                 fontSize = 10.5.sp,

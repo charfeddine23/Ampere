@@ -102,6 +102,7 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
         repository.setProModeActive(_themeConfig.value.isProMode)
         repository.setLanguage(_themeConfig.value.appLanguage)
         updateEngine.setLanguage(_themeConfig.value.appLanguage)
+        repository.updateAlertConfig(_themeConfig.value)
         repository.updateCurrentCalibration(
             multiplier = _themeConfig.value.currentMultiplier,
             zeroOffsetMa = _themeConfig.value.currentZeroOffsetMa
@@ -184,7 +185,7 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
 
     override fun onCleared() {
         super.onCleared()
-        updateEngine.unregisterListener()
+        updateEngine.release()
         repository.releaseResources()
     }
 
@@ -232,6 +233,7 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
         _themeConfig.value = sanitized
         prefsManager.saveThemeConfig(sanitized)
         repository.setProModeActive(sanitized.isProMode)
+        repository.updateAlertConfig(sanitized)
         if (prev.appLanguage != sanitized.appLanguage) {
             repository.setLanguage(sanitized.appLanguage)
             updateEngine.setLanguage(sanitized.appLanguage)
@@ -263,17 +265,19 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
 
     fun equipThemePreset(preset: com.example.ui.theme.AppThemePreset) {
         val argb = (preset.accentColor.value shr 32).toLong()
-        val updated = _themeConfig.value.copy(
+        val prev = _themeConfig.value
+        val keptMode = if (deviceProfile.value.isLowEndDevice) GraphicsMode.SIMPLE else prev.graphicsMode
+        val updated = prev.copy(
             activeThemeId = preset.id,
             isDarkMode = preset.isDark,
             customAccentHex = argb,
             glowIntensity = preset.glowIntensity,
-            graphicsMode = if (deviceProfile.value.isLowEndDevice) GraphicsMode.SIMPLE else GraphicsMode.STANDARD,
-            samplingIntervalMs = 1000L
+            graphicsMode = keptMode,
+            samplingIntervalMs = if (keptMode == GraphicsMode.PRO) 10L else 1000L
         )
         _themeConfig.value = updated
         prefsManager.saveThemeConfig(updated)
-        repository.setProModeActive(false)
+        repository.setProModeActive(updated.isProMode)
         com.example.audio.CyberHapticsEngine.triggerTactileTick(getApplication())
         com.example.audio.CyberSoundscapeEngine.playCryoChime()
         val isAr = updated.appLanguage.isArabic
@@ -321,11 +325,7 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun redeemPremiumCode(rawCode: String): Boolean {
-        val cleaned = rawCode.trim()
-        val isMatch = MessageDigest.isEqual(
-            cleaned.toByteArray(StandardCharsets.UTF_8),
-            PREMIUM_REDEEM_CODE.toByteArray(StandardCharsets.UTF_8)
-        )
+        val isMatch = verifyRedeemCode(rawCode)
         if (isMatch) {
             val updated = _themeConfig.value.copy(
                 isPremiumUnlocked = true,
@@ -355,6 +355,7 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
         val argb = (skin.primaryColor.value shr 32).toLong()
         // Retain the current user's dark/light mode preference unchanged
         val updatedConfig = _themeConfig.value.copy(
+            activeThemeId = null,
             activeSkinId = skin.id,
             customAccentHex = argb,
             glowIntensity = skin.glowIntensity
@@ -393,8 +394,24 @@ class AmperePulseViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     companion object {
-        const val PREMIUM_REDEEM_CODE = "charfeddine23a"
+        private const val PREMIUM_CODE_SALT = "VoltCoreSalt2026:"
+        private const val PREMIUM_CODE_SHA256_HEX =
+            "185eecfa6cae5e695bf6bf944aa5ba56dd0ee8b1f40f6097f229160b3cc87e42"
         const val AUTO_UPDATE_COOLDOWN_MS = 6L * 60L * 60L * 1000L
         const val APP_USAGE_REFRESH_COOLDOWN_MS = 45_000L
+
+        fun verifyRedeemCode(rawCode: String): Boolean {
+            val cleaned = rawCode.trim()
+            if (cleaned.isEmpty()) return false
+            val digest = MessageDigest.getInstance("SHA-256")
+                .digest("$PREMIUM_CODE_SALT$cleaned".toByteArray(StandardCharsets.UTF_8))
+            val actualHex = digest.joinToString(separator = "") { b ->
+                "%02x".format(b.toInt() and 0xFF)
+            }
+            return MessageDigest.isEqual(
+                actualHex.toByteArray(StandardCharsets.US_ASCII),
+                PREMIUM_CODE_SHA256_HEX.toByteArray(StandardCharsets.US_ASCII)
+            )
+        }
     }
 }

@@ -219,7 +219,10 @@ class ExampleUnitTest {
         val config = GlassThemeConfig()
         assertFalse(config.isPremiumUnlocked)
         assertEquals(AppTier.FREE, config.appTier)
-        assertEquals("charfeddine23a", AmperePulseViewModel.PREMIUM_REDEEM_CODE)
+        assertTrue(AmperePulseViewModel.verifyRedeemCode("charfeddine23a"))
+        assertTrue(AmperePulseViewModel.verifyRedeemCode("  charfeddine23a  "))
+        assertFalse(AmperePulseViewModel.verifyRedeemCode(""))
+        assertFalse(AmperePulseViewModel.verifyRedeemCode("wrong-code"))
     }
 
     @Test
@@ -567,5 +570,62 @@ class ExampleUnitTest {
             model = "Entry Phone"
         )
         assertEquals(DevicePerformanceTier.LOW_END, entryChipEval.tier)
+    }
+
+    @Test
+    fun testCurrentNormalizationAndFullBatteryDischarge() {
+        // Negative microamps reported while discharging remain negative milliamps
+        val dischargeMa = CurrentCalibrationEngine.normalizeHardwareCurrentMa(
+            rawVal = -1_450_000,
+            isCharging = false,
+            isFull = false
+        )
+        assertEquals(-1450f, dischargeMa, 0.01f)
+
+        // When status == BATTERY_STATUS_FULL while still plugged, genuine net system discharge stays negative
+        val fullNetDischargeMa = CurrentCalibrationEngine.normalizeHardwareCurrentMa(
+            rawVal = -220_000,
+            isCharging = true,
+            isFull = true
+        )
+        assertEquals(-220f, fullNetDischargeMa, 0.01f)
+
+        // OEM reversed-polarity charging during active non-FULL charging flips to positive
+        val reversedChargeMa = CurrentCalibrationEngine.normalizeHardwareCurrentMa(
+            rawVal = -2_400_000,
+            isCharging = true,
+            isFull = false
+        )
+        assertEquals(2400f, reversedChargeMa, 0.01f)
+    }
+
+    @Test
+    fun testCableDnaHeavyUnpluggedDischargeRemainsStandby() {
+        val profile = DeviceHardwareProfile(
+            brand = "Samsung",
+            model = "Galaxy S24",
+            chargingEcosystemEn = "USB-IF PD 3.0 + PPS",
+            recommendedPowerWatts = 25,
+            safeThermalCeilingC = 42.0f
+        )
+
+        val standbyResult = CableDnaStandardsEngine.evaluate(
+            telemetry = BatteryTelemetry(
+                percentage = 64,
+                status = BatteryStatus.DISCHARGING,
+                plugType = ChargePlug.NONE,
+                voltageMv = 3920,
+                currentMa = -1800,
+                temperatureC = 31.0f
+            ),
+            deviceProfile = profile,
+            observedBaselineOcvMv = 3920,
+            dynamicDeltaImpedanceMilliOhms = 0,
+            currentRipplePercent = 0f,
+            isArabic = false
+        )
+        assertEquals(0, standbyResult.measuredCurrentMa)
+        assertEquals(0, standbyResult.resistanceMilliOhms)
+        assertEquals("Standby (Unplugged)", standbyResult.chargingPhase)
     }
 }
